@@ -100,12 +100,20 @@ interact with your space for more XP → repeat.
 - **Audio:** LOFI music plus ambient sounds — rain, birdsong, wind — and
   appropriate sounds for furniture, appliances, and decorations.
 
-## Open questions
+## Design intent
 
-Not yet answered by the vision doc — to fill in from interview:
+- **What "cozy" means:** Cozy is about comfort. The game should feel
+  relaxing. Players should want to live in their environments with the cat,
+  and go on snowy ski adventures. It should be a second home, away from the
+  stress and worries of the world.
 
-- What "cozy" means, as a design intent (beyond the aesthetic details above).
-- What the player is ultimately working toward — is there an endgame, or is
-  progression meant to be open-ended?
-- What makes Toebeans different from Stardew Valley / Animal Crossing, in
-  the director's own words.
+- **Progression and endgame:** Progression is open-ended, not building to a
+  fixed endgame. Levels continue to rise (at a slower rate each level). New
+  environments and customization keep players interested. In the earliest
+  version, full multiplayer doesn't exist yet, but players can manually add
+  friends and see their friend's cat and environment. So: relax, ski, get
+  creative, and love on your cat.
+
+- **What makes Toebeans different from Stardew Valley / Animal Crossing:**
+  The graphics and gameplay separate it from both. The visual target is
+  graphics like *Omno*.

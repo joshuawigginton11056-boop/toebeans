@@ -35,16 +35,17 @@ working design doc; the vision file stays the source of truth if the two
 ever disagree.
 
 The vision doc doesn't answer everything from the original design interview.
-Three questions are still open:
+Three questions were still open; all three are now answered and folded into
+[DESIGN.md](DESIGN.md):
 
-1. What does "cozy" mean to you for this game — beyond the low-poly / LOFI /
-   warm-colors aesthetic, what's the feeling you're chasing? Is it about
-   safety, slowness, control, nostalgia, something else?
-2. What is the player ultimately working toward — is there an endgame, or is
-   progression meant to be open-ended?
-3. What makes Toebeans different from Stardew Valley / Animal Crossing, in
-   your own words?
+1. Cozy = comfort and relaxation — a second home away from real-world stress,
+   where players want to live with their cat and go on ski adventures.
+2. Progression is open-ended (no fixed endgame), with slowing level-up rates
+   and new environments/customization to stay interesting. Earliest version
+   also supports manually adding friends to view their cat and environment,
+   ahead of full multiplayer.
+3. Differentiator from Stardew Valley / Animal Crossing is graphics and
+   gameplay — visual target is *Omno*.
 
-**Next:** answer the three open interview questions above, fold the answers
-into DESIGN.md, then pick the first real feature to build (see
-[IDEAS.md](IDEAS.md) for candidates).
+**Next:** pick the first real feature to build (see [IDEAS.md](IDEAS.md) for
+candidates).
