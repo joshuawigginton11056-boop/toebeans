@@ -50,5 +50,58 @@ Three questions were still open; all three are now answered and folded into
 Director call: friend/cat/environment viewing deferred to M6; v1.0 is
 strictly single-player.
 
-**Next:** pick the first real feature to build (see [IDEAS.md](IDEAS.md) for
-candidates).
+Followed up the same day with the v1.0/v1.x/Steam scope split (Step 1.3):
+proposed a feature-by-feature cost breakdown in build-time (sessions), the
+director approved the recommended cut as-is, and it's now written into
+[DESIGN.md](DESIGN.md#scope-v10--v1x--steam) — v1.0 is one environment
+(bedroom), 6–8 furniture/appliance items, and 3 handcrafted slopes, enough
+to run the full ski → XP → unlock → decorate loop end to end.
+
+**Next:** start M1 (see milestone checklist below) — pick the first
+prototype feature to build (see [IDEAS.md](IDEAS.md) for candidates).
+
+## Milestones
+
+Tracking toward the v1.0 web launch scope in
+[DESIGN.md](DESIGN.md#scope-v10--v1x--steam). Check items off as sessions
+land them; each session still gets its own dated log entry above.
+
+### M1 — Prototype (gray-box, "is this fun?" gate)
+
+- [ ] Character moves around a gray-box bedroom
+- [ ] Basic cat follows/sits in the room
+- [ ] One gray-box ski slope: movement, controls, one hazard type
+- [ ] Cat's 9 lives + crash/checkpoint loop
+- [ ] Fun check: does the ski loop feel good before investing in art?
+
+### M2 — Vertical slice
+
+- [ ] Real (non-gray-box) bedroom environment with rotating camera
+- [ ] Furniture placement system (place/move/store)
+- [ ] One timed-task item and one passive/AFK item working end to end
+- [ ] XP and leveling wired to a single unlock
+- [ ] One polished ski slope with all hazard types + checkpoints
+- [ ] Save system (browser storage)
+
+### M3 — Content
+
+- [ ] All 3 v1.0 slopes built
+- [ ] Full 6–8 item furniture/appliance set
+- [ ] Character + cat customization options
+- [ ] All level-gated unlocks wired up
+- [ ] 24-hour offline XP catch-up implemented
+
+### M4 — Polish
+
+- [ ] Audio: music + ambient sound hooked up
+- [ ] Detail touches (ski trails, lamp glow, fireplace crackle, meows)
+- [ ] Performance pass: 60fps on a mid laptop
+- [ ] Load-size pass: under 15MB initial load
+- [ ] Playtest pass on the full loop, fix rough edges
+
+### M5 — Web launch
+
+- [ ] Deployed to itch.io
+- [ ] Steam store page live (wishlist accumulation starts; not the game
+      itself — that's the Steam-version phase)
+- [ ] Submitted to web portals (Poki/CrazyGames or similar)

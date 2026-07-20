@@ -117,3 +117,60 @@ interact with your space for more XP → repeat.
 - **What makes Toebeans different from Stardew Valley / Animal Crossing:**
   The graphics and gameplay separate it from both. The visual target is
   graphics like *Omno*.
+
+## Scope: v1.0 / v1.x / Steam
+
+Approved by the director, July 20, 2026. This is the answer to "what do we
+actually build first" — see [ROADMAP.md](ROADMAP.md) for the milestone
+checklist that delivers it.
+
+### v1.0 — smallest shippable version (web launch, M5)
+
+Everything needed for the full loop — ski → earn XP → level up → unlock →
+decorate → repeat — to work end to end. Strictly single-player (friend/cat/
+environment viewing is deferred to M6, per the existing director call
+above).
+
+- Character customization (basic options)
+- Cat customization (basic options)
+- One environment: the starting bedroom, with the Sims-style rotating
+  bird's-eye camera
+- Furniture/appliance placement system (place, move, store owned items)
+- **6–8 starter furniture/appliance items**: at least one timed-task item
+  (e.g. a TV or grill) and one passive/AFK item (the bed), plus a few
+  decorative pieces
+- Skiing: core movement/controls/camera, hazards (snowballs, chasms, tree
+  limbs), checkpoints, the cat's 9 lives and forfeit-for-half-XP rule
+- **3 handcrafted slopes**
+- XP and leveling (earning, level curve, save/persist)
+- Level-gated unlocks connecting XP to environment/furniture/cosmetic
+  access
+- Timed-task XP (appliance timers) and passive/AFK XP (with 24-hour
+  offline catch-up)
+- Save system (browser storage — no accounts yet; see IDEAS.md note on
+  cloud saves)
+- Audio hookup for music + ambient sound
+
+### v1.x — post-launch (still browser, still single-player)
+
+Grows the same loop; adds nothing that changes how it works.
+
+- Additional environments beyond the bedroom (apartment, skyrise, and
+  onward per the vision doc's list)
+- Additional handcrafted slopes beyond the initial 3
+- Procedurally generated slopes with selectable Easy/Difficult/Hard/
+  Extreme difficulty
+- Environment save slots (multiple saved layouts per environment)
+- Expanded furniture/cosmetic catalog beyond the v1.0 starter set
+- M6 async social: friend/cat/environment viewing
+
+### Steam version (later phase)
+
+Requires systems v1.0 and v1.x have no reason to build.
+
+- Electron wrapper + steamworks.js packaging
+- Real-time head-to-head slope races (the largest single system in the
+  full vision — needs server-authoritative netcode)
+- Leaderboards (weekly/all-time win-loss, biggest winner/loser)
+- Friend visits with shared XP boost and cats socializing together
+- Achievements
