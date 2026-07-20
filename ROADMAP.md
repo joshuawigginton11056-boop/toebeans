@@ -60,6 +60,55 @@ to run the full ski → XP → unlock → decorate loop end to end.
 **Next:** start M1 (see milestone checklist below) — pick the first
 prototype feature to build (see [IDEAS.md](IDEAS.md) for candidates).
 
+## 2026-07-20 — M1: gray-box ski slope
+
+Merged the scope-split branch to master directly (no PR), then built the
+first M1 checklist item: a playable gray-box ski slope — placeholder box
+shapes only, no art.
+
+- `/shared` gets a new `skiing.ts`: a pure `stepSkiing(state, input, dt)`
+  function plus `createInitialSkiState()`. The skier auto-skis downhill;
+  `left`/`right` steer, `up`/`down` lean to speed up or brake, `jump` arcs
+  over gaps, `boost` gives a temporary speed burst. One hazard type this
+  session — **chasms** — 3 of them, placed at increasing distances down
+  the slope. Landing inside a chasm without enough height ends the run
+  (it just freezes for now — checkpoints/lives are the *next* M1 item, not
+  this one). 8 new tests cover steering, boosting, jumping, and both
+  crashing into and clearing a chasm.
+- `crouch` is in the design but has no hazard to react to yet (that's tree
+  limbs, not built this session) — left out entirely rather than wiring a
+  control that does nothing, per the "no half-finished implementations"
+  rule in CLAUDE.md. It'll get built alongside tree limbs.
+- `/client` gets `skiRender.ts`: an isometric-ish three-quarter camera that
+  follows the skier down the slope, plus placeholder box meshes (blue
+  skier, small orange box for the cat riding along). Replaced the old
+  scaffold demo in `main.ts` (the drifting-cat box that was only ever
+  there to prove the rendering pipeline worked) with real keyboard input
+  driving the ski loop: arrows/WASD to steer and lean, Space to jump,
+  Shift to boost.
+- Deleted `client/src/render.ts` — it was the old scaffold's renderer and
+  nothing imports it anymore. The generic `Cat`/`GameState` types it used
+  are untouched in `/shared` for whenever the bedroom gray-box gets built.
+- `npm run check` passes (12 tests); verified in an actual browser (not
+  just tests) — skiing with no input crashes into the first chasm right
+  at distance 20 as designed, and holding jump while steering clears it
+  with no crash.
+
+**What to playtest:** run `npm run dev`, open the page, and just try
+skiing. Arrow keys or WASD to steer/lean, Space to jump, Shift to boost —
+there's no title screen or instructions yet, so use those controls
+straight away. There are 3 gaps in the snow to jump over as you go. Things
+to pay attention to: does steering feel responsive or sluggish, is the
+jump timing for the gaps fair or cheap, does the auto-forward speed feel
+right, and does holding boost feel meaningfully different. This is the
+first half of the "fun check" gate — the second half (the cat's 9 lives
+and crash/checkpoint loop) is next, and *then* comes the actual fun-check
+verdict once both pieces are in.
+
+**Next:** the "Cat's 9 lives + crash/checkpoint loop" M1 item — turn a
+crash from "the run just stops" into a real checkpoint respawn with a
+life counter, so repeated crashes have a defined cost.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -70,7 +119,7 @@ land them; each session still gets its own dated log entry above.
 
 - [ ] Character moves around a gray-box bedroom
 - [ ] Basic cat follows/sits in the room
-- [ ] One gray-box ski slope: movement, controls, one hazard type
+- [x] One gray-box ski slope: movement, controls, one hazard type
 - [ ] Cat's 9 lives + crash/checkpoint loop
 - [ ] Fun check: does the ski loop feel good before investing in art?
 

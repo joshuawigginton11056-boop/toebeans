@@ -1,3 +1,5 @@
+export * from "./skiing";
+
 export interface Vector3 {
   readonly x: number;
   readonly y: number;
