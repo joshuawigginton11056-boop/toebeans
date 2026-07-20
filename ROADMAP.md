@@ -47,5 +47,8 @@ Three questions were still open; all three are now answered and folded into
 3. Differentiator from Stardew Valley / Animal Crossing is graphics and
    gameplay — visual target is *Omno*.
 
+Director call: friend/cat/environment viewing deferred to M6; v1.0 is
+strictly single-player.
+
 **Next:** pick the first real feature to build (see [IDEAS.md](IDEAS.md) for
 candidates).

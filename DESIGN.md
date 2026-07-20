@@ -109,10 +109,10 @@ interact with your space for more XP → repeat.
 
 - **Progression and endgame:** Progression is open-ended, not building to a
   fixed endgame. Levels continue to rise (at a slower rate each level). New
-  environments and customization keep players interested. In the earliest
-  version, full multiplayer doesn't exist yet, but players can manually add
-  friends and see their friend's cat and environment. So: relax, ski, get
-  creative, and love on your cat.
+  environments and customization keep players interested. Friend/cat/
+  environment viewing is deferred to M6 (async social) per director
+  decision, July 20, 2026 — v1.0 has no friend-viewing and is fully
+  single-player. So: relax, ski, get creative, and love on your cat.
 
 - **What makes Toebeans different from Stardew Valley / Animal Crossing:**
   The graphics and gameplay separate it from both. The visual target is
