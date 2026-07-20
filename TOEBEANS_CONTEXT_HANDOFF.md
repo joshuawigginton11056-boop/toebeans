@@ -24,14 +24,13 @@ Current status (as of July 20, 2026)
 
 * Phase 0 (setup): DONE. Repo at C:\Users\joshu\Toebeans, scaffold built and running, walkable gray-box, a render-timing bug already found/fixed.
 * GitHub: DONE. Repo `toebeans` pushed to GitHub and set to private (it was briefly public; fixed July 20). Git Credential Manager login complete; Claude Code pushes after every commit. Because the repo is private, advisor Claude cannot fetch files from it — paste or upload file contents into chat instead.
-* Phase 1, Step 1.1 (design interview): IN PROGRESS. The owner wrote TOEBEANS_VISION.md, which answers the fantasy/setting and core-loop questions. Claude Code drafted DESIGN.md from it. Three interview questions remain unanswered; the one confirmed verbatim is: "What does 'cozy' mean to you for this game — beyond the low-poly/LOFI/warm-colors aesthetic, what's the feeling you're chasing? Safety, slowness, control, nostalgia, something else?" The other two open questions are recorded in ROADMAP.md (likely from the original interview list: progression, differentiation from Stardew/Animal Crossing).
-* End-of-session cleanup (July 20): duplicate untracked file `TOEBEANS_CONTEXT_HANDOFF (1).md` deleted; DESIGN.md draft committed and pushed; ROADMAP.md updated with remaining questions. (If any of these didn't actually complete, verify git status in the next Claude Code session before proceeding.)
-* Next step: New Claude Code session finishes Step 1.1 — asks the remaining interview questions one at a time, writes the OWNER'S answers into DESIGN.md (Claude is scribe, not designer). Then Step 1.3: Claude proposes a v1.0/v1.x/Steam scope split with build-cost estimates; owner approves the cut; ROADMAP.md gets milestone checklists. Then Step 1.5: owner brings 3–5 reference screenshots → art style bible written into DESIGN.md.
-* Advisor review pending: DESIGN.md draft has not yet been reviewed by advisor Claude for faithfulness to the vision doc (checking Claude Code didn't sneak in design decisions). Owner should paste DESIGN.md + TOEBEANS_VISION.md into an advisor chat for this.
+* Phase 1, Step 1.1 (design interview): DONE (July 20). All interview questions answered and written into DESIGN.md, including a "Design intent" section covering what "cozy" means for this game, progression/endgame, and differentiation from Stardew/Animal Crossing. DESIGN.md covers core fantasy, the ski loop, leveling/unlocks, environment XP, multiplayer (later phase), and look & feel. Visual target: Omno.
+* Next step: Phase 1, Step 1.3 — Claude proposes a v1.0/v1.x/Steam scope split with build-cost estimates; owner approves the cut; ROADMAP.md gets milestone checklists. Then Step 1.5: owner brings 3–5 reference screenshots → art style bible written into DESIGN.md.
+* Advisor review pending: DESIGN.md has not yet been reviewed by advisor Claude for faithfulness to the owner's vision (repo is private, so paste DESIGN.md + TOEBEANS_VISION.md into an advisor chat).
 
 Facts to not hallucinate about
 
-* Game design is PARTIALLY decided: TOEBEANS_VISION.md covers fantasy/setting and core loop; everything not in the vision doc or DESIGN.md is UNDECIDED. Do not invent answers to the open interview questions.
+* Game design v1 direction is DECIDED and lives in DESIGN.md; do not contradict it or invent details beyond it. Scope split (v1.0/v1.x/Steam) is NOT yet decided — that's Step 1.3.
 * Nothing is deployed anywhere; no itch.io/portal/Steam accounts exist yet.
 * No art assets are in the repo yet; no style bible yet.
 * Multiplayer code does not exist yet.
