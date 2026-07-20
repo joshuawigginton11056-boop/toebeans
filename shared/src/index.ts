@@ -1,4 +1,5 @@
 export * from "./skiing";
+export * from "./bedroom";
 
 export interface Vector3 {
   readonly x: number;

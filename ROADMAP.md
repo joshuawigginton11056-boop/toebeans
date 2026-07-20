@@ -153,6 +153,47 @@ are now in, so the next session should be a playtest-and-verdict session:
 does the ski loop feel good enough to invest in art? Feel fixes (tuning
 speeds, jump arc, pause length) belong in that session too.
 
+## 2026-07-20 — M1: gray-box bedroom walk
+
+The character can now walk around a gray-box bedroom — the "home" half of
+the core loop's stage. The game starts in the bedroom, and Enter switches
+between the bedroom and the ski slope (each trip to the slope is a fresh
+run with full lives, which doubles as the retry button after a forfeit).
+
+- `/shared` gets `bedroom.ts`: a pure `stepBedroom(state, input, dt)` plus
+  `createInitialBedroomState()`. Arrow/WASD walking on a flat floor,
+  normalized so diagonals aren't faster, clamped at the walls, and blocked
+  by three placeholder furniture pieces (bed, dresser, desk) with
+  slide-along-the-edge collision, solved one axis at a time. 7 new tests
+  (24 total) cover walking, standing still, diagonal speed, wall clamping,
+  furniture blocking, sliding, and non-mutation.
+- `/client` gets `bedroomRender.ts`: a fixed Sims-style bird's-eye camera
+  (rotation is the M2 "real bedroom" item, not this one), gray floor, four
+  low walls the camera sees over, gray furniture boxes, and the same blue
+  box as the skier so it reads as "you" in both scenes. `main.ts` now owns
+  a two-mode scene switch (two canvases, one hidden) and a HUD hint line
+  showing the controls plus which key switches scenes.
+- The cat is deliberately absent from the room — "basic cat follows/sits"
+  is its own M1 item, next session's work, not a half-built extra here.
+- `npm run check` passes (24 tests). Browser verification: the preview
+  pane stayed hidden again (same quirk as last session — hidden tabs
+  freeze the animation loop), so the real modules were driven manually in
+  the live page: wall clamp at x=-4.7, desk blocks at exactly x=3.0, bed
+  blocks at z=-0.2, and Enter swaps which canvas is visible both
+  directions. The rendered look of the room is the one thing only eyeballs
+  can confirm — worth a glance when playtesting.
+
+**What to playtest:** `npm run dev` now starts you in the bedroom. Walk
+around with arrows/WASD — bump into the bed, dresser, and desk, and slide
+along their edges. Press Enter to go skiing, Enter again to come home.
+Does walking speed feel right for a small room? Do the furniture bumps
+feel solid or sticky? Does starting at home (instead of on the slope)
+feel like the right shape for the game?
+
+**Next:** either the M1 fun-check verdict on the ski loop (needs your
+playtest impressions — feel tuning lives in that session), or the last
+M1 build item: the basic cat following/sitting in the bedroom.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -161,7 +202,7 @@ land them; each session still gets its own dated log entry above.
 
 ### M1 — Prototype (gray-box, "is this fun?" gate)
 
-- [ ] Character moves around a gray-box bedroom
+- [x] Character moves around a gray-box bedroom
 - [ ] Basic cat follows/sits in the room
 - [x] One gray-box ski slope: movement, controls, one hazard type
 - [x] Cat's 9 lives + crash/checkpoint loop
