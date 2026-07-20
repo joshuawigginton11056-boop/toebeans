@@ -1,0 +1,19 @@
+{
+  "name": "@toebeans/client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsc --build",
+    "typecheck": "tsc --build"
+  },
+  "dependencies": {
+    "@toebeans/shared": "*",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.1",
+    "vite": "^8.1.5"
+  }
+}
