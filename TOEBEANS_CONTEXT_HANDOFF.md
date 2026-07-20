@@ -21,7 +21,7 @@ Locked decisions (do not relitigate or contradict)
 Key documents the owner has
 
 1. DIRECTORS_PLAYBOOK.md — step-by-step process doc: every step is "You decide/You do" or "Ask Claude: [copy-paste prompt]." Exists as a Claude.ai artifact only; not yet in the repo.
-2. Repo files: CLAUDE.md (conventions), ROADMAP.md (session log), TOEBEANS_VISION.md (director's own vision doc — the source of truth for design if it and DESIGN.md ever disagree), DESIGN.md (working design doc restating the vision, plus the approved v1.0/v1.x/Steam scope split), IDEAS.md (currently empty — no parked ideas yet), README.md, TOEBEANS_CONTEXT_HANDOFF.md (this file).
+2. Repo files: CLAUDE.md (conventions), ROADMAP.md (session log), TOEBEANS_VISION.md (director's own vision doc — the source of truth for design if it and DESIGN.md ever disagree), DESIGN.md (working design doc restating the vision, plus the approved v1.0/v1.x/Steam scope split), IDEAS.md (one parked idea: finish line / run completion), README.md, TOEBEANS_CONTEXT_HANDOFF.md (this file).
 
 What the game is (from DESIGN.md — decided, do not contradict)
 
@@ -47,11 +47,11 @@ Current status (as of end of day, July 20, 2026)
 * Phase 1, Step 1.4 (approve the cut): DONE — folded into the 1.3 approval above.
 * Phase 1, Step 1.5 (art reference photos → style bible): NOT STARTED in the repo. Director has collected 3–5 low-poly reference screenshots (known from advisor conversation only — not yet reflected in any repo file). Deliberately deferred until M1 passes its fun check, since M1 is gray-box/placeholder-shapes only and doesn't need art direction yet. Should run as its own session before M2 begins.
 * Phase 2 / M1 (prototype, in progress):
-  - [x] Gray-box ski slope — DONE. `/shared/skiing.ts` (pure logic), `/client/src/skiRender.ts` (three-quarter camera, placeholder box meshes), one hazard type (3 chasms), full keyboard controls (steer/lean/jump/boost). 12 tests passing, verified in an actual browser by Claude Code (not just automated tests).
-  - [ ] Character moves around a gray-box bedroom — not started.
-  - [ ] Basic cat follows/sits in the room — not started.
-  - [ ] Cat's 9 lives + crash/checkpoint loop — NEXT queued item. Currently a crash just freezes the run; this turns it into a real respawn-with-a-cost.
-  - [ ] Fun check gate — not yet run. Needs the remaining M1 items built first, then a genuine 30+ minute honest playtest per the playbook's Step 2.2.
+  - [x] Gray-box ski slope — DONE. `/shared/skiing.ts` (pure logic), `/client/src/skiRender.ts` (three-quarter camera, placeholder box meshes), one hazard type (3 chasms), full keyboard controls (steer/lean/jump/boost).
+  - [x] Cat's 9 lives + crash/checkpoint loop — DONE. Crashing costs a life, pauses 1.5s, respawns at the last checkpoint (one just past each chasm); losing all 9 forfeits the run (on-screen message; half XP once XP exists). HUD shows the lives counter.
+  - [x] Character moves around a gray-box bedroom — DONE. `/shared/bedroom.ts` (pure walking + wall/furniture collision with slide-along edges), `/client/src/bedroomRender.ts` (fixed Sims-style bird's-eye camera — rotation is an M2 item). The game now starts in the bedroom; Enter switches bedroom ↔ slope, and each trip to the slope is a fresh full-lives run (doubles as the retry after a forfeit). 24 tests passing across the suite; logic verified live in the browser by Claude Code.
+  - [ ] Basic cat follows/sits in the room — NEXT queued item (director confirmed, July 20, 2026): the last M1 build item before the fun-check gate.
+  - [ ] Fun check gate — not yet run. Needs the cat item built first, then a genuine 30+ minute honest playtest per the playbook's Step 2.2. Feel tuning (speeds, jump arc, pause length) belongs in that session.
   - Director has not yet personally playtested the ski slope firsthand (known from advisor conversation, not the repo) — was waiting on desktop access as of the last advisor session. This is the very next real-world action: pull latest on the PC via Claude Code, run `npm run dev`, and playtest before deciding whether to continue M1 or ask Claude Code to diagnose and offer fix options.
   - `crouch` is intentionally unbuilt — no hazard (tree limbs) exists yet for it to react to; will be added together with tree limbs rather than wired to nothing.
 
@@ -62,8 +62,8 @@ Facts to not hallucinate about
 * Nothing is deployed anywhere; no itch.io/portal/Steam accounts exist yet. The game only runs via `npm run dev` on the owner's machine.
 * No art assets are in the repo yet; no style bible yet.
 * Multiplayer code does not exist yet.
-* IDEAS.md is currently empty — nothing has been parked there yet.
-* README.md is stale: it still describes the project as "nothing playable yet," even though the ski slope now exists. Worth noting so it doesn't cause confusion, but it's a low-priority fix, not something to treat as ground truth over ROADMAP.md.
+* IDEAS.md has one parked idea (a finish line / run completion, needed before XP can exist — noticed during the 9-lives session). Nothing else is parked.
+* README.md is current again as of July 20, 2026 (describes both gray-box scenes and their controls).
 * The repo is now public — advisor Claude can read repo files directly via GitHub's raw URLs. This does not mean advisor Claude can write to the repo; commits still go through Claude Code.
 * Owner time budget: up to ~3 hrs/day. Owner is picky about graphics — visual iteration happens via screenshots pasted to Claude with short direction notes.
 * An unrelated prior project called "Windowsill" exists in Claude Code's memory with a "design before build" lesson; it is not part of Toebeans.

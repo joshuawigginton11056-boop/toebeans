@@ -190,9 +190,10 @@ Does walking speed feel right for a small room? Do the furniture bumps
 feel solid or sticky? Does starting at home (instead of on the slope)
 feel like the right shape for the game?
 
-**Next:** either the M1 fun-check verdict on the ski loop (needs your
-playtest impressions — feel tuning lives in that session), or the last
-M1 build item: the basic cat following/sitting in the bedroom.
+**Next:** the last M1 build item — the basic cat following/sitting in the
+bedroom (director call, 2026-07-20). After that, only the fun-check
+verdict remains in M1; it needs the director's playtest impressions, and
+feel tuning (speeds, jump arc, pause length) belongs in that session.
 
 ## Milestones
 
