@@ -7,6 +7,7 @@ export interface SkiSceneHandle {
   readonly camera: THREE.PerspectiveCamera;
   readonly player: THREE.Group;
   readonly chasmMeshes: ReadonlyMap<string, THREE.Mesh>;
+  readonly checkpointMeshes: ReadonlyMap<number, THREE.Mesh>;
 }
 
 const SLOPE_LENGTH = 100;
@@ -60,13 +61,35 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
 
   scene.add(player);
 
-  return { renderer, scene, camera, player, chasmMeshes: new Map() };
+  return {
+    renderer,
+    scene,
+    camera,
+    player,
+    chasmMeshes: new Map(),
+    checkpointMeshes: new Map(),
+  };
 }
 
 // Pure with respect to SkiState: only reads state to sync mesh transforms
 // and the camera, never writes back into it.
 export function syncSkiSceneToState(handle: SkiSceneHandle, state: SkiState): void {
   handle.player.position.set(state.lateral, state.height, -state.distance);
+  // Fallen over sideways during the crash pause, upright otherwise.
+  handle.player.rotation.z = state.status === "crashed" ? Math.PI / 2 : 0;
+
+  const checkpointMeshes = handle.checkpointMeshes as Map<number, THREE.Mesh>;
+  for (const checkpoint of state.checkpoints) {
+    if (checkpoint === 0 || checkpointMeshes.has(checkpoint)) continue;
+    const marker = new THREE.Mesh(
+      new THREE.PlaneGeometry(SLOPE_WIDTH, 0.5),
+      new THREE.MeshStandardMaterial({ color: 0x27ae60 }),
+    );
+    marker.rotation.x = -Math.PI / 2;
+    marker.position.set(0, 0.02, -checkpoint);
+    handle.scene.add(marker);
+    checkpointMeshes.set(checkpoint, marker);
+  }
 
   const meshes = handle.chasmMeshes as Map<string, THREE.Mesh>;
   for (const chasm of state.chasms) {

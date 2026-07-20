@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createInitialSkiState, stepSkiing, type SkiInput, type SkiState } from "./skiing";
+import {
+  createInitialSkiState,
+  RESPAWN_DELAY,
+  STARTING_LIVES,
+  stepSkiing,
+  type SkiInput,
+  type SkiState,
+} from "./skiing";
 
 const noInput: SkiInput = {
   left: false,
@@ -18,16 +25,29 @@ const nearChasm: SkiState = {
   height: 0,
   verticalVelocity: 0,
   speed: 8,
-  crashed: false,
+  status: "skiing",
+  lives: STARTING_LIVES,
+  respawnTimer: 0,
+  lastCheckpoint: 0,
+  checkpoints: [0, 26],
   chasms: [{ id: "c1", start: 20, width: 3 }],
 };
+
+function skiUntilCrash(start: SkiState): SkiState {
+  let state = start;
+  for (let i = 0; i < 60 && state.status === "skiing"; i++) {
+    state = stepSkiing(state, noInput, 0.02);
+  }
+  expect(state.status).toBe("crashed");
+  return state;
+}
 
 describe("stepSkiing", () => {
   it("moves downhill at base speed with no input", () => {
     const state = stepSkiing(createInitialSkiState(), noInput, 1);
 
     expect(state.distance).toBe(8);
-    expect(state.crashed).toBe(false);
+    expect(state.status).toBe("skiing");
   });
 
   it("steers laterally within the slope limits", () => {
@@ -49,16 +69,6 @@ describe("stepSkiing", () => {
     expect(jumped.height).toBeGreaterThan(0);
   });
 
-  it("crashes when reaching a chasm without enough height to clear it", () => {
-    let state = nearChasm;
-    for (let i = 0; i < 30; i++) {
-      state = stepSkiing(state, noInput, 0.02);
-    }
-
-    expect(state.distance).toBeGreaterThanOrEqual(20);
-    expect(state.crashed).toBe(true);
-  });
-
   it("clears a chasm when jumping over it", () => {
     let state = nearChasm;
     for (let i = 0; i < 30; i++) {
@@ -66,7 +76,8 @@ describe("stepSkiing", () => {
     }
 
     expect(state.distance).toBeGreaterThan(23);
-    expect(state.crashed).toBe(false);
+    expect(state.status).toBe("skiing");
+    expect(state.lives).toBe(STARTING_LIVES);
   });
 
   it("never mutates the input state", () => {
@@ -78,15 +89,75 @@ describe("stepSkiing", () => {
     expect(initial).toEqual(snapshot);
   });
 
-  it("stays crashed and stops advancing once crashed", () => {
-    let state = createInitialSkiState();
+  it("records the last checkpoint passed", () => {
+    let state: SkiState = { ...nearChasm, distance: 24, height: 1 };
     for (let i = 0; i < 30; i++) {
-      state = stepSkiing(state, noInput, 0.1);
+      state = stepSkiing(state, noInput, 0.02);
     }
-    expect(state.crashed).toBe(true);
 
-    const next = stepSkiing(state, { ...noInput, up: true, jump: true }, 1);
+    expect(state.distance).toBeGreaterThan(26);
+    expect(state.lastCheckpoint).toBe(26);
+  });
+});
 
-    expect(next).toEqual(state);
+describe("crashing and the cat's nine lives", () => {
+  it("costs a life and pauses when falling into a chasm", () => {
+    const crashed = skiUntilCrash(nearChasm);
+
+    expect(crashed.lives).toBe(STARTING_LIVES - 1);
+    expect(crashed.respawnTimer).toBeCloseTo(RESPAWN_DELAY, 5);
+  });
+
+  it("ignores input and holds position during the crash pause", () => {
+    const crashed = skiUntilCrash(nearChasm);
+
+    const during = stepSkiing(crashed, { ...noInput, jump: true, boost: true }, 0.1);
+
+    expect(during.status).toBe("crashed");
+    expect(during.distance).toBe(crashed.distance);
+    expect(during.respawnTimer).toBeCloseTo(crashed.respawnTimer - 0.1, 5);
+  });
+
+  it("respawns at the last checkpoint after the pause", () => {
+    const crashed = skiUntilCrash({ ...nearChasm, lastCheckpoint: 10 });
+
+    const respawned = stepSkiing(crashed, noInput, RESPAWN_DELAY + 0.01);
+
+    expect(respawned.status).toBe("skiing");
+    expect(respawned.distance).toBe(10);
+    expect(respawned.lateral).toBe(0);
+    expect(respawned.height).toBe(0);
+    expect(respawned.lives).toBe(STARTING_LIVES - 1);
+  });
+
+  it("can retry the same chasm after respawning", () => {
+    const crashed = skiUntilCrash(nearChasm);
+    const respawned = stepSkiing(crashed, noInput, RESPAWN_DELAY + 0.01);
+
+    let state = respawned;
+    for (let i = 0; i < 200; i++) {
+      state = stepSkiing(state, { ...noInput, jump: state.distance > 18 }, 0.02);
+    }
+
+    expect(state.distance).toBeGreaterThan(23);
+    expect(state.status).toBe("skiing");
+  });
+
+  it("forfeits the run when the last life is lost", () => {
+    const crashed = skiUntilCrash({ ...nearChasm, lives: 1 });
+    expect(crashed.lives).toBe(0);
+
+    const after = stepSkiing(crashed, noInput, RESPAWN_DELAY + 0.01);
+
+    expect(after.status).toBe("forfeited");
+  });
+
+  it("stays forfeited no matter the input", () => {
+    const crashed = skiUntilCrash({ ...nearChasm, lives: 1 });
+    const forfeited = stepSkiing(crashed, noInput, RESPAWN_DELAY + 0.01);
+
+    const next = stepSkiing(forfeited, { ...noInput, up: true, jump: true }, 1);
+
+    expect(next).toEqual(forfeited);
   });
 });

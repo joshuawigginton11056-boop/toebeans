@@ -109,6 +109,50 @@ verdict once both pieces are in.
 crash from "the run just stops" into a real checkpoint respawn with a
 life counter, so repeated crashes have a defined cost.
 
+## 2026-07-20 — M1: cat's 9 lives + crash/checkpoint loop
+
+Crashing is no longer a dead end. Falling into a chasm now costs one of the
+cat's 9 lives, pauses for 1.5 seconds (the skier visibly tips over
+sideways), and respawns you at the last checkpoint you passed. Lose all 9
+lives and the run is forfeited — a real end state, shown on screen. Per
+DESIGN.md, a forfeit will eventually pay half XP; XP itself doesn't exist
+yet.
+
+- `/shared` `skiing.ts`: the old `crashed` true/false flag became a
+  three-way run status — `skiing`, `crashed` (the brief pause), or
+  `forfeited` — plus a lives counter, a respawn timer, and checkpoints.
+  There's a checkpoint just past each chasm, so a crash only ever replays
+  the one hazard that got you, never the whole slope. 9 new/updated tests
+  (17 total) cover losing a life, the pause ignoring input, respawning at
+  the right checkpoint, retrying the same chasm, forfeiting on the last
+  life, and the forfeited state being final.
+- `/client`: green stripe markers on the snow show where checkpoints are;
+  the skier rotates onto their side during the crash pause; a new HUD
+  overlay (plain text in the corner) shows "🐱 × lives" and the
+  crash/forfeit messages.
+- Noticed while building: the slope has no finish line, so "a completed
+  run" isn't a real thing yet — parked in [IDEAS.md](IDEAS.md) rather than
+  built, since XP needs it and XP is a later session.
+- `npm run check` passes (17 tests). Browser verification hit a snag: the
+  preview pane stayed hidden this session, which freezes the game's
+  animation loop (browsers pause hidden tabs), so instead the real game
+  modules were loaded in the live page and stepped manually — full loop
+  confirmed: 9 crashes at the first chasm burn all 9 lives and end in
+  forfeit at ~36s; clearing chasm 1 then crashing into chasm 2 respawns at
+  checkpoint 26, not the start. The HUD text itself is the one bit only
+  eyeballs have not confirmed — worth a glance when playtesting.
+
+**What to playtest:** same as before (`npm run dev`, arrows/WASD, Space to
+jump, Shift to boost) — but now crash on purpose. Does the 1.5s crash pause
+feel right or annoying? Does respawning just past the previous gap feel
+fair? Is 9 lives too generous for a 3-gap slope? Check the corner counter
+counts down and the forfeit message appears when lives hit zero.
+
+**Next:** the M1 fun check — both halves of the gate (slope + lives loop)
+are now in, so the next session should be a playtest-and-verdict session:
+does the ski loop feel good enough to invest in art? Feel fixes (tuning
+speeds, jump arc, pause length) belong in that session too.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -120,7 +164,7 @@ land them; each session still gets its own dated log entry above.
 - [ ] Character moves around a gray-box bedroom
 - [ ] Basic cat follows/sits in the room
 - [x] One gray-box ski slope: movement, controls, one hazard type
-- [ ] Cat's 9 lives + crash/checkpoint loop
+- [x] Cat's 9 lives + crash/checkpoint loop
 - [ ] Fun check: does the ski loop feel good before investing in art?
 
 ### M2 — Vertical slice
