@@ -553,9 +553,15 @@ synthesized sound)? And the standing question, now answerable: with these
 effects in your ears, what should the music be — lofi, ambient-only, or
 calm instrumental?
 
+**Playtest verdict (director, 2026-07-21):** the sounds land — "speed
+feels real now," and the wind is the favorite. One note: the ski-carve
+hiss is too loud relative to the rest — parked in
+[IDEAS.md](IDEAS.md) for the end-of-M2 tuning pass rather than tweaked
+now, per the no-nibbling rule. The music direction question stays open
+until the director calls it (lofi vs ambient-only vs calm instrumental).
+
 **Next:** the UI tone restyle (middle ground — this session's director
-call), then save/load to finish the M2 list. Music direction is decided
-by the director after playtesting the effects.
+call), then save/load to finish the M2 list.
 
 ## Milestones
 

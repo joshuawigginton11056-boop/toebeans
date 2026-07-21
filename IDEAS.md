@@ -25,6 +25,13 @@ land here instead of in code.
   under the SIL Open Font License — would push the cozy tone further.
   Needs a director yes/no because it means downloading a font file into
   the repo (plus a CREDITS.md row). Cheap to do in any later UI session.
+- **Turn down the ski-carve sound** (director playtest note, 2026-07-21,
+  sound session): the sound effects passed playtest — speed feels real,
+  the wind is the favorite — but the ski/carve hiss is too loud relative
+  to the rest. A picky-tuning item, not a redo: lower the carve layer's
+  loudness (the `carve` numbers in `client/src/audio.ts`'s
+  `setLayerTargets`) in the end-of-M2 tuning pass, alongside the parked
+  visual tweaks.
 - **Dynamic title screen** (director direction, 2026-07-21, sound
   session): the game still drops you straight into the bedroom with no
   framing — no game name, no "press Enter". The director's call: when it
