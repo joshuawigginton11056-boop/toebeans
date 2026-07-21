@@ -492,9 +492,12 @@ questions: is soft-and-rounded the right tone against the austere slope,
 and do you want a title screen session soon?
 
 **Next:** per the M2 list — sound for the slope (music + effects), then
-save/load. Direction questions for sound/music are still with the
-director; slope-side character art (skier/cat models) also remains open
-under the M2 assets item.
+save/load. **Director instruction (2026-07-21): re-ask the direction
+questions at the top of the next session** — both the sound/music
+direction and a ratify-or-change pass on this session's three UI
+defaults (HUD-only scope, nine icons, soft-rounded tone). Slope-side
+character art (skier/cat models) also remains open under the M2 assets
+item.
 
 ## Milestones
 

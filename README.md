@@ -3,8 +3,9 @@
 A cozy 3D game: ski mountain slopes with your cat, earn XP, and decorate a
 home you customize together. Early build — two playable scenes (a bedroom
 to walk around and a ski slope with crashes, checkpoints, and the cat's 9
-lives). The slope is getting its real art first (snowy trees and rocks are
-in; lighting, UI, and sound are next); the bedroom is still gray-box. Most
+lives). The slope is getting its real art first (snowy trees and rocks,
+the dawn lighting pass, and the real UI are in; sound and save/load are
+next); the bedroom is still gray-box. Most
 of the game described in [`DESIGN.md`](DESIGN.md) isn't built yet. See
 [`ROADMAP.md`](ROADMAP.md) for what's done and what's next.
 
@@ -28,9 +29,11 @@ the slope. Controls:
   up/down to speed up or brake, **Space** to jump the gaps in the snow,
   **Shift** to boost. Crashing costs one of the cat's 9 lives and sends
   you back to the last checkpoint (ice-blue stripe); lose all 9 and the
-  run is forfeited. The treelines flanking the run are the first real
-  art — see [`assets/CREDITS.md`](assets/CREDITS.md) for where they come
-  from.
+  run is forfeited. The nine cat faces in the top-left corner are the
+  lives — each one fades out as it's spent — and the chips along the
+  bottom of the screen show the controls for whichever scene you're in.
+  The treelines flanking the run are the first real art — see
+  [`assets/CREDITS.md`](assets/CREDITS.md) for where they come from.
 
 Other useful commands:
 
