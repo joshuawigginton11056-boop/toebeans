@@ -85,6 +85,70 @@ describe("stepBedroom", () => {
     expect(state.player.z).toBeGreaterThan(-1.5);
   });
 
+  it("cat trots over to greet the player at game start", () => {
+    // The initial state deliberately spawns the cat far enough from the
+    // player that it starts following right away.
+    let state = createInitialBedroomState();
+    const startDistance = Math.hypot(
+      state.player.x - state.cat.x,
+      state.player.z - state.cat.z,
+    );
+
+    state = stepBedroom(state, noInput, 0.02);
+    expect(state.cat.mood).toBe("following");
+
+    // Two simulated seconds is plenty to cross the room.
+    state = walk(state, noInput, 100);
+    const endDistance = Math.hypot(
+      state.player.x - state.cat.x,
+      state.player.z - state.cat.z,
+    );
+
+    expect(endDistance).toBeLessThan(startDistance);
+    expect(endDistance).toBeLessThanOrEqual(1.2);
+    expect(state.cat.mood).toBe("sitting");
+  });
+
+  it("cat stays sitting while the player is close enough", () => {
+    // Player at ~1.5 away: between the stop distance (where a following
+    // cat sits down) and the start distance (where a sitting cat gets up).
+    const start: BedroomState = {
+      ...createInitialBedroomState(),
+      player: { x: -1.6, z: 0.6 },
+    };
+    const state = walk(start, noInput, 50);
+
+    expect(state.cat).toEqual(start.cat);
+  });
+
+  it("cat faces the direction it walks", () => {
+    // Player due +x of the cat, so the cat should face +x: atan2(dx, dz)
+    // with dz = 0 is π/2.
+    const start: BedroomState = {
+      ...createInitialBedroomState(),
+      player: { x: 3, z: -0.9 },
+      obstacles: [],
+    };
+    const state = stepBedroom(start, noInput, 0.02);
+
+    expect(state.cat.mood).toBe("following");
+    expect(state.cat.facing).toBeCloseTo(Math.PI / 2, 5);
+  });
+
+  it("cat is blocked by furniture on the way to the player", () => {
+    // Cat left of the desk, player straight through it on the other side.
+    // The desk's left face is at x = 3.3; the cat's radius is 0.2.
+    const start: BedroomState = {
+      ...createInitialBedroomState(),
+      player: { x: 4.4, z: 1.6 },
+      cat: { x: 1.9, z: 1.6, facing: 0, mood: "sitting" },
+    };
+    const state = walk(start, noInput, 500);
+
+    expect(state.cat.x).toBeCloseTo(3.3 - 0.2, 5);
+    expect(state.cat.z).toBeCloseTo(1.6, 5);
+  });
+
   it("never mutates the input state", () => {
     const initial = createInitialBedroomState();
     const snapshot = JSON.parse(JSON.stringify(initial));

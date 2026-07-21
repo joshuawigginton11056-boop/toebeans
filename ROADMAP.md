@@ -195,6 +195,48 @@ bedroom (director call, 2026-07-20). After that, only the fun-check
 verdict remains in M1; it needs the director's playtest impressions, and
 feel tuning (speeds, jump arc, pause length) belongs in that session.
 
+## 2026-07-20 — M1: basic cat follows/sits in the bedroom
+
+The cat is in the room — the last M1 build item. It starts the game sitting
+beside the bed, trots over to greet you when the game starts, follows you
+around the room, and sits back down when it catches up.
+
+- `/shared` `bedroom.ts`: the bedroom state gains a cat (position, facing
+  direction, and a mood — `sitting` or `following`). The cat's whole brain
+  is: sit until the player is more than 2.2 units away, walk toward them at
+  3.0 units/s (a touch slower than the player's 3.5, so it trails behind
+  rather than gluing to your heels), and sit back down within 1.1 units.
+  The two different distances stop it flickering between sitting and
+  standing at one boundary. It collides with walls and furniture using the
+  same slide-along-edges logic as the player, just with a smaller
+  footprint. The cat thinks every frame, so it keeps walking toward you
+  while you stand still. 4 new tests (28 total): greeting at game start,
+  staying seated while you're close, facing its walk direction, and being
+  blocked by the desk.
+- `/client` `bedroomRender.ts`: an orange box for the cat (same orange as
+  the ski scene's cat, so it reads as the same character), rotated to face
+  where it's walking. Sitting is the same box stood up taller and
+  shortened front-to-back so the two poses read at a glance from the
+  bird's-eye camera.
+- `npm run check` passes (28 tests). Browser verification: the preview
+  pane's screenshot path was stuck again (third session running), so the
+  real modules were stepped manually in the live page — the cat greets at
+  game start and settles at ~1.06 units, follows during a walk (while the
+  player correctly stops against the desk at x=3.0), and sits back down at
+  ~1.07 units after you stop. The cat's rendered look (color, poses,
+  rotation) is the one thing only eyeballs can confirm — worth a glance
+  when playtesting.
+
+**What to playtest:** `npm run dev` — you start in the bedroom and the cat
+should trot over to you on its own. Walk around; does the follow distance
+feel companionable or clingy? Trap it behind furniture — does it look
+stuck-dumb or acceptably cat-like? Does the sit-down pose read as sitting?
+
+**Next:** the M1 fun check — every build item is done, so the next session
+is the playtest-and-verdict session: does the loop feel good enough to
+invest in art? Feel tuning (speeds, jump arc, pause length, follow
+distances) belongs in that session.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -204,7 +246,7 @@ land them; each session still gets its own dated log entry above.
 ### M1 — Prototype (gray-box, "is this fun?" gate)
 
 - [x] Character moves around a gray-box bedroom
-- [ ] Basic cat follows/sits in the room
+- [x] Basic cat follows/sits in the room
 - [x] One gray-box ski slope: movement, controls, one hazard type
 - [x] Cat's 9 lives + crash/checkpoint loop
 - [ ] Fun check: does the ski loop feel good before investing in art?
