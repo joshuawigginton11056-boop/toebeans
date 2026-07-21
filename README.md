@@ -1,11 +1,12 @@
 # Toebeans
 
 A cozy 3D game: ski mountain slopes with your cat, earn XP, and decorate a
-home you customize together. Early build — the gray-box prototype now has
-two playable scenes (a bedroom to walk around and a ski slope with
-crashes, checkpoints, and the cat's 9 lives); most of the game described
-in [`DESIGN.md`](DESIGN.md) isn't built yet. See [`ROADMAP.md`](ROADMAP.md)
-for what's done and what's next.
+home you customize together. Early build — two playable scenes (a bedroom
+to walk around and a ski slope with crashes, checkpoints, and the cat's 9
+lives). The slope is getting its real art first (snowy trees and rocks are
+in; lighting, UI, and sound are next); the bedroom is still gray-box. Most
+of the game described in [`DESIGN.md`](DESIGN.md) isn't built yet. See
+[`ROADMAP.md`](ROADMAP.md) for what's done and what's next.
 
 ## Running it
 
@@ -15,7 +16,8 @@ npm run dev
 ```
 
 Then open the URL it prints (usually `http://localhost:5173`). You start
-in a gray-box bedroom — placeholder box shapes, no art yet. Controls:
+in a gray-box bedroom — placeholder box shapes; the real art starts on
+the slope. Controls:
 
 - **Enter** — switch between the bedroom and the ski slope. Every trip to
   the slope is a fresh run with full lives (this is also how you retry
@@ -25,8 +27,10 @@ in a gray-box bedroom — placeholder box shapes, no art yet. Controls:
 - On the slope: **arrow keys or WASD** to steer left/right and lean
   up/down to speed up or brake, **Space** to jump the gaps in the snow,
   **Shift** to boost. Crashing costs one of the cat's 9 lives and sends
-  you back to the last checkpoint (green stripe); lose all 9 and the run
-  is forfeited.
+  you back to the last checkpoint (ice-blue stripe); lose all 9 and the
+  run is forfeited. The treelines flanking the run are the first real
+  art — see [`assets/CREDITS.md`](assets/CREDITS.md) for where they come
+  from.
 
 Other useful commands:
 

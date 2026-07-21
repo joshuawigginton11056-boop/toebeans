@@ -261,6 +261,11 @@ staying a live concern. Director call for the next phase (their numbering:
 real assets, lighting, UI, sound, save/load — rather than spreading
 vertical-slice work across both areas at once.
 
+**Area chosen (July 21, 2026, director call):** the **ski slope**, with
+assets sourced from the Quaternius Ultimate Nature Pack (CC0) — its snow
+variants matched the bible's birch/pine/rock needs directly. The bedroom
+reaches the same polish level in M3.
+
 ### v1.0 — smallest shippable version (web launch, M5)
 
 Everything needed for the full loop — ski → earn XP → level up → unlock →

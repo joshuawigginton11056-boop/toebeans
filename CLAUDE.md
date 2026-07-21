@@ -27,7 +27,12 @@ it's explained.
 /client   Vite + Three.js app. Rendering only.
 /server   Server-side code.
 /shared   Pure game logic, shared between client and server.
-/assets   Art, audio, and other static assets (not code).
+/assets   Art, audio, and other static assets (not code). Vite serves
+          this directory as-is, so assets/slope/X.glb is /slope/X.glb
+          in the game. Every asset needs a row in assets/CREDITS.md.
+/tools    Build-time scripts (not shipped). obj2glb_palette.py converts
+          downloaded models to palette-recolored .glb per the Art Style
+          Bible in DESIGN.md.
 ```
 
 ## The core rule: state and rendering are separate
