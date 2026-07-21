@@ -156,54 +156,104 @@ landscape accents (7–10), ~5% character/signal (11–12). If a screenshot
 feels wrong, count the warm accents first — too many birch-amber trees
 kills the lonely-vast feeling.
 
-### Characters & customization — OPEN, needs a director call
+### Character palette (separate from the 12)
 
-Raised 2026-07-21 (cat-model session). The director wants full character
-customization — skin color, hair, eyes, "all of the things you would want
-to control for custom characters" — built on the proportions of
-Quaternius's
-[Ultimate Animated Character Pack](https://quaternius.com/packs/ultimatedanimatedcharacter.html)
-(CC0). That collides with the palette above, so it needs deciding **before
-the skier is built**, because it's cheap now and expensive later.
+**Director call, 2026-07-21 (skier session):** skin and hair get their own
+palette. The 12 landscape colors above are **left alone** — they were
+written for a landscape and stay that way.
 
-**The method is settled and cheap.** Quaternius colors his models with a
-shared texture atlas of flat swatches; `tools/glb_palette.py` bakes those
-into palette vertex colors and strips the texture, which leaves the model
-split into named **color regions** (the cat came out as body / belly /
-eyes / nose). A human will bake out as skin / hair / eyes / shirt /
-trousers / shoes. So:
+The rule that replaces "every material comes from the 12": *landscape and
+props* come from the 12; *characters* come from the 12 **plus** the ramps
+below. Nothing else may use the character ramps, and characters may not
+introduce colors outside them.
 
-- **Color customization is nearly free.** Split the mesh by region into
-  separate materials; customizing is then setting a material color. No new
-  geometry, no textures, unlimited options. Covers skin, hair color, eye
-  color, clothing colors.
+**Skin (8 tones)** — warm and slightly desaturated so faces sit against
+snow instead of glowing off it.
+
+| # | Hex | Name |
+|---|-----|------|
+| S1 | `#F4DAC4` | Porcelain |
+| S2 | `#EAC2A3` | Sand |
+| S3 | `#DCA77E` | Honey *(default)* |
+| S4 | `#C4855A` | Amber |
+| S5 | `#A2673F` | Chestnut |
+| S6 | `#7E4C2E` | Umber |
+| S7 | `#5C3722` | Cocoa |
+| S8 | `#3F2418` | Espresso |
+
+**Hair (8 colors)**
+
+| # | Hex | Name |
+|---|-----|------|
+| H1 | `#2B2622` | Soft black — never pure black, per the bible |
+| H2 | `#4A3628` | Dark brown *(default)* |
+| H3 | `#6E4B2E` | Chestnut |
+| H4 | `#8A5A30` | Auburn |
+| H5 | `#B4623C` | Ginger — deliberately off signal red, which stays reserved |
+| H6 | `#C79A4A` | Honey blonde |
+| H7 | `#E2CA92` | Pale blonde |
+| H8 | `#8C8C94` | Silver |
+
+**Eyes (5)**: `#3B2B22` brown *(default)*, `#4E6E7A` blue-gray, `#5A7A5C`
+green, `#6B5B45` hazel, `#2B2622` near-black.
+
+**Coat (5)**: `#4E72A8` skier blue *(default)*, `#2F6D63` pine teal,
+`#7A4E8C` plum, `#C0663A` rust, `#B23A48` cranberry. All saturated
+mid-darks that read instantly against snow. Skier blue stays the default so
+"you" looks the way the rest of the docs describe; the reservation rule
+relaxes to *the coat is always a saturated character color the landscape
+never uses*.
+
+**Trousers (4)**: `#3E3A3A` charcoal *(default)*, `#5A5F6B` slate gray,
+`#6E6152` taupe, `#2E3548` deep navy.
+**Boots (3)**: `#3A2F2F` dark brown *(default)*, `#2B2622` soft black,
+`#66738C` slate.
+
+Signal red (#12) is **not** in any character ramp — it stays reserved for
+"look at this", which is why the cat's scarf still reads as the one red
+thing on a skier.
+
+### Characters & customization — how it's built
+
+Raised 2026-07-21 (cat-model session), decided the same day (skier
+session). The director wants full character customization — skin color,
+hair, eyes, "all of the things you would want to control for custom
+characters".
+
+**Six regions, two bases.** Every character splits into the same six
+**color regions** — skin, hair, eyes, coat, trousers, boots — and each
+region takes one color from the ramps above. Customizing is setting those
+six colors; the geometry never changes. Two CC0 Quaternius bases are in
+the repo while the director picks between them (see *Character assets*
+below), and they carry their regions differently:
+
+- **Modular base** (`Skier_Modular.glb`) ships with six *named materials*
+  (Shirt, Skin, Pants, Eyes, Socks, Hair) and no textures at all.
+  Recoloring is setting a material color — nothing to bake.
+- **Animated base** (`Skier_Animated.glb`) shipped with a texture atlas,
+  which the bible bans, so `tools/glb_palette.py` baked it to palette
+  vertex colors. Its six regions are six distinct baked colors, and
+  recoloring rewrites the matching entries of the color attribute.
+
+Both are hidden behind one interface in `client/src/skierModel.ts`, so
+game code just sets an appearance and never learns which base is loaded.
+
+- **Color customization is nearly free**, and is what v1.0 ships
+  *(director call, 2026-07-21: "colors + a few hairstyles")*.
 - **Shape customization costs real art.** Hair *color* is a recolor; hair
   *style* is geometry, needing a hair slot on the head bone and N meshes to
   pick from. Quaternius's
   [Ultimate Modular Men Pack](https://quaternius.com/packs/ultimatemodularcharacters.html)
   is built exactly for this (each character split into 4 swappable pieces)
-  and is the pack to mine for parts.
+  and is the pack to mine for parts. **The hairstyle meshes are not built
+  yet** — the color seam landed first; hairstyles are their own session.
 - **It fits the architecture.** The choices are plain serializable data
-  (`{skin, hair, hairColor, eyes, …}`), so they live in `GameState` and the
-  existing save system persists them for free.
+  (`{base, skin, hair, eyes, coat, trousers, boots}`) living in
+  `shared/src/appearance.ts` as indices into the ramps above, so they can
+  never drift off-palette and the save system persists them for free.
 
-**The open question is the palette, not the code.** The 12 colors above
-contain **no skin tones** and no hair colors — the palette was written for
-a landscape, and the one character color in it (#11 skier blue) is a coat.
-Character customization therefore requires extending the bible. Options:
-
-1. **Add a character ramp** — a set of skin tones (say 6–8) and hair colors
-   that live *alongside* the 12 as a separate, character-only palette.
-   Keeps the landscape rules untouched; most likely right.
-2. **Fold them into the 12** — keeps one list, but 12 colors can't carry a
-   landscape *and* a range of human skin tones without going muddy.
-3. **Stylize past it** — non-realistic skin tones drawn from the existing
-   palette. Most visually cohesive, least conventional; would be a
-   deliberate art statement rather than a customization feature.
-
-Until this is called, the skier stays a gray box. Related: cat
-customization (same mechanism, already-baked regions) is parked in
-[IDEAS.md](IDEAS.md).
+Related: cat customization (same mechanism, already-baked regions) is
+parked in [IDEAS.md](IDEAS.md).
 
 ### Shape language
 
@@ -338,6 +388,24 @@ contains a cat; this was the one that did.) Asset research the same day
 established that **no CC0 skiing human exists** — every skier model found
 was CC-BY or paid — so the skier will be built from a generic CC0
 character, which is what makes the customization question above urgent.
+
+**The skier's base — undecided on purpose (July 21, 2026, director
+call):** the Animated Character Pack's male model turned out to be
+*unusable* for customization (one material, no texture, no color
+separation — it renders monochrome), which broke the premise of the
+original "use the animated pack" call. Two viable CC0 Quaternius bases
+were found instead, and the director's call was to **ship both and pick at
+playtest**:
+
+- `Skier_Modular.glb` — the Modular Men lineage. Six named materials, no
+  textures, 1,852 tris, 11 clips. Better seam, but not the proportions
+  originally preferred.
+- `Skier_Animated.glb` — the Animated Character Pack lineage (its female
+  model). 1,908 tris, 10 clips, atlas baked to palette vertex colors.
+
+The game ships with a key that swaps between them so the choice is made
+with eyes, not spreadsheets. **The loser gets deleted** once the director
+calls it — carrying two bases is a temporary state, not the design.
 
 ### v1.0 — smallest shippable version (web launch, M5)
 

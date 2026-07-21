@@ -1,10 +1,14 @@
 import {
+  createDefaultAppearance,
   createInitialBedroomState,
   createInitialSkiState,
   createSave,
+  cycleBase,
+  cycleRegion,
   restoreSave,
   stepBedroom,
   stepSkiing,
+  type Appearance,
   type BedroomInput,
   type SceneMode,
   type SkiInput,
@@ -41,9 +45,19 @@ let mode: SceneMode = restored?.mode ?? "bedroom";
 let bedroomState = restored?.bedroom ?? createInitialBedroomState();
 let skiState = restored?.ski ?? createInitialSkiState();
 let muted = restored?.muted ?? false;
+let appearance: Appearance = restored?.appearance ?? createDefaultAppearance();
 
 const bedroomScene = createBedroomScene(container, bedroomState);
 const skiScene = createSkiScene(container);
+
+// Both scenes show the same character, so they always get the same
+// appearance. Pushing it in (rather than the rigs reading state) keeps the
+// renderers free of game-state knowledge.
+function applyAppearance(): void {
+  bedroomScene.player.setAppearance(appearance);
+  skiScene.skier.setAppearance(appearance);
+}
+applyAppearance();
 
 function showActiveCanvas(): void {
   bedroomScene.renderer.domElement.style.display =
@@ -65,7 +79,7 @@ const audio = createAudio(muted);
 // (the moments that feel like "progress"), every few seconds as a safety
 // net, and when the tab is hidden or closed.
 function persist(): void {
-  writeSave(createSave(mode, bedroomState, skiState, muted));
+  writeSave(createSave(mode, bedroomState, skiState, muted, appearance));
 }
 
 const AUTOSAVE_SECONDS = 5;
@@ -75,6 +89,19 @@ const heldKeys = new Set<string>();
 window.addEventListener("keydown", (event) => {
   if (event.code === "KeyM") {
     muted = audio.toggleMuted();
+    persist();
+    return;
+  }
+  // Appearance keys. B is temporary — it swaps between the two candidate
+  // skier models so the director can pick one by eye, and goes away with
+  // the losing model. K and H stand in for the real customization UI (an M3
+  // item) and are the only way to see the color seam working until then.
+  if (event.code === "KeyB" || event.code === "KeyK" || event.code === "KeyH") {
+    appearance =
+      event.code === "KeyB"
+        ? cycleBase(appearance)
+        : cycleRegion(appearance, event.code === "KeyK" ? "skin" : "hair");
+    applyAppearance();
     persist();
     return;
   }

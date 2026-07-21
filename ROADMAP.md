@@ -775,6 +775,106 @@ built and they're all cheap now and expensive later. Written up in full in
 After the skier: music (the deliberately **last** M2 item), then the
 end-of-M2 tuning pass.
 
+## 2026-07-21 — M2: the skier is a real character (and customizable)
+
+The blue box is gone from both scenes. You are a real rigged person now,
+walking around the bedroom and skiing down the slope — and the character
+customization seam the director asked for is in and working, minus its UI.
+
+**Three director calls first, per last session's instruction:**
+
+1. **Skin and hair get their own palette**, leaving the landscape's 12
+   colors alone. Written into [DESIGN.md](DESIGN.md#character-palette-separate-from-the-12)
+   as a character-only ramp: 8 skin tones, 8 hair colors, 5 eye colors, 5
+   coats, 4 trousers, 3 boots. Signal red is deliberately in none of them —
+   it stays reserved, so the cat's scarf is still the one red thing on a
+   skier.
+2. **Customization depth: colors + a few hairstyles.** Colors landed this
+   session. Hairstyles are geometry rather than a recolor, so they're their
+   own session — parked in [IDEAS.md](IDEAS.md) rather than half-built.
+3. **Which base model** — this one changed shape mid-session, see below.
+
+**The base model question got re-opened by the facts.** The Animated
+Character Pack's *male* model turned out to be unusable: one material, no
+texture, no color separation at all, so it renders monochrome and can't be
+customized without re-authoring it. Two other CC0 Quaternius bases work,
+and the director's call was to **ship both and pick at playtest**:
+
+- `Skier_Modular.glb` — six named materials out of the box, no textures,
+  1,852 tris, 11 clips. The better seam.
+- `Skier_Animated.glb` — the animated pack's female model, 1,908 tris, 10
+  clips, texture atlas baked to palette vertex colors by the same tool the
+  cat used.
+
+**Press B in the bedroom to swap between them.** That key is temporary and
+goes away with the losing model.
+
+- `/shared` gets `appearance.ts`: the ramps plus the character's chosen
+  colors, stored as **indices into the ramps** rather than raw hex — an
+  index can't drift off-palette, it survives a ramp being re-tuned, and
+  validating a save becomes a range check instead of a color parse. 12 new
+  tests (53 total) cover resolving, cycling, wrapping, non-mutation, and
+  the reserved-red rule.
+- Appearance rides in the save, so it persists for free. `SAVE_VERSION`
+  went 1 → 2, which **discards existing saves** — that costs a position and
+  a run in progress, and the alternative was supporting two save shapes
+  forever. Out-of-range indices are healed by clamping, like stale
+  positions already were; wrong *types* are still rejected outright.
+- `/client` gets `skierModel.ts`, which hides the two bases behind one
+  interface — the rest of the game sets an appearance and never learns
+  which base is loaded. The modular base recolors by setting material
+  colors; the animated base rewrites the color-attribute entries belonging
+  to each region, matched once at load against their baked colors.
+- The bedroom player now faces the way they're walking and switches between
+  standing and walking animations. That heading is derived in the renderer
+  from the movement between frames rather than added to `BedroomState` —
+  it's presentation, not simulation. Flagged in IDEAS.md for the day
+  something in `/shared` needs it.
+- `npm run check` (53 tests) and `npm run build` pass. Verified in the live
+  page by driving the real modules (screenshots timed out again — eleventh
+  session running): both bases load and normalize to 1.6 units with feet on
+  the ground, all six regions resolve to exactly the colors
+  `resolveAppearance` predicts on both bases, recoloring one region leaves
+  the other five untouched, every animation clip name resolves on both
+  bases (a wrong name would silently do nothing), swapping bases keeps
+  exactly one model mounted, and a rendered frame reads the coat, skin,
+  hair, trousers and the cat's amber in their correct lit palette colors —
+  with flat snow landing within 2/255 of palette #1, matching the lighting
+  session's own measurement.
+
+**Two real bugs were caught by that verification, not by the tests:**
+
+- **The skier leaned uphill.** The ski pose is a forward lean, and the lean
+  was being applied *inside* the half-turn that points the skier downhill —
+  which flipped it, tipping them back into the hill by a third of a unit of
+  head travel. The rig now applies lean above the turn, and the fix is
+  measured: the head moves 0.33 units downhill instead of uphill.
+- **The cat was riding inside the skier's chest.** Its offset was tuned
+  against the old 1-unit box; on a real 1.6-unit person leaning downhill it
+  landed *in* the torso. Now it sits against the back with a 22mm gap,
+  still facing back toward the camera so you can see its face and scarf.
+
+**Found, deliberately not fixed:** the modular base is wearing a **t-shirt
+and shorts** on a ski slope — lit skin is the single largest non-snow color
+in a frame. The animated base is better dressed. Parked in IDEAS.md,
+because it may well decide the base-model question by itself.
+
+**What to playtest:** `npm run dev`. In the bedroom, walk around — does the
+character turn and walk convincingly, and is 1.6 units the right size next
+to the furniture and the cat? Then **press B** to swap between the two
+candidate bodies, and **K** and **H** to cycle skin and hair. The real
+questions: **which of the two bodies should the game keep** (proportions,
+how they read at ski distance, and whether the shorts are a dealbreaker),
+do the skin and hair ramps have the range you want, and does the character
+still read as "you" at slope distance now that they're not a blue box? Then
+Enter to ski: does the forward lean look like skiing, and can you see the
+cat on your back?
+
+**Next:** the base-model call, then music (the deliberately **last** M2
+item: timed per-slope songs, see IDEAS.md), then the end-of-M2 tuning pass.
+Hairstyle geometry and the skier's winter clothes are both parked and
+should probably follow the base-model decision.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -800,8 +900,10 @@ sounds like the real game.
       phase *(slope — director call, 2026-07-21)*
 - [ ] Real (non-gray-box) assets for that area, in the *Omno*-target
       low-poly style *(slope-side trees/rocks in 2026-07-21; the cat is a
-      real rigged model as of 2026-07-21 — the skier, slope surface detail,
-      and hazard art are still gray-box)*
+      real rigged model as of 2026-07-21; the **skier** is a real rigged,
+      customizable character as of 2026-07-21 — two candidate bases pending
+      the director's pick. Slope surface detail and hazard art are still
+      gray-box)*
 - [x] Lighting pass for that area *(2026-07-21 — sun, palette-exact blue
       shadows, dawn-pink haze, visible sun disc)*
 - [x] Real UI (replace the plain-text HUD overlay) *(2026-07-21 —

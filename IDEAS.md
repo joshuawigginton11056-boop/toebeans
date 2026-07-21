@@ -77,6 +77,31 @@ land here instead of in code.
   tuxedo, calico) would mean either per-region vertex groups or a second
   color set; breed/shape variety would mean new meshes. Should ship
   alongside character customization so both live in one place.
+- **The skier is dressed for summer** (noticed 2026-07-21, skier session):
+  measuring the modular base's parts showed its "Pants" region only covers
+  0.49–0.87 units of a 1.6-unit body, with bare skin below and above — it's
+  a **t-shirt and shorts**, on a ski slope. Lit skin is the single largest
+  non-snow color in a rendered frame. The animated base is better dressed
+  (its trousers region runs the full leg). Fixing it properly means real
+  art: a jacket/trousers piece mined from the
+  [Ultimate Modular Men Pack](https://quaternius.com/packs/ultimatemodularcharacters.html)
+  (built for exactly this kind of part-swapping), or accepting it as a
+  deliberate "this cat owner is very hardy" joke. Worth settling alongside
+  the base-model choice, since it may decide it.
+- **Hairstyle geometry** (director direction, 2026-07-21, skier session):
+  the call was "colors + a few hairstyles" for v1.0. The **colors** half
+  landed this session; hairstyles are geometry, not a recolor, so they need
+  a hair slot on the head bone and N meshes to pick from — the Modular Men
+  pack is the source. Its own session, and it should probably wait until
+  the base model is chosen, since the hair has to fit that skull.
+- **Player facing lives in the renderer, not the state** (noticed
+  2026-07-21, skier session): `BedroomState` has a facing for the cat (its
+  brain needs one) but not for the player, so `bedroomRender.ts` derives
+  the player's heading from how their position moved between two frames.
+  That's fine while facing is pure presentation, but the moment anything in
+  `/shared` needs to know which way the player looks — interacting with
+  furniture, picking the cat up, an emote — it should become real state
+  with tests, like the cat's.
 - **Dynamic title screen** (director direction, 2026-07-21, sound
   session): the game still drops you straight into the bedroom with no
   framing — no game name, no "press Enter". The director's call: when it

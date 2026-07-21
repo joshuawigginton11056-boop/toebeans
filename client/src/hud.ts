@@ -161,6 +161,13 @@ const BEDROOM_HINTS: readonly Hint[] = [
   { key: "WASD / ←↑↓→", label: "walk" },
   { key: "Enter", label: "go skiing" },
   { key: "M", label: "mute" },
+  // Home is where you'd look at yourself, so the appearance keys live in
+  // the bedroom only. B is temporary: it swaps between the two candidate
+  // skier models so the director can pick one by eye. K and H stand in for
+  // the real customization UI, which is an M3 item.
+  { key: "B", label: "body" },
+  { key: "K", label: "skin" },
+  { key: "H", label: "hair" },
 ];
 
 const SLOPE_HINTS: readonly Hint[] = [

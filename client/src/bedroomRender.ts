@@ -1,13 +1,23 @@
 import * as THREE from "three";
-import { PLAYER_RADIUS, type BedroomState } from "@toebeans/shared";
+import { type BedroomState } from "@toebeans/shared";
 import { createCatRig, type CatRig } from "./catModel";
+import { createSkierRig, type SkierRig } from "./skierModel";
 
 export interface BedroomSceneHandle {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
-  readonly player: THREE.Mesh;
+  readonly player: SkierRig;
   readonly cat: CatRig;
+  /**
+   * Which way the player is facing and where they were last frame.
+   *
+   * BedroomState deliberately has no player facing — the cat has one because
+   * its brain needs it, but the player's is pure presentation, derived here
+   * from how the position moved between two frames. That keeps a rendering
+   * concern out of the shared game state.
+   */
+  readonly walk: { lastX: number; lastZ: number; facing: number };
 }
 
 const WALL_HEIGHT = 1.2;
@@ -85,22 +95,28 @@ export function createBedroomScene(
     scene.add(mesh);
   }
 
-  // Same blue as the skier so it reads as "you" in both scenes.
-  const player = new THREE.Mesh(
-    new THREE.BoxGeometry(PLAYER_RADIUS * 2, 1.6, PLAYER_RADIUS * 2),
-    // Palette skier blue — the same "you" color as the ski scene.
-    new THREE.MeshStandardMaterial({ color: 0x4e72a8 }),
-  );
-  player.position.y = 0.8;
-  scene.add(player);
+  // The same skier rig that goes down the slope, so "you" are recognizably
+  // one person in both scenes — same model, same appearance colors.
+  const player = createSkierRig();
+  scene.add(player.group);
 
   // The real cat model — the same rig that rides along on the slope, so
   // it's recognizably one animal in both scenes.
   const cat = createCatRig();
   scene.add(cat.group);
 
-  return { renderer, scene, camera, player, cat };
+  return {
+    renderer,
+    scene,
+    camera,
+    player,
+    cat,
+    walk: { lastX: state.player.x, lastZ: state.player.z, facing: 0 },
+  };
 }
+
+/** Below this much movement in one frame, treat the player as standing still. */
+const WALK_EPSILON = 1e-4;
 
 // Only reads BedroomState to place the player and cat meshes — never
 // writes state.
@@ -109,7 +125,23 @@ export function syncBedroomSceneToState(
   state: BedroomState,
   dt: number,
 ): void {
-  handle.player.position.set(state.player.x, 0.8, state.player.z);
+  // Walking or standing, and which way — read off the movement since last
+  // frame rather than from state (see the `walk` note on the handle).
+  const dx = state.player.x - handle.walk.lastX;
+  const dz = state.player.z - handle.walk.lastZ;
+  handle.walk.lastX = state.player.x;
+  handle.walk.lastZ = state.player.z;
+  const moving = Math.hypot(dx, dz) > WALK_EPSILON;
+  if (moving) {
+    // Keep the last heading when standing still, so stopping doesn't snap
+    // the player back to facing the camera.
+    handle.walk.facing = Math.atan2(dx, dz);
+  }
+
+  handle.player.setPose(moving ? "walking" : "idle");
+  handle.player.update(dt);
+  handle.player.group.position.set(state.player.x, 0, state.player.z);
+  handle.player.setFacing(handle.walk.facing);
 
   // The cat's two moods map straight onto two animation clips — no more
   // squash-and-stretch box tricks to tell sitting from walking.

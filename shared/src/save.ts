@@ -1,4 +1,9 @@
 import {
+  SKIER_BASES,
+  normalizeAppearance,
+  type Appearance,
+} from "./appearance";
+import {
   CAT_RADIUS,
   PLAYER_RADIUS,
   createInitialBedroomState,
@@ -25,7 +30,11 @@ import {
 // are then discarded (decodeSave returns null) and the game starts fresh,
 // which is always safe this early in the project.
 
-export const SAVE_VERSION = 1;
+// Bumped to 2 (skier session): saves now carry the character's appearance.
+// Saves written before it are discarded, which costs a player their position
+// and the current run — acceptable this early, and the alternative is two
+// save shapes to support forever.
+export const SAVE_VERSION = 2;
 
 export type SceneMode = "bedroom" | "slope";
 
@@ -33,6 +42,7 @@ export interface SaveData {
   readonly version: number;
   readonly mode: SceneMode;
   readonly muted: boolean;
+  readonly appearance: Appearance;
   readonly bedroom: {
     readonly player: { readonly x: number; readonly z: number };
     readonly cat: {
@@ -60,11 +70,13 @@ export function createSave(
   bedroom: BedroomState,
   ski: SkiState,
   muted: boolean,
+  appearance: Appearance,
 ): SaveData {
   return {
     version: SAVE_VERSION,
     mode,
     muted,
+    appearance,
     bedroom: {
       player: { x: bedroom.player.x, z: bedroom.player.z },
       cat: {
@@ -117,6 +129,20 @@ export function decodeSave(json: string): SaveData | null {
   if (parsed.mode !== "bedroom" && parsed.mode !== "slope") return null;
   if (typeof parsed.muted !== "boolean") return null;
 
+  // Appearance: reject the wrong *kind* of value, but leave out-of-range
+  // indices to normalizeAppearance below — same split as everywhere else
+  // here, where a wrong type is corruption and a stale number is healable.
+  const appearance = parsed.appearance;
+  if (!isRecord(appearance)) return null;
+  if (!SKIER_BASES.includes(appearance.base as Appearance["base"])) return null;
+  const indices = ["skin", "hair", "eyes", "coat", "trousers", "boots"] as const;
+  const picked = {} as Record<(typeof indices)[number], number>;
+  for (const field of indices) {
+    const value = appearance[field];
+    if (!isFinite(value)) return null;
+    picked[field] = value;
+  }
+
   const bedroom = parsed.bedroom;
   if (!isRecord(bedroom)) return null;
   const player = bedroom.player;
@@ -165,6 +191,10 @@ export function decodeSave(json: string): SaveData | null {
     version: SAVE_VERSION,
     mode: parsed.mode,
     muted: parsed.muted,
+    appearance: normalizeAppearance({
+      base: appearance.base as Appearance["base"],
+      ...picked,
+    }),
     bedroom: {
       player: { x: player.x, z: player.z },
       cat: { x: cat.x, z: cat.z, facing: cat.facing, mood: cat.mood },
@@ -186,6 +216,7 @@ export function decodeSave(json: string): SaveData | null {
 export interface RestoredGame {
   readonly mode: SceneMode;
   readonly muted: boolean;
+  readonly appearance: Appearance;
   readonly bedroom: BedroomState;
   readonly ski: SkiState;
 }
@@ -218,6 +249,7 @@ export function restoreSave(save: SaveData): RestoredGame {
   return {
     mode: save.mode,
     muted: save.muted,
+    appearance: normalizeAppearance(save.appearance),
     bedroom: {
       ...bedroomBase,
       player: {

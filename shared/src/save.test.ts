@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  SKIN_TONES,
+  createDefaultAppearance,
   createInitialBedroomState,
   createInitialSkiState,
   stepBedroom,
@@ -34,7 +36,8 @@ function midGameSave() {
   for (let i = 0; i < 60 * 6; i++) {
     ski = stepSkiing(ski, idleSkiInput, 1 / 60);
   }
-  return { bedroom, ski, save: createSave("slope", bedroom, ski, true) };
+  const appearance = { ...createDefaultAppearance(), skin: 5, hair: 4, coat: 2 };
+  return { bedroom, ski, appearance, save: createSave("slope", bedroom, ski, true, appearance) };
 }
 
 describe("save/load", () => {
@@ -52,6 +55,41 @@ describe("save/load", () => {
     expect(restored.ski.lives).toBe(ski.lives);
     expect(restored.ski.status).toBe(ski.status);
     expect(restored.ski.lastCheckpoint).toBe(ski.lastCheckpoint);
+  });
+
+  it("round-trips the character's appearance", () => {
+    const { appearance, save } = midGameSave();
+    const restored = restoreSave(decodeSave(encodeSave(save))!);
+    expect(restored.appearance).toEqual(appearance);
+  });
+
+  it("rejects appearances of the wrong kind", () => {
+    const { save } = midGameSave();
+    const cases: ReadonlyArray<Record<string, unknown>> = [
+      { ...save, appearance: "brown hair" },
+      { ...save, appearance: { ...save.appearance, base: "claymation" } },
+      { ...save, appearance: { ...save.appearance, skin: "honey" } },
+      { ...save, appearance: { ...save.appearance, hair: null } },
+      { ...save, appearance: { ...save.appearance, coat: Number.NaN } },
+    ];
+    for (const broken of cases) {
+      expect(decodeSave(JSON.stringify(broken))).toBeNull();
+    }
+  });
+
+  it("heals appearance indices that fell off the end of a ramp", () => {
+    const { save } = midGameSave();
+    // A save written when the ramps were longer (or hand-edited): the index
+    // is a real number, just out of range, so it clamps rather than wiping
+    // the whole save.
+    const stale = {
+      ...save,
+      appearance: { ...save.appearance, skin: 99, hair: -3, eyes: 2.7 },
+    };
+    const restored = restoreSave(decodeSave(JSON.stringify(stale))!);
+    expect(restored.appearance.skin).toBe(SKIN_TONES.length - 1);
+    expect(restored.appearance.hair).toBe(0);
+    expect(restored.appearance.eyes).toBe(2);
   });
 
   it("restores static layout from code, not from the save", () => {
@@ -89,7 +127,7 @@ describe("save/load", () => {
 
     const { save } = midGameSave();
     // Drop each top-level piece in turn.
-    for (const key of ["mode", "muted", "bedroom", "ski"] as const) {
+    for (const key of ["mode", "muted", "bedroom", "ski", "appearance"] as const) {
       const broken: Record<string, unknown> = { ...save };
       delete broken[key];
       expect(decodeSave(JSON.stringify(broken))).toBeNull();
@@ -167,7 +205,13 @@ describe("save/load", () => {
       ski = stepSkiing(ski, idleSkiInput, 1 / 60);
     }
     expect(ski.status).toBe("crashed");
-    const save = createSave("slope", createInitialBedroomState(), ski, false);
+    const save = createSave(
+      "slope",
+      createInitialBedroomState(),
+      ski,
+      false,
+      createDefaultAppearance(),
+    );
     let restored = restoreSave(decodeSave(encodeSave(save))!).ski;
     // Let the pause run out: the restored run must respawn at the
     // checkpoint, exactly like an uninterrupted one.

@@ -1,6 +1,7 @@
 export * from "./skiing";
 export * from "./bedroom";
 export * from "./save";
+export * from "./appearance";
 
 export interface Vector3 {
   readonly x: number;

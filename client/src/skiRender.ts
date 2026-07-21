@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { SkiState } from "@toebeans/shared";
 import { createCatRig, type CatRig } from "./catModel";
+import { createSkierRig, type SkierRig } from "./skierModel";
 
 // Art Style Bible palette (DESIGN.md) — every color in this scene comes
 // from these 12 (or a value shift of one, which the bible allows).
@@ -33,6 +34,7 @@ export interface SkiSceneHandle {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
   readonly player: THREE.Group;
+  readonly skier: SkierRig;
   readonly cat: CatRig;
   readonly chasmMeshes: ReadonlyMap<string, THREE.Mesh>;
   readonly checkpointMeshes: ReadonlyMap<number, THREE.Mesh>;
@@ -128,20 +130,26 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   scene.add(slope);
 
   const player = new THREE.Group();
-  const skierMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(0.6, 1, 0.4),
-    new THREE.MeshStandardMaterial({ color: PALETTE.skierBlue }),
-  );
-  skierMesh.position.y = 0.5;
-  skierMesh.castShadow = true; // the skier's shadow is the height cue on jumps
-  player.add(skierMesh);
+
+  // A real person on the skis now, not a blue box. The rig owns the model's
+  // quirks (scale, which clip is which, the forward ski lean) and takes its
+  // colors from the character palette — see skierModel.ts.
+  const skier = createSkierRig();
+  skier.setPose("skiing");
+  skier.setFacing(Math.PI); // both bases are authored facing +z; downhill is -z
+  player.add(skier.group);
 
   // The cat rides on your back (DESIGN.md's core fantasy) — the same rig as
   // the bedroom cat, sitting, parented to the skier so it goes along for the
   // ride including the crash tip-over.
+  // Sits against the skier's back rather than inside the torso — the old
+  // offset was tuned against a 1m box, and a real 1.6m person leaning
+  // downhill puts their back somewhere else entirely. Left facing +z (i.e.
+  // back up the hill, toward the camera) so the player can see the cat's
+  // face and its signal-red scarf while they ski.
   const cat = createCatRig();
   cat.setPose("sitting");
-  cat.group.position.set(0, 0.95, -0.2);
+  cat.group.position.set(0, 0.95, 0.16);
   player.add(cat.group);
 
   scene.add(player);
@@ -155,6 +163,7 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     scene,
     camera,
     player,
+    skier,
     cat,
     chasmMeshes: new Map(),
     checkpointMeshes: new Map(),
@@ -173,6 +182,7 @@ export function syncSkiSceneToState(
   dt: number,
 ): void {
   handle.cat.update(dt);
+  handle.skier.update(dt);
   handle.player.position.set(state.lateral, state.height, -state.distance);
   // Fallen over sideways during the crash pause, upright otherwise.
   handle.player.rotation.z = state.status === "crashed" ? Math.PI / 2 : 0;
