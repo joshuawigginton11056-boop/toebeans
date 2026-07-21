@@ -5,13 +5,13 @@ import {
   stepSkiing,
   type BedroomInput,
   type SkiInput,
-  type SkiState,
 } from "@toebeans/shared";
 import {
   createBedroomScene,
   renderBedroom,
   syncBedroomSceneToState,
 } from "./bedroomRender";
+import { createHud } from "./hud";
 import { createSkiScene, render, syncSkiSceneToState } from "./skiRender";
 
 const container = document.getElementById("app");
@@ -39,37 +39,11 @@ function showActiveCanvas(): void {
 }
 showActiveCanvas();
 
-// HUD: DOM overlay on top of the canvas. Reads state only, never writes it.
-const hud = document.createElement("div");
-hud.style.cssText =
-  "position:fixed;top:16px;left:16px;font:20px system-ui,sans-serif;" +
-  "color:#1a1a2e;user-select:none;pointer-events:none;";
-const livesEl = document.createElement("div");
-const messageEl = document.createElement("div");
-messageEl.style.cssText = "margin-top:8px;font-size:28px;font-weight:bold;";
-const hintEl = document.createElement("div");
-hintEl.style.cssText = "margin-top:8px;font-size:16px;color:#55556a;";
-hud.append(livesEl, messageEl, hintEl);
-document.body.appendChild(hud);
-
-function syncHud(state: SkiState): void {
-  if (mode === "bedroom") {
-    livesEl.textContent = "";
-    messageEl.textContent = "";
-    hintEl.textContent = "Arrows/WASD to walk — Enter to go skiing";
-    return;
-  }
-  livesEl.textContent = `\u{1F431} × ${state.lives}`;
-  if (state.status === "crashed") {
-    messageEl.textContent =
-      state.lives > 0 ? "Crashed! Back to the checkpoint…" : "Crashed!";
-  } else if (state.status === "forfeited") {
-    messageEl.textContent = "Out of lives — run forfeited";
-  } else {
-    messageEl.textContent = "";
-  }
-  hintEl.textContent = "Enter to go home";
-}
+// HUD: DOM overlay on top of the canvas (see hud.ts). Reads state only,
+// never writes it. Synced once up front so the right panels show even
+// before the first animation frame (browsers pause frames in hidden tabs).
+const hud = createHud();
+hud.sync(mode, skiState);
 
 const heldKeys = new Set<string>();
 window.addEventListener("keydown", (event) => {
@@ -124,7 +98,7 @@ function loop(now: number): void {
     syncSkiSceneToState(skiScene, skiState);
     render(skiScene);
   }
-  syncHud(skiState);
+  hud.sync(mode, skiState);
 
   requestAnimationFrame(loop);
 }

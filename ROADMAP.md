@@ -444,6 +444,58 @@ tuning pass rather than nibbled at between features.
 **Next:** per the M2 list — real UI (replace the plain-text HUD). Direction
 questions for sound/music/UI are with the director.
 
+## 2026-07-21 — M2: real UI — cat-face lives, banners, keycap hints
+
+The plain-text HUD is gone. The slope now has a real UI, styled to the Art
+Style Bible's palette: the cat's 9 lives are nine little cat faces in a
+snow-white pill (top left), crash/forfeit messages are proper centered
+banners, and the controls hint is a row of keycap chips along the bottom.
+All DOM overlay (`client/src/hud.ts`, new) — reads game state, never writes
+it. No `/shared` changes; test count stays at 28.
+
+- **Lives are nine cat faces.** Each is a chunky amber cat with eyes and the
+  palette's signal-red scarf. Losing a life fades that cat to snow-shadow
+  blue — eyes and scarf vanish, so a spent life reads as the cat's shadow.
+  Nine icons sells the "9 lives" joke better than a number ever did.
+- **Banners.** Crashing pops a soft snow-white banner ("Crashed! Back to
+  the checkpoint…"); running out of lives pops the one signal-red panel in
+  the game ("Out of lives — run forfeited", with "Press Enter to head
+  home" under it) — red is reserved for "look at this", and this is the
+  thing to look at.
+- **Keycap hints.** Bottom-center pill with little keyboard-key chips:
+  walk/ski keys in the bedroom; steer/lean/jump/boost/home on the slope.
+  Each scene shows only its own hints.
+- Also fixed while in there: the HUD now syncs once at startup, so the
+  right panels show even before the first animation frame (hidden browser
+  tabs pause frames — the same quirk that affects verification here).
+- **Director calls made by default this session** (the direction questions
+  were still open, so the recommended options went in — all cheap to
+  change): scope was HUD-only (no title screen yet), lives as nine icons
+  rather than icon-×-number, and a soft-rounded tone (pills, chunky
+  lettering) rather than Omno-minimal. Flag anything that feels wrong.
+- A proper rounded display font (e.g. Fredoka or Baloo, both open-license)
+  would push the cozy tone further, but bundling one means downloading a
+  file — parked in [IDEAS.md](IDEAS.md) for a director yes/no.
+- `npm run check` (28 tests) and `npm run build` pass. Verified in the live
+  page by driving the real ski module through a full run against the HUD:
+  fresh run shows 9 amber cats, first crash fades one and pops the crash
+  banner, burning all lives swaps it for the red forfeit banner, and going
+  home hides all slope UI. Panel/icon/keycap colors computed-style-match
+  the palette hexes exactly. The rendered *look* is the eyeballs item
+  below (screenshots still time out — sixth session running).
+
+**What to playtest:** `npm run dev` — check the bottom hint bar in the
+bedroom, then Enter to ski. Crash on purpose: does the cat-face fading
+read instantly as "I just spent a life"? Does the forfeit banner land with
+the right weight? Are the keycap hints helpful or clutter? And the taste
+questions: is soft-and-rounded the right tone against the austere slope,
+and do you want a title screen session soon?
+
+**Next:** per the M2 list — sound for the slope (music + effects), then
+save/load. Direction questions for sound/music are still with the
+director; slope-side character art (skier/cat models) also remains open
+under the M2 assets item.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -472,7 +524,9 @@ sounds like the real game.
       surface detail, and hazard art still gray-box)*
 - [x] Lighting pass for that area *(2026-07-21 — sun, palette-exact blue
       shadows, dawn-pink haze, visible sun disc)*
-- [ ] Real UI (replace the plain-text HUD overlay)
+- [x] Real UI (replace the plain-text HUD overlay) *(2026-07-21 —
+      cat-face lives, crash/forfeit banners, keycap hints; title screen
+      still open, parked in IDEAS.md)*
 - [ ] Sound for that area (music + effects)
 - [ ] Save/load (browser storage)
 - [ ] Ongoing: feel tuning as polish exposes rough edges *(director call,

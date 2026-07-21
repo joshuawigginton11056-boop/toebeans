@@ -19,3 +19,13 @@ land here instead of in code.
   in assets/CREDITS.md when needed. Two snow trees (BirchTree_Snow_4,
   PineTree_Snow_3) were skipped for being over the triangle budget —
   decimation in Blender could rescue them if variety ever runs thin.
+- **Bundle a rounded display font for the UI** (noticed 2026-07-21, real-UI
+  session): the HUD currently uses the system font (Segoe UI) with heavy
+  weights. A properly chunky rounded font — Fredoka or Baloo 2, both free
+  under the SIL Open Font License — would push the cozy tone further.
+  Needs a director yes/no because it means downloading a font file into
+  the repo (plus a CREDITS.md row). Cheap to do in any later UI session.
+- **Title screen** (noticed 2026-07-21, real-UI session): the game still
+  drops you straight into the bedroom with no framing — no game name, no
+  "press Enter". Deliberately left out of the real-UI session to keep it
+  one feature; a natural small follow-up session.
