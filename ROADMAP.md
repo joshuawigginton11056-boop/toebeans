@@ -271,6 +271,28 @@ drunk?
 **Next:** unchanged — the M1 fun-check verdict session (playtest +
 feel tuning).
 
+## 2026-07-21 — M1 fun check: PASS (barely) — M1 complete
+
+The director playtested the full loop and gave the verdict: **the fun
+loop passes, barely.** That closes the last M1 checkbox — the prototype
+gate is cleared and the game has earned real art.
+
+"Barely" is worth recording honestly: the margin is thin, so feel tuning
+(speeds, jump arc, crash pause, follow distances) stays a live concern
+through the next phase rather than a solved problem. Polish genuinely
+helps here — sound, real assets, and visual feedback are a big part of
+game feel — but tuning shouldn't hide behind it.
+
+**Director call (2026-07-21):** the next phase — the director's
+numbering calls it **phase 3** (scaffold was 1, prototype 2); it maps to
+M2 below — is to **polish one area of the game end to end**: real
+assets, lighting, UI, sound, and save/load. The M2 checklist has been
+reshaped to match, and choosing which area (bedroom or slope) is the
+first order of business next session. Vertical-slice items that aren't
+part of the chosen area moved down into M3.
+
+**Next:** start phase 3 / M2 — first decision: which area gets polished.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -283,19 +305,34 @@ land them; each session still gets its own dated log entry above.
 - [x] Basic cat follows/sits in the room
 - [x] One gray-box ski slope: movement, controls, one hazard type
 - [x] Cat's 9 lives + crash/checkpoint loop
-- [ ] Fun check: does the ski loop feel good before investing in art?
+- [x] Fun check: does the ski loop feel good before investing in art?
+      *(PASS, barely — 2026-07-21; feel tuning stays live through M2)*
 
-### M2 — Vertical slice
+### M2 — Vertical slice (director's "phase 3": polish one area for real)
 
-- [ ] Real (non-gray-box) bedroom environment with rotating camera
-- [ ] Furniture placement system (place/move/store)
-- [ ] One timed-task item and one passive/AFK item working end to end
-- [ ] XP and leveling wired to a single unlock
-- [ ] One polished ski slope with all hazard types + checkpoints
-- [ ] Save system (browser storage)
+Per the director (2026-07-21): take **one area of the game** — bedroom or
+ski slope — and polish it end to end, so one part of Toebeans looks and
+sounds like the real game.
+
+- [ ] Pick the area to polish (bedroom or slope) — first decision of the
+      phase
+- [ ] Real (non-gray-box) assets for that area, in the *Omno*-target
+      low-poly style
+- [ ] Lighting pass for that area
+- [ ] Real UI (replace the plain-text HUD overlay)
+- [ ] Sound for that area (music + effects)
+- [ ] Save/load (browser storage)
+- [ ] Ongoing: feel tuning as polish exposes rough edges
 
 ### M3 — Content
 
+Includes the vertical-slice systems that weren't part of the M2 area:
+
+- [ ] The other area (bedroom or slope) brought to the same polish level
+      — incl. the rotating bird's-eye camera if that area is the bedroom
+- [ ] Furniture placement system (place/move/store)
+- [ ] One timed-task item and one passive/AFK item working end to end
+- [ ] XP and leveling wired to unlocks
 - [ ] All 3 v1.0 slopes built
 - [ ] Full 6–8 item furniture/appliance set
 - [ ] Character + cat customization options
@@ -304,7 +341,8 @@ land them; each session still gets its own dated log entry above.
 
 ### M4 — Polish
 
-- [ ] Audio: music + ambient sound hooked up
+- [ ] Audio: music + ambient sound across the rest of the game (the M2
+      area gets its sound in M2)
 - [ ] Detail touches (ski trails, lamp glow, fireplace crackle, meows)
 - [ ] Performance pass: 60fps on a mid laptop
 - [ ] Load-size pass: under 15MB initial load

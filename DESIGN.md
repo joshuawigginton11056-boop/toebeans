@@ -124,6 +124,13 @@ Approved by the director, July 20, 2026. This is the answer to "what do we
 actually build first" — see [ROADMAP.md](ROADMAP.md) for the milestone
 checklist that delivers it.
 
+**Gate result (July 21, 2026):** the M1 prototype fun check **passed,
+barely** — the loop is fun enough to invest in art, with feel tuning
+staying a live concern. Director call for the next phase (their numbering:
+"phase 3"; the roadmap's M2): polish **one area** of the game end to end —
+real assets, lighting, UI, sound, save/load — rather than spreading
+vertical-slice work across both areas at once.
+
 ### v1.0 — smallest shippable version (web launch, M5)
 
 Everything needed for the full loop — ski → earn XP → level up → unlock →
