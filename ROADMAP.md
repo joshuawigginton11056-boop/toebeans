@@ -600,9 +600,13 @@ still pop now that their panel is quieter? Is anything now too quiet —
 hard to read against bright snow? This is the restyle you asked for;
 say if the middle landed in the right place.
 
-**Next:** per the M2 list — save/load (browser storage), unless you're
-ready to call the music direction (lofi vs ambient-only vs calm
-instrumental), which can slot in first.
+**Next:** save/load (browser storage). **Music direction called by the
+director (2026-07-21, after this session):** each slope gets a timed song
+synced to its layout, Geometry Dash style — tense before the big jumps
+(details in [IDEAS.md](IDEAS.md)) — and music deliberately waits until
+the **end** of M2, after everything else. So the running order is:
+save/load → character art / remaining slope assets → music → the
+end-of-M2 tuning pass.
 
 ## Milestones
 
@@ -636,7 +640,9 @@ sounds like the real game.
       cat-face lives, crash/forfeit banners, keycap hints; title screen
       still open, parked in IDEAS.md)*
 - [ ] Sound for that area (music + effects) *(effects in 2026-07-21,
-      synthesized; music direction decided after the director hears them)*
+      synthesized and playtest-passed; music: timed per-slope songs à la
+      Geometry Dash — director call 2026-07-21, see IDEAS.md — built
+      **last** in M2, after everything else)*
 - [x] UI tone restyle to the middle-ground direction *(2026-07-21 — pills →
       soft rectangles, hairline borders, semi-bold type; cat faces untouched)*
 - [ ] Save/load (browser storage)

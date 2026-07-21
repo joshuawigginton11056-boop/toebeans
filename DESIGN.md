@@ -99,9 +99,14 @@ interact with your space for more XP → repeat.
   decor; lamps glow; fireplaces crackle; book pages bend; cats meow.
 - **Audio:** LOFI music plus ambient sounds — rain, birdsong, wind — and
   appropriate sounds for furniture, appliances, and decorations.
-  *Director call (2026-07-21): on the slope, effects come first — the
-  music direction (lofi vs ambient-only vs instrumental) gets decided
-  after hearing the effects in place.*
+  *Director call (2026-07-21): on the slope, effects come first — done,
+  playtested, passed. Slope music direction (director, same day): each
+  slope gets a **timed song synced to its layout**, Geometry Dash style —
+  tense before a big cliff jump, etc. (details in IDEAS.md; this
+  supersedes the lofi vs ambient-only vs instrumental question for the
+  slope). Music is deliberately the **last** M2 item — save/load and the
+  rest come first. The LOFI direction above still stands for the
+  environments (bedroom etc.), which get their audio in M4.*
 - **UI tone (director call, 2026-07-21):** middle ground between
   soft-rounded and Omno-minimal — the cat faces stay cute, but panels,
   pills, and lettering calm down (less pill, less chunk, quieter panels).

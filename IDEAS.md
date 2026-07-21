@@ -32,6 +32,19 @@ land here instead of in code.
   loudness (the `carve` numbers in `client/src/audio.ts`'s
   `setLayerTargets`) in the end-of-M2 tuning pass, alongside the parked
   visual tweaks.
+- **Timed per-slope music, Geometry Dash style** (director direction,
+  2026-07-21, UI-restyle session): instead of a generic background track,
+  each slope gets its own composed/timed song that plays in sync with the
+  slope's layout — tense right before a huge cliff jump, and so on. Works
+  because v1.0's slopes are handcrafted with fixed layouts, so the music
+  can be authored against known hazard positions. Things to solve when it
+  gets built: what happens to the sync on a crash/checkpoint respawn
+  (Geometry Dash restarts the whole level *and* song; Toebeans respawns
+  mid-slope), and how it layers with the existing speed-tracking wind/
+  carve effects. This supersedes the old lofi vs ambient-only vs
+  instrumental question for the slope. **Music is deliberately last in
+  M2** (director call, same day): build save/load and the rest first,
+  music comes at the end.
 - **Dynamic title screen** (director direction, 2026-07-21, sound
   session): the game still drops you straight into the bedroom with no
   framing — no game name, no "press Enter". The director's call: when it
