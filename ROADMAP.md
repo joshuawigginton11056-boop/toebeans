@@ -563,6 +563,47 @@ until the director calls it (lofi vs ambient-only vs calm instrumental).
 **Next:** the UI tone restyle (middle ground — this session's director
 call), then save/load to finish the M2 list.
 
+## 2026-07-21 — M2: UI tone restyle to the middle ground
+
+The HUD calmed down. Last session's director call — cat faces stay cute,
+everything around them quiets toward *Omno*-minimal — is now in. This is a
+CSS-only change in `client/src/hud.ts`: no layout moved, no logic changed,
+no `/shared` changes, test count stays at 28.
+
+- **Pills became soft rounded rectangles.** The lives panel and hint bar
+  had fully-round pill corners (999px); they're now gently rounded
+  (10–12px), matching the banners, which also came down from 24px.
+- **Lettering went from chunky to quiet.** Banner text dropped from 26px
+  extra-bold to 20px semi-bold with a touch more letter-spacing; hint
+  labels lightened a step; the keycap chips lost their thick 3D bottom
+  edge (3px → 2px) and heavy weight. Everything still reads at a glance —
+  it just stops shouting.
+- **Panels became whispers.** All borders thinned from 2px to 1px
+  hairlines, backgrounds got a bit more translucent, and the hint bar's
+  dawn-pink border joined everything else on quiet snow-shadow blue — one
+  fewer accent color competing with the scenery.
+- **What deliberately did not change:** the nine cat faces (size, amber,
+  scarf, the fade-to-shadow on a spent life), the forfeit banner staying
+  the game's one signal-red panel, and all HUD behavior. The bundled
+  rounded font stays parked in IDEAS.md pending a director yes/no.
+- `npm run check` (28 tests) and `npm run build` pass. Verified in the
+  live page by reading computed styles off the real HUD elements — every
+  value matches the design exactly (12px/10px radii, 1px snow-shadow
+  borders, 20px/600 banner, 5px keycaps, cat faces untouched at 26px
+  birch amber). The rendered look is the eyeballs item below (screenshots
+  still time out — eighth session running).
+
+**What to playtest:** `npm run dev` — look at the hint bar in the bedroom,
+then Enter to ski and crash on purpose to see the banners. Does the HUD
+now sit *with* the landscape instead of on top of it? Do the cat faces
+still pop now that their panel is quieter? Is anything now too quiet —
+hard to read against bright snow? This is the restyle you asked for;
+say if the middle landed in the right place.
+
+**Next:** per the M2 list — save/load (browser storage), unless you're
+ready to call the music direction (lofi vs ambient-only vs calm
+instrumental), which can slot in first.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -596,8 +637,8 @@ sounds like the real game.
       still open, parked in IDEAS.md)*
 - [ ] Sound for that area (music + effects) *(effects in 2026-07-21,
       synthesized; music direction decided after the director hears them)*
-- [ ] UI tone restyle to the middle-ground direction *(added 2026-07-21 —
-      director call from the ratify pass; cat faces stay, panels calm down)*
+- [x] UI tone restyle to the middle-ground direction *(2026-07-21 — pills →
+      soft rectangles, hairline borders, semi-bold type; cat faces untouched)*
 - [ ] Save/load (browser storage)
 - [ ] Ongoing: feel tuning as polish exposes rough edges *(director call,
       2026-07-21: picky visual tweaks wait until all M2 items land, then

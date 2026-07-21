@@ -5,13 +5,14 @@ import { STARTING_LIVES, type SkiState } from "@toebeans/shared";
 //
 // Style notes: every color is an Art Style Bible palette hex (or an allowed
 // value shift — the deep slate text is the same shift skiRender uses for
-// chasms; the bible bans pure black). Tone is the "soft & rounded" option:
-// pill panels, chunky heavy lettering, cute cat iconography. Signal red is
+// chasms; the bible bans pure black). Tone is the director's "middle ground"
+// (DESIGN.md, 2026-07-21): the cat faces stay cute, but panels are soft
+// rounded rectangles rather than pills, borders are hairlines, and lettering
+// is semi-bold with a little air instead of chunky-heavy. Signal red is
 // reserved for "look at this", which is exactly what the forfeit banner is.
 
 const SUNLIT_SNOW = "#F8F5EF";
 const SNOW_SHADOW = "#D3DFF0";
-const DAWN_PINK = "#F6D7CE";
 const BIRCH_AMBER = "#E9A960";
 const SLATE_DEEP = "#2E3548"; // slate rock, deep value shift — never black
 const SIGNAL_RED = "#C6473E";
@@ -59,10 +60,10 @@ const HUD_CSS = `
   display: flex;
   gap: 4px;
   align-items: center;
-  padding: 8px 16px;
-  border-radius: 999px;
-  background: ${SUNLIT_SNOW}E6;
-  border: 2px solid ${SNOW_SHADOW};
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: ${SUNLIT_SNOW}CC;
+  border: 1px solid ${SNOW_SHADOW};
 }
 
 .hud-life {
@@ -84,13 +85,13 @@ const HUD_CSS = `
   position: absolute;
   top: 22%;
   left: 50%;
-  transform: translate(-50%, 0) scale(0.9);
-  padding: 14px 34px;
-  border-radius: 24px;
+  transform: translate(-50%, 0) scale(0.94);
+  padding: 10px 26px;
+  border-radius: 12px;
   text-align: center;
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   opacity: 0;
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
@@ -99,20 +100,20 @@ const HUD_CSS = `
   transform: translate(-50%, 0) scale(1);
 }
 .hud-banner.crash {
-  background: ${SUNLIT_SNOW}F2;
-  border: 2px solid ${SNOW_SHADOW};
+  background: ${SUNLIT_SNOW}E6;
+  border: 1px solid ${SNOW_SHADOW};
   color: ${SLATE_DEEP};
 }
 .hud-banner.forfeit {
   background: ${SIGNAL_RED}F2;
-  border: 2px solid ${SUNLIT_SNOW};
+  border: 1px solid ${SUNLIT_SNOW};
   color: ${SUNLIT_SNOW};
 }
 .hud-banner .sub {
   display: block;
   margin-top: 6px;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   opacity: 0.9;
 }
 
@@ -122,30 +123,30 @@ const HUD_CSS = `
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 18px;
+  gap: 16px;
   align-items: center;
-  padding: 8px 18px;
-  border-radius: 999px;
-  background: ${SUNLIT_SNOW}CC;
-  border: 2px solid ${DAWN_PINK};
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: ${SUNLIT_SNOW}B3;
+  border: 1px solid ${SNOW_SHADOW};
   white-space: nowrap;
 }
 .hud-hint {
   display: flex;
   gap: 6px;
   align-items: baseline;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
 }
 .hud-key {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 8px;
+  padding: 1px 7px;
+  border-radius: 5px;
   background: ${SNOW_SHADOW};
-  border: 1px solid ${SLATE_DEEP}33;
-  border-bottom-width: 3px;
-  font-size: 13px;
-  font-weight: 800;
+  border: 1px solid ${SLATE_DEEP}26;
+  border-bottom-width: 2px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .hud-hidden { display: none; }
