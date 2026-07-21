@@ -1,3 +1,3 @@
 @echo off
-cd /d "%~dp0"
-npm run dev -- --port 5199 --strictPort
+cd /d "%~dp0client"
+npx vite --port 5199 --strictPort

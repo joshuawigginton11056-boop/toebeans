@@ -168,7 +168,8 @@ kills the lonely-vast feeling.
   enough to throw long readable shadows. The whole game is bright — dark
   moods are out of scope.
 - **Shadows are soft blue, never black.** Shadow color is palette #2. Use
-  soft shadow edges (PCFSoft in Three.js). The director called out
+  soft shadow edges (in Three.js: PCF shadows with a blur radius — the old
+  PCFSoft mode was retired upstream in r185). The director called out
   "accurate" shadows — shadows must track objects correctly, especially
   the skier's shadow on the snow, which is a key height cue during jumps.
 - **Haze is mandatory.** Distance fog tinted dawn pink (#5) near the

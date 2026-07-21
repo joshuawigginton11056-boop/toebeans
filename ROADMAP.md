@@ -384,6 +384,61 @@ the mandatory dawn-pink distance haze (it's also the depth-reading
 gameplay cue). Direction questions for sound/music/UI are with the
 director.
 
+## 2026-07-21 — M2: slope lighting pass — sun, blue shadows, pink haze
+
+The slope now has its weather: one low warm sun throwing long soft shadows,
+every shadow on snow the bible's soft blue, dawn-pink haze eating the
+distance, and a visible glowing sun hanging just above the horizon ahead.
+All rendering-only (`client/skiRender.ts`) — no `/shared` changes, so the
+test count stays at 28.
+
+- **The palette does the math.** The bible's two snow colors fully
+  determine the lighting: ambient skylight alone must render flat snow as
+  snow-shadow blue (#D3DFF0), and ambient + sun together must render it as
+  sunlit snow (#F8F5EF). The light colors are *derived* from those two
+  constraints in code rather than tuned by eye — so shadows land on
+  palette #2 by construction. The sun comes out warm (all red/yellow, no
+  blue) and the ambient cool, which is exactly the dawn look the
+  references have.
+- **Shadows.** Shadow mapping is on with soft edges (a blur radius on the
+  sun's shadow). Everything casts: trees, rocks, the skier — whose shadow
+  on the snow is the bible's height cue during jumps. The sun and its
+  shadow camera follow the skier down the slope so shadows stay crisp the
+  whole run. Trees on the left flank throw long shadows right across the
+  lane, like a real morning piste. Upstream wrinkle: Three.js retired the
+  exact "PCFSoft" mode the bible's parenthetical named (r185 silently
+  falls back and warns); the bible's implementation note was updated —
+  same soft look, different knob.
+- **Haze.** Distance fog tinted dawn pink (#F6D7CE) from 35 to 150 units —
+  far trees lighten and melt into the horizon, which is the gameplay
+  depth cue the bible mandates. A new sky dome blends dawn pink at the
+  horizon up to sky blue overhead, so the fog fades into sky instead of
+  hitting a flat wall. The snowfield plane now quietly follows the skier,
+  so the snow never visibly ends — its far edge is always past full haze.
+- **The sun is visible.** A sun-glow disc with a soft radial halo sits at
+  the light's azimuth, cheated down to just above the horizon — the
+  camera looks downhill, so the real 25°-up sun could never be in frame.
+  You ski toward the light.
+- Verified numerically in the live page by rendering a frame and reading
+  pixels back (screenshots still time out — fifth session running): lit
+  snow renders within 2/255 of palette #1, a tree shadow's core within
+  1/255 of palette #2, the horizon fog *exactly* #F6D7CE, the sun disc
+  core *exactly* #FFF4DA, and the shadow edge measures a ~13-pixel soft
+  penumbra with a solid core. `npm run check` (28 tests) and
+  `npm run build` both pass. The overall *look* — mood, balance, whether
+  the haze feels like Omno — is the one thing only eyeballs can judge.
+
+**What to playtest:** `npm run dev`, Enter to hit the slope. This is the
+first session where the slope should feel like a *place with weather* —
+does the dawn light land? Watch your own shadow while jumping a chasm: does
+it help you judge the landing? Do the long tree shadows across the lane
+read as morning light or as visual noise? Is the haze helping you sense
+how far the next chasm is? And does the sun ahead make you want to ski
+toward it?
+
+**Next:** per the M2 list — real UI (replace the plain-text HUD). Direction
+questions for sound/music/UI are with the director.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -410,7 +465,8 @@ sounds like the real game.
 - [ ] Real (non-gray-box) assets for that area, in the *Omno*-target
       low-poly style *(slope-side trees/rocks in — characters, slope
       surface detail, and hazard art still gray-box)*
-- [ ] Lighting pass for that area
+- [x] Lighting pass for that area *(2026-07-21 — sun, palette-exact blue
+      shadows, dawn-pink haze, visible sun disc)*
 - [ ] Real UI (replace the plain-text HUD overlay)
 - [ ] Sound for that area (music + effects)
 - [ ] Save/load (browser storage)

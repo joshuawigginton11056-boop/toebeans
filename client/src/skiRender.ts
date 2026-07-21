@@ -6,12 +6,26 @@ import type { SkiState } from "@toebeans/shared";
 // from these 12 (or a value shift of one, which the bible allows).
 const PALETTE = {
   sunlitSnow: 0xf8f5ef,
+  snowShadow: 0xd3dff0, // every shadow cast on snow — soft blue, never black
   skyBlue: 0xbfdcf5,
+  dawnPink: 0xf6d7ce, // horizon + the mandatory distance-haze tint
+  sunGlow: 0xfff4da, // the sun disc and halo — brightest value in the scene
   glacialIce: 0x79b7d8,
   skierBlue: 0x4e72a8, // reserved: only the player wears this
   birchAmber: 0xe9a960,
   chasmDark: 0x2e3548, // slate rock, deep value shift — never pure black
 } as const;
+
+// Direction from the scene toward the sun: ahead of the skier (you ski into
+// the light, which is what makes the haze glow) and off to the left, low
+// enough (~25°) that shadows stretch long across the snow.
+const SUN_DIRECTION = new THREE.Vector3(-0.4, 0.5, -1).normalize();
+
+// Where the *visible* sun disc hangs: same azimuth as the light, but cheated
+// down to just above the horizon so it's actually in frame — the camera looks
+// downhill, so the real 25° sun sits above the top edge of the screen. A
+// horizon sun with long shadows still reads as one coherent dawn.
+const SUN_BILLBOARD_DIRECTION = new THREE.Vector3(-0.4, 0.075, -1).normalize();
 
 export interface SkiSceneHandle {
   readonly renderer: THREE.WebGLRenderer;
@@ -20,6 +34,10 @@ export interface SkiSceneHandle {
   readonly player: THREE.Group;
   readonly chasmMeshes: ReadonlyMap<string, THREE.Mesh>;
   readonly checkpointMeshes: ReadonlyMap<number, THREE.Mesh>;
+  readonly slope: THREE.Mesh;
+  readonly sun: THREE.DirectionalLight;
+  readonly skyDome: THREE.Mesh;
+  readonly sunBillboard: THREE.Sprite;
 }
 
 const SLOPE_LENGTH = 100;
@@ -28,6 +46,10 @@ const SLOPE_WIDTH = 10;
 export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(PALETTE.skyBlue);
+
+  // The mandatory haze: distance fog tinted dawn pink. Doubles as gameplay —
+  // how pink something is tells you how far away it is.
+  scene.fog = new THREE.Fog(PALETTE.dawnPink, 35, 150);
 
   // Three-quarter front perspective: looking downhill and slightly to the
   // side, matching the 2.5D isometric side-scroller camera described in
@@ -41,21 +63,66 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
+  // Soft shadow edges per the bible. Three.js retired PCFSoftShadowMap
+  // (r185 falls back to PCF with a console warning), so softness comes from
+  // the default PCF type plus the sun's shadow.radius below.
+  renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
 
-  const light = new THREE.DirectionalLight(0xffffff, 1);
-  light.position.set(3, 8, 5);
-  scene.add(light);
-  scene.add(new THREE.AmbientLight(0x808080));
+  // The bible's two snow colors define the lighting exactly: ambient
+  // skylight alone must render flat snow as snow-shadow blue, and ambient
+  // plus sun must render it as sunlit snow. Solving those two constraints
+  // gives the light colors below — shadows land on palette #2 by
+  // construction, not by tuning. (The blue channel wants slightly more than
+  // the sun can subtract, hence the clamp; the sun comes out warm because
+  // it carries all the red/yellow the blue ambient lacks.)
+  const albedo = new THREE.Color(PALETTE.sunlitSnow);
+  const shadowTarget = new THREE.Color(PALETTE.snowShadow);
+  const ambientColor = new THREE.Color(
+    Math.min(1, shadowTarget.r / albedo.r),
+    Math.min(1, shadowTarget.g / albedo.g),
+    Math.min(1, shadowTarget.b / albedo.b),
+  );
+  const groundNdotL = SUN_DIRECTION.y; // how squarely the sun hits flat snow
+  const sunColor = new THREE.Color(
+    Math.max(0, (1 - ambientColor.r) / groundNdotL),
+    Math.max(0, (1 - ambientColor.g) / groundNdotL),
+    Math.max(0, (1 - ambientColor.b) / groundNdotL),
+  );
+
+  // Math.PI because three.js physical lights fold 1/π into the material.
+  scene.add(new THREE.AmbientLight(ambientColor, Math.PI));
+
+  const sun = new THREE.DirectionalLight(sunColor, Math.PI);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -45;
+  sun.shadow.camera.right = 45;
+  sun.shadow.camera.top = 45;
+  sun.shadow.camera.bottom = -45;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 160;
+  sun.shadow.normalBias = 0.05;
+  sun.shadow.radius = 2; // soft penumbra, but shadows keep a solid core
+  scene.add(sun, sun.target); // both follow the skier — see the sync function
+
+  const skyDome = createSkyDome();
+  scene.add(skyDome);
+
+  const sunBillboard = createSunBillboard();
+  scene.add(sunBillboard);
 
   // One wide snowfield; the skiable lane (SLOPE_WIDTH) sits in the middle
-  // and the decor lives on the flanks beyond it.
+  // and the decor lives on the flanks beyond it. The plane is featureless,
+  // so it quietly follows the skier's z (see sync) — the snow never ends,
+  // and its far edge always sits past where the haze fully takes over.
   const slope = new THREE.Mesh(
-    new THREE.PlaneGeometry(80, SLOPE_LENGTH + 80),
+    new THREE.PlaneGeometry(80, 220),
     new THREE.MeshStandardMaterial({ color: PALETTE.sunlitSnow }),
   );
   slope.rotation.x = -Math.PI / 2;
-  slope.position.z = -SLOPE_LENGTH / 2;
+  slope.position.z = -50;
+  slope.receiveShadow = true;
   scene.add(slope);
 
   const player = new THREE.Group();
@@ -64,6 +131,7 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     new THREE.MeshStandardMaterial({ color: PALETTE.skierBlue }),
   );
   skierMesh.position.y = 0.5;
+  skierMesh.castShadow = true; // the skier's shadow is the height cue on jumps
   player.add(skierMesh);
 
   const catMesh = new THREE.Mesh(
@@ -71,6 +139,7 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     new THREE.MeshStandardMaterial({ color: PALETTE.birchAmber }),
   );
   catMesh.position.set(0, 1.1, -0.15);
+  catMesh.castShadow = true;
   player.add(catMesh);
 
   scene.add(player);
@@ -86,6 +155,10 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     player,
     chasmMeshes: new Map(),
     checkpointMeshes: new Map(),
+    slope,
+    sun,
+    skyDome,
+    sunBillboard,
   };
 }
 
@@ -105,6 +178,7 @@ export function syncSkiSceneToState(handle: SkiSceneHandle, state: SkiState): vo
     );
     marker.rotation.x = -Math.PI / 2;
     marker.position.set(0, 0.02, -checkpoint);
+    marker.receiveShadow = true;
     handle.scene.add(marker);
     checkpointMeshes.set(checkpoint, marker);
   }
@@ -118,6 +192,7 @@ export function syncSkiSceneToState(handle: SkiSceneHandle, state: SkiState): vo
         new THREE.MeshStandardMaterial({ color: PALETTE.chasmDark }),
       );
       mesh.rotation.x = -Math.PI / 2;
+      mesh.receiveShadow = true;
       handle.scene.add(mesh);
       meshes.set(chasm.id, mesh);
     }
@@ -126,10 +201,95 @@ export function syncSkiSceneToState(handle: SkiSceneHandle, state: SkiState): vo
 
   handle.camera.position.set(state.lateral, state.height + 4, -state.distance + 8);
   handle.camera.lookAt(state.lateral, state.height, -state.distance - 4);
+
+  // Atmosphere follows the run downhill. The sun light (and its shadow
+  // camera) track the skier so shadows stay crisp anywhere on the slope;
+  // the sky dome and sun disc ride with the camera like a real horizon.
+  const anchor = new THREE.Vector3(state.lateral, 0, -state.distance);
+  handle.sun.target.position.copy(anchor);
+  handle.sun.position.copy(anchor).addScaledVector(SUN_DIRECTION, 70);
+  handle.slope.position.z = -state.distance - 50;
+  handle.skyDome.position.copy(handle.camera.position);
+  handle.sunBillboard.position
+    .copy(handle.camera.position)
+    .addScaledVector(SUN_BILLBOARD_DIRECTION, 150);
 }
 
 export function render(handle: SkiSceneHandle): void {
   handle.renderer.render(handle.scene, handle.camera);
+}
+
+// ---------------------------------------------------------------------------
+// Sky: an inward-facing dome, dawn pink at the horizon blending up to sky
+// blue overhead, so the ground fog (also dawn pink) melts into the horizon
+// instead of hitting a flat-colored wall.
+
+function createSkyDome(): THREE.Mesh {
+  const radius = 170;
+  const geometry = new THREE.SphereGeometry(radius, 32, 16);
+  const positions = geometry.attributes.position!;
+  const colors = new Float32Array(positions.count * 3);
+  const horizon = new THREE.Color(PALETTE.dawnPink);
+  const zenith = new THREE.Color(PALETTE.skyBlue);
+  const color = new THREE.Color();
+  for (let i = 0; i < positions.count; i++) {
+    const height = positions.getY(i) / radius; // -1 (below) … 1 (overhead)
+    // Blend fully to sky blue within ~15° of elevation — the downhill camera
+    // only ever sees a low band of sky, and the blue should reach into it.
+    const t = Math.min(1, Math.max(0, (height - 0.02) / 0.25));
+    color.lerpColors(horizon, zenith, t);
+    colors[i * 3] = color.r;
+    colors[i * 3 + 1] = color.g;
+    colors[i * 3 + 2] = color.b;
+  }
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  const dome = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      side: THREE.BackSide,
+      fog: false,
+      depthWrite: false,
+    }),
+  );
+  dome.renderOrder = -1; // paint the sky first; everything else draws over it
+  return dome;
+}
+
+// The visible sun: a solid sun-glow disc with a soft radial halo, drawn on
+// one always-camera-facing sprite. The bible wants a glow, not lens flare.
+function createSunBillboard(): THREE.Sprite {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const gradient = ctx.createRadialGradient(
+    size / 2,
+    size / 2,
+    0,
+    size / 2,
+    size / 2,
+    size / 2,
+  );
+  gradient.addColorStop(0, "rgba(255,244,218,1)"); // sun glow, solid core
+  gradient.addColorStop(0.28, "rgba(255,244,218,1)");
+  gradient.addColorStop(0.34, "rgba(255,244,218,0.55)");
+  gradient.addColorStop(1, "rgba(255,244,218,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+      fog: false,
+    }),
+  );
+  sprite.scale.setScalar(34);
+  return sprite;
 }
 
 // ---------------------------------------------------------------------------
@@ -183,6 +343,12 @@ async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
         const gltf = await loader.loadAsync(
           `${import.meta.env.BASE_URL}slope/${name}.glb`,
         );
+        gltf.scene.traverse((object) => {
+          if (object instanceof THREE.Mesh) {
+            object.castShadow = true; // clone() carries these flags along
+            object.receiveShadow = true;
+          }
+        });
         templates.set(name, gltf.scene);
       }),
     );
