@@ -1,9 +1,12 @@
 import {
   createInitialBedroomState,
   createInitialSkiState,
+  createSave,
+  restoreSave,
   stepBedroom,
   stepSkiing,
   type BedroomInput,
+  type SceneMode,
   type SkiInput,
 } from "@toebeans/shared";
 import {
@@ -13,6 +16,7 @@ import {
 } from "./bedroomRender";
 import { createAudio } from "./audio";
 import { createHud } from "./hud";
+import { readSave, writeSave } from "./save";
 import { createSkiScene, render, syncSkiSceneToState } from "./skiRender";
 
 const container = document.getElementById("app");
@@ -24,11 +28,19 @@ if (!container) {
 // the bedroom (that's where the core loop begins); Enter switches to the
 // slope and back. Each scene keeps its own canvas — the inactive one is
 // just hidden.
-type Mode = "bedroom" | "slope";
-let mode: Mode = "bedroom";
+//
+// Save/load (M2): if browser storage holds a valid save, the game resumes
+// exactly where it left off — same scene, same spot, mid-run and all.
+// Anything invalid (corrupt, old version) is ignored and you start fresh.
+const restored = (() => {
+  const save = readSave();
+  return save === null ? null : restoreSave(save);
+})();
 
-let bedroomState = createInitialBedroomState();
-let skiState = createInitialSkiState();
+let mode: SceneMode = restored?.mode ?? "bedroom";
+let bedroomState = restored?.bedroom ?? createInitialBedroomState();
+let skiState = restored?.ski ?? createInitialSkiState();
+let muted = restored?.muted ?? false;
 
 const bedroomScene = createBedroomScene(container, bedroomState);
 const skiScene = createSkiScene(container);
@@ -47,12 +59,23 @@ const hud = createHud();
 hud.sync(mode, skiState);
 
 // Sound effects (see audio.ts). Reads state only, like the HUD.
-const audio = createAudio();
+const audio = createAudio(muted);
+
+// Persist the whole game as one snapshot. Called on scene switches and mute
+// (the moments that feel like "progress"), every few seconds as a safety
+// net, and when the tab is hidden or closed.
+function persist(): void {
+  writeSave(createSave(mode, bedroomState, skiState, muted));
+}
+
+const AUTOSAVE_SECONDS = 5;
+let autosaveTimer = 0;
 
 const heldKeys = new Set<string>();
 window.addEventListener("keydown", (event) => {
   if (event.code === "KeyM") {
-    audio.toggleMuted();
+    muted = audio.toggleMuted();
+    persist();
     return;
   }
   if (event.code === "Enter") {
@@ -65,6 +88,7 @@ window.addEventListener("keydown", (event) => {
       mode = "bedroom";
     }
     showActiveCanvas();
+    persist();
     return;
   }
   heldKeys.add(event.code);
@@ -109,10 +133,23 @@ function loop(now: number): void {
   hud.sync(mode, skiState);
   audio.sync(mode, skiState);
 
+  autosaveTimer += dt;
+  if (autosaveTimer >= AUTOSAVE_SECONDS) {
+    autosaveTimer = 0;
+    persist();
+  }
+
   requestAnimationFrame(loop);
 }
 
 requestAnimationFrame(loop);
+
+// Save at the moments the page might go away: tab hidden (browsers pause
+// hidden tabs, and mobile may never fire pagehide) and actual unload.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") persist();
+});
+window.addEventListener("pagehide", () => persist());
 
 window.addEventListener("resize", () => {
   for (const handle of [bedroomScene, skiScene]) {

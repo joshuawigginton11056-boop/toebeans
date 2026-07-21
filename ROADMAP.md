@@ -608,6 +608,66 @@ the **end** of M2, after everything else. So the running order is:
 save/load → character art / remaining slope assets → music → the
 end-of-M2 tuning pass.
 
+## 2026-07-21 — M2: save/load (browser storage)
+
+The game remembers where you were. Close the tab mid-run and reopen it, and
+you're back in the same scene, the same spot, with the same run in
+progress — lives spent, checkpoint banked, mute setting and all.
+
+- `/shared` gets `save.ts`: the pure save logic, so it's testable without a
+  browser. A save is a JSON snapshot of only the *dynamic* game
+  state — where the player and cat are, the ski run's distance/lives/status,
+  and whether sound is muted. The **static layout is deliberately not
+  saved**: room size, furniture, chasms, and checkpoints always come fresh
+  from the `createInitial*` functions on load. So when the slope gets
+  retuned later (M1's verdict says feel tuning stays live), old saves never
+  trap a stale layout — they only carry your progress, which gets dropped
+  onto today's slope.
+- **Loading is strict and self-healing.** `decodeSave` rejects anything that
+  isn't exactly right — corrupt JSON, an old `SAVE_VERSION`, a bad enum, a
+  non-finite number, or an impossible combination like "still skiing with
+  zero lives" — and the game just starts fresh (always safe this early).
+  Values that are merely *stale* rather than *wrong* get healed instead of
+  rejected: an out-of-range position is clamped back into the room, and a
+  checkpoint that no longer exists snaps down to the nearest one you'd
+  actually have passed.
+- `/client` gets `save.ts` — the thin localStorage glue (the only file that
+  touches storage), wrapped in try/catch so private-browsing or
+  storage-disabled just plays on without persistence. `main.ts` restores on
+  startup and saves at the moments that matter: scene switches, mute toggle,
+  a 5-second autosave safety net, and when the tab is hidden or closed.
+  `audio.ts` now takes an initial-muted flag so a restored mute setting is
+  respected from the first frame.
+- 10 new tests (38 total): a mid-game snapshot round-trips through
+  encode → decode → restore; a restored run steps *identically* to the
+  original for 120 more frames; static layout comes from code not the save;
+  garbage/version/enum/non-finite/impossible-combo saves are all rejected;
+  stale checkpoints snap and wild positions clamp; and a run saved
+  mid-crash-pause still respawns correctly on load.
+- `npm run check` (38 tests) and `npm run build` pass. Verified in the live
+  page on this session's own dev server (screenshots still time out — ninth
+  session running, so state was read via the DOM): a fresh load writes the
+  default save; pressing Enter switches to the slope and persists `mode:
+  slope` immediately; a hand-crafted "6 lives, past checkpoint 26" save
+  reloads into the slope with exactly 3 cat faces faded; toggling mute
+  persists `muted: false`; and a deliberately corrupted save reloads to a
+  clean fresh bedroom with all 9 lives. (One wrinkle worth noting: the
+  save-on-close is *so* prompt that it overwrites a hand-injected fixture
+  during a test reload — real behavior, working as intended; the test just
+  had to block the unload-save to observe the fixture.)
+
+**What to playtest:** `npm run dev`, then just play — walk around, go
+skiing, crash a couple times, maybe mute. Now **close the tab entirely and
+reopen it**. You should land right back where you were: same scene, same
+position, same lives, same mute setting. Try it mid-run on the slope, and
+try it from the bedroom. Does resuming feel seamless, or is there anything
+that resets when it shouldn't (or *doesn't* reset when it should)?
+
+**Next:** per the M2 list — character art / remaining slope assets
+(skier + cat models are still gray boxes), then music (the deliberately
+**last** M2 item: timed per-slope songs, see IDEAS.md), then the
+end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -645,7 +705,9 @@ sounds like the real game.
       **last** in M2, after everything else)*
 - [x] UI tone restyle to the middle-ground direction *(2026-07-21 — pills →
       soft rectangles, hairline borders, semi-bold type; cat faces untouched)*
-- [ ] Save/load (browser storage)
+- [x] Save/load (browser storage) *(2026-07-21 — dynamic-state-only JSON
+      snapshot; static layout reloads from code; strict, self-healing
+      decode; autosave + save-on-close)*
 - [ ] Ongoing: feel tuning as polish exposes rough edges *(director call,
       2026-07-21: picky visual tweaks wait until all M2 items land, then
       one tuning pass)*

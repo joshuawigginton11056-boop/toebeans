@@ -40,7 +40,8 @@ export const MAX_SPEED = 12;
 const LEAN_ACCEL = 6;
 export const BOOST_SPEED = 16;
 const STEER_SPEED = 5;
-const LATERAL_LIMIT = 4;
+// Exported for save.ts: restoring a save clamps lateral position into range.
+export const LATERAL_LIMIT = 4;
 const JUMP_VELOCITY = 7;
 const GRAVITY = -18;
 const CHASM_CLEAR_HEIGHT = 0.4;

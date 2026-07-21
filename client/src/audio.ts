@@ -217,9 +217,9 @@ function playForfeit(nodes: Nodes): void {
 
 // --- Public handle ---------------------------------------------------------
 
-export function createAudio(): AudioHandle {
+export function createAudio(initiallyMuted = false): AudioHandle {
   let nodes: Nodes | null = null;
-  let muted = false;
+  let muted = initiallyMuted;
   let prev: SkiState | null = null;
   let prevOnSlope = false;
 
