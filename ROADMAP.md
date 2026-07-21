@@ -436,6 +436,11 @@ read as morning light or as visual noise? Is the haze helping you sense
 how far the next chasm is? And does the sun ahead make you want to ski
 toward it?
 
+**Playtest verdict (director, 2026-07-21):** "It's starting to come
+together." The lighting pass stands as-is — picky visual tweaks are
+deliberately parked until every M2 item is done, then handled as one
+tuning pass rather than nibbled at between features.
+
 **Next:** per the M2 list — real UI (replace the plain-text HUD). Direction
 questions for sound/music/UI are with the director.
 
@@ -470,7 +475,9 @@ sounds like the real game.
 - [ ] Real UI (replace the plain-text HUD overlay)
 - [ ] Sound for that area (music + effects)
 - [ ] Save/load (browser storage)
-- [ ] Ongoing: feel tuning as polish exposes rough edges
+- [ ] Ongoing: feel tuning as polish exposes rough edges *(director call,
+      2026-07-21: picky visual tweaks wait until all M2 items land, then
+      one tuning pass)*
 
 ### M3 — Content
 
