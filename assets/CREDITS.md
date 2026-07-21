@@ -9,7 +9,13 @@ An asset with no row here gets removed.
 
 | File | What it is | Source | Author | License | Modifications |
 |------|-----------|--------|--------|---------|---------------|
-| _(none yet)_ | | | | | |
+| `slope/BirchTree_Snow_{1,2,3,5}.glb` | Snowy birch trees (4 variants) | [Ultimate Nature Pack](https://quaternius.com/packs/ultimatenature.html) ([itch.io mirror](https://quaternius.itch.io/150-lowpoly-nature-models)) | Quaternius | CC0 | Palette recolor + OBJ→GLB via `tools/obj2glb_palette.py`; origin snapped to base. Variant 4 dropped (2,478 tris, over prop budget). |
+| `slope/BirchTree_Dead_Snow_{1,2,3,4,5}.glb` | Dead snowy birches (5 variants) | same | Quaternius | CC0 | Same pipeline. |
+| `slope/PineTree_Snow_{1,2,4,5}.glb` | Snowy pines (4 variants) | same | Quaternius | CC0 | Same pipeline; foliage recolored birch amber (palette has no green). Variant 3 dropped (2,392 tris, over prop budget). |
+| `slope/Rock_Snow_{1,2,3,4,5,6,7}.glb` | Snow-capped rocks (7 variants) | same | Quaternius | CC0 | Same pipeline; rock faces recolored slate. |
+| `slope/TreeStump_Snow.glb` | Snowy tree stump | same | Quaternius | CC0 | Same pipeline. |
+| `slope/WoodLog_Snow.glb` | Snowy fallen log | same | Quaternius | CC0 | Same pipeline. |
+| `slope/Bush_Snow_{1,2}.glb` | Snowy bushes (2 variants) | same | Quaternius | CC0 | Same pipeline. |
 
 Notes:
 

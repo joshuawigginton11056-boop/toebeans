@@ -91,7 +91,8 @@ export function createBedroomScene(
   // Same blue as the skier so it reads as "you" in both scenes.
   const player = new THREE.Mesh(
     new THREE.BoxGeometry(PLAYER_RADIUS * 2, 1.6, PLAYER_RADIUS * 2),
-    new THREE.MeshStandardMaterial({ color: 0x2980b9 }),
+    // Palette skier blue — the same "you" color as the ski scene.
+    new THREE.MeshStandardMaterial({ color: 0x4e72a8 }),
   );
   player.position.y = 0.8;
   scene.add(player);
@@ -99,7 +100,8 @@ export function createBedroomScene(
   // Same orange as the cat riding along in the ski scene.
   const cat = new THREE.Mesh(
     new THREE.BoxGeometry(CAT_RADIUS * 2, CAT_BODY_HEIGHT, CAT_BODY_LENGTH),
-    new THREE.MeshStandardMaterial({ color: 0xf39c12 }),
+    // Palette birch amber — the same cat color as the ski scene.
+    new THREE.MeshStandardMaterial({ color: 0xe9a960 }),
   );
   scene.add(cat);
 

@@ -329,6 +329,61 @@ No code changed this session; `npm run check` unaffected.
 polish. The bible's snow/motion rules lean toward the slope being the
 richer showcase, but that's the director's call.
 
+## 2026-07-21 — M2: slope chosen; first real assets on the slope
+
+Director calls: the M2 polish area is the **ski slope**, and assets come
+from the **Quaternius Ultimate Nature Pack** (CC0). This session got those
+assets into the game — the slope now has real snowy trees and rocks
+instead of empty gray flanks.
+
+- Downloaded the pack (150 models; the itch.io mirror, since the Google
+  Drive folder was over its download quota) and kept the 24 snow-variant
+  models that fit the slope: snowy birches, dead birches, pines, 7 rocks,
+  a stump, a log, and 2 bushes. License confirmed CC0 by the License.txt
+  inside the pack itself.
+- New tool: `tools/obj2glb_palette.py` converts the pack's OBJ files to
+  `.glb` while remapping every material to the Art Style Bible palette —
+  foliage goes birch amber (the palette has no green on purpose), rock
+  goes slate, snow goes sunlit snow. It also snaps each model's origin to
+  its base and enforces the bible's 2,000-triangle prop budget: two
+  over-budget tree variants (BirchTree_Snow_4, PineTree_Snow_3) were
+  dropped rather than decimated — each still has 4 sibling variants.
+- 24 `.glb` files landed in `assets/slope/` (1.3 MB total — comfortably
+  inside M4's 15 MB load budget), each with a row in
+  [assets/CREDITS.md](assets/CREDITS.md). Vite now serves `/assets` as
+  its public dir, so they ship in the build automatically.
+- `client/skiRender.ts` loads the models in the background (the run is
+  playable before they arrive) and scatters 87 of them along both flanks
+  of the skiable lane with a seeded random layout — same slope every run,
+  nothing ever inside the lane, sparse oversized silhouettes farther out
+  for the lonely-vast depth the bible asks for. Decor is pure scenery:
+  no collision, no `/shared` changes.
+- Palette alignment while in there: sky, snowfield, checkpoint stripes
+  (green → glacial ice), chasms (near-black → deep slate; the bible bans
+  pure black), and the characters — the skier now wears the reserved
+  skier blue and the cat is birch amber in **both** scenes, so "you" and
+  the cat stay the same colors everywhere.
+- `npm run check` passes (28 tests, no logic changes) and `npm run build`
+  ships the GLBs. Verified in the live page by stepping the real modules
+  (screenshots timed out again — fourth session running): all 24 GLBs
+  load with no console errors, 87 decor pieces placed, zero inside the
+  skiable lane, and material colors round-trip to the exact bible hexes.
+  The rendered look is the one thing only eyeballs can confirm — that's
+  the headline playtest item below.
+
+**What to playtest:** `npm run dev`, press Enter to hit the slope. Do the
+treelines read as an *Omno*-ish place — lonely and vast, but cute? Is the
+tree density right (the bible says too many warm trees kills the mood)?
+Do the amber birches work against the snow? Does anything pop in that
+shouldn't (a tree in the lane, floating props)? And per M1's verdict, the
+feel question stays open: does the slope feel *better* to ski now that
+speed has visible reference points?
+
+**Next:** the slope lighting pass — the bible's sun + soft blue shadows +
+the mandatory dawn-pink distance haze (it's also the depth-reading
+gameplay cue). Direction questions for sound/music/UI are with the
+director.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -350,10 +405,11 @@ Per the director (2026-07-21): take **one area of the game** — bedroom or
 ski slope — and polish it end to end, so one part of Toebeans looks and
 sounds like the real game.
 
-- [ ] Pick the area to polish (bedroom or slope) — first decision of the
-      phase
+- [x] Pick the area to polish (bedroom or slope) — first decision of the
+      phase *(slope — director call, 2026-07-21)*
 - [ ] Real (non-gray-box) assets for that area, in the *Omno*-target
-      low-poly style
+      low-poly style *(slope-side trees/rocks in — characters, slope
+      surface detail, and hazard art still gray-box)*
 - [ ] Lighting pass for that area
 - [ ] Real UI (replace the plain-text HUD overlay)
 - [ ] Sound for that area (music + effects)
