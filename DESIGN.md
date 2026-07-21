@@ -220,37 +220,39 @@ session). The director wants full character customization — skin color,
 hair, eyes, "all of the things you would want to control for custom
 characters".
 
-**Six regions, two bases.** Every character splits into the same six
-**color regions** — skin, hair, eyes, coat, trousers, boots — and each
-region takes one color from the ramps above. Customizing is setting those
-six colors; the geometry never changes. Two CC0 Quaternius bases are in
-the repo while the director picks between them (see *Character assets*
-below), and they carry their regions differently:
+**Pick a character, then tint it.** Customizing has two parts, decided
+2026-07-21 (character-pass session): you **pick a character** from a
+curated roster, and you **tint its skin and hair** from the ramps above.
+The outfit comes *with* the character — it's baked to the palette at
+conversion time, not a runtime choice — which is why the old
+coat/trousers/boots/eyes ramps are gone.
 
-- **Modular base** (`Skier_Modular.glb`) ships with six *named materials*
-  (Shirt, Skin, Pants, Eyes, Socks, Hair) and no textures at all.
-  Recoloring is setting a material color — nothing to bake.
-- **Animated base** (`Skier_Animated.glb`) shipped with a texture atlas,
-  which the bible bans, so `tools/glb_palette.py` baked it to palette
-  vertex colors. Its six regions are six distinct baked colors, and
-  recoloring rewrites the matching entries of the color attribute.
-
-Both are hidden behind one interface in `client/src/skierModel.ts`, so
-game code just sets an appearance and never learns which base is loaded.
-
-- **Color customization is nearly free**, and is what v1.0 ships
-  *(director call, 2026-07-21: "colors + a few hairstyles")*.
-- **Shape customization costs real art.** Hair *color* is a recolor; hair
-  *style* is geometry, needing a hair slot on the head bone and N meshes to
-  pick from. Quaternius's
-  [Ultimate Modular Men Pack](https://quaternius.com/packs/ultimatemodularcharacters.html)
-  is built exactly for this (each character split into 4 swappable pieces)
-  and is the pack to mine for parts. **The hairstyle meshes are not built
-  yet** — the color seam landed first; hairstyles are their own session.
+- **The roster** is `CHARACTERS` in `shared/src/appearance.ts`: 11 cozy
+  characters curated from Quaternius's **Ultimate Animated Character Pack**
+  (50 characters, CC0, all sharing one 23-bone skeleton and one 16-clip
+  animation set). They're chunky and big-headed — cute by construction, and
+  by the same artist as the cat and the scenery, so they finally match. The
+  pack's costume characters (knights, ninjas, etc.) are held back as XP
+  unlock candidates (see IDEAS.md).
+- **Recoloring is a material set.** The pack is textureless with named
+  materials (Skin, Face, Hair, Shirt, Pants, …). `tools/gltf_character.py`
+  bakes every material to the palette at conversion time; `Skin` and `Hair`
+  are then re-tinted at runtime in `client/src/skierModel.ts` from the ramps
+  above. No atlas-baking, no vertex-color rewriting — a cleaner seam than
+  either of the two retired bases had.
+- **Shared skeleton, shared clips.** Because all 50 share one rig, the clips
+  live in a single `CharacterClips.glb` bound to any character by bone name,
+  and every character scales by the same rule (off the Head bone, so hats
+  add height instead of shrinking the body). Adding a character is one
+  `CHARACTERS` line plus a conversion.
+- **Color customization is what v1.0 ships** *(director call, 2026-07-21:
+  "colors + a few hairstyles")*. Character choice already delivers real hair
+  *shape* variety (bald/short/long/hats); independent hairstyle geometry is
+  parked in IDEAS.md pending the director seeing that built-in variety.
 - **It fits the architecture.** The choices are plain serializable data
-  (`{base, skin, hair, eyes, coat, trousers, boots}`) living in
-  `shared/src/appearance.ts` as indices into the ramps above, so they can
-  never drift off-palette and the save system persists them for free.
+  (`{character, skin, hair}`) living in `shared/src/appearance.ts` as indices
+  (into the roster and the ramps), so they can never drift off-roster or
+  off-palette, and the save system persists them for free.
 
 Related: cat customization (same mechanism, already-baked regions) is
 parked in [IDEAS.md](IDEAS.md).
@@ -389,41 +391,28 @@ established that **no CC0 skiing human exists** — every skier model found
 was CC-BY or paid — so the skier will be built from a generic CC0
 character, which is what makes the customization question above urgent.
 
-**The skier's base — undecided on purpose (July 21, 2026, director
-call):** the Animated Character Pack's male model turned out to be
-*unusable* for customization (one material, no texture, no color
-separation — it renders monochrome), which broke the premise of the
-original "use the animated pack" call. Two viable CC0 Quaternius bases
-were found instead, and the director's call was to **ship both and pick at
-playtest**:
+**The skier's base — settled (July 21, 2026, character-pass session).**
+The story got here in three steps: the Animated Character Pack's *male*
+model was unusable (monochrome, no color separation); two other CC0
+Quaternius bases were shipped side-by-side to pick at playtest; and that
+playtest **rejected both** — they were realistically-proportioned humans
+(~6 heads tall), failing this bible's *"Cute lives in the characters"*
+rule. Next to the chunky cat, a realistic human read as a stray asset from
+a different game.
 
-- `Skier_Modular.glb` — the Modular Men lineage. Six named materials, no
-  textures, 1,852 tris, 11 clips. Better seam, but not the proportions
-  originally preferred.
-- `Skier_Animated.glb` — the Animated Character Pack lineage (its female
-  model). 1,908 tris, 10 clips, atlas baked to palette vertex colors.
+The resolution was to change *what a Toebeans human is*, not which of two
+realistic bases to keep. The whole **Ultimate Animated Character Pack**
+(50 CC0 Quaternius characters) is chunky, big-headed and cute — the same
+art family as the cat and the Nature-Pack scenery. Rather than dress one
+body, the player now **picks a character** from a curated roster (see
+*Characters & customization* above). Both old bases (`Skier_Modular.glb`,
+`Skier_Animated.glb`) were deleted. The ski pose, skis, and any hairstyle
+geometry still wait — but now they're built once against the shared
+skeleton and work for every character, so nothing gets built twice.
 
-The game ships with a key that swaps between them so the choice is made
-with eyes, not spreadsheets. **The loser gets deleted** once the director
-calls it — carrying two bases is a temporary state, not the design.
-
-**Playtest outcome (July 21, 2026): neither one is right yet.** The
-director's verdict was that the characters **don't match the art style**.
-Both bases are realistically-proportioned humans (roughly 6 heads tall),
-which fails this bible's own *"Cute lives in the characters"* rule under
-Shape language: the landscape is deliberately austere, so the warmth has to
-come from chunky, rounded, big-headed characters — and next to the cat,
-which is chunky and cute, a realistic human reads as a stray asset from a
-different game.
-
-So the open question is no longer "which of these two", it's **what a
-Toebeans human looks like**. Weighed together in the character session:
-find a genuinely stylized CC0 base; adjust proportions on the rig we
-already have (scaling the head bone up and the limbs down is cheap and
-keeps the skeleton and all the animation working); or set a deliberate
-different direction for humans. The skier's ski pose, the skis themselves,
-and any hairstyle geometry all hang off whichever body wins, so they wait
-for it rather than getting built twice.
+*(Aside worth remembering: this pack advertises only FBX/OBJ/Blend on the
+site, but the download's Google Drive folder carries a `glTF` subfolder —
+which is what `tools/gltf_character.py` consumes.)*
 
 ### v1.0 — smallest shippable version (web launch, M5)
 

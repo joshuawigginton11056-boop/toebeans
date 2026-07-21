@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHARACTERS,
   SKIN_TONES,
   createDefaultAppearance,
   createInitialBedroomState,
@@ -36,7 +37,7 @@ function midGameSave() {
   for (let i = 0; i < 60 * 6; i++) {
     ski = stepSkiing(ski, idleSkiInput, 1 / 60);
   }
-  const appearance = { ...createDefaultAppearance(), skin: 5, hair: 4, coat: 2 };
+  const appearance = { ...createDefaultAppearance(), character: 3, skin: 5, hair: 4 };
   return { bedroom, ski, appearance, save: createSave("slope", bedroom, ski, true, appearance) };
 }
 
@@ -67,10 +68,10 @@ describe("save/load", () => {
     const { save } = midGameSave();
     const cases: ReadonlyArray<Record<string, unknown>> = [
       { ...save, appearance: "brown hair" },
-      { ...save, appearance: { ...save.appearance, base: "claymation" } },
+      { ...save, appearance: { ...save.appearance, character: "casual" } },
       { ...save, appearance: { ...save.appearance, skin: "honey" } },
       { ...save, appearance: { ...save.appearance, hair: null } },
-      { ...save, appearance: { ...save.appearance, coat: Number.NaN } },
+      { ...save, appearance: { ...save.appearance, character: Number.NaN } },
     ];
     for (const broken of cases) {
       expect(decodeSave(JSON.stringify(broken))).toBeNull();
@@ -84,12 +85,12 @@ describe("save/load", () => {
     // the whole save.
     const stale = {
       ...save,
-      appearance: { ...save.appearance, skin: 99, hair: -3, eyes: 2.7 },
+      appearance: { ...save.appearance, character: 999, skin: 99, hair: -3 },
     };
     const restored = restoreSave(decodeSave(JSON.stringify(stale))!);
+    expect(restored.appearance.character).toBe(CHARACTERS.length - 1);
     expect(restored.appearance.skin).toBe(SKIN_TONES.length - 1);
     expect(restored.appearance.hair).toBe(0);
-    expect(restored.appearance.eyes).toBe(2);
   });
 
   it("restores static layout from code, not from the save", () => {

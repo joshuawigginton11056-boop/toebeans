@@ -1,8 +1,4 @@
-import {
-  SKIER_BASES,
-  normalizeAppearance,
-  type Appearance,
-} from "./appearance";
+import { normalizeAppearance, type Appearance } from "./appearance";
 import {
   CAT_RADIUS,
   PLAYER_RADIUS,
@@ -30,11 +26,14 @@ import {
 // are then discarded (decodeSave returns null) and the game starts fresh,
 // which is always safe this early in the project.
 
-// Bumped to 2 (skier session): saves now carry the character's appearance.
-// Saves written before it are discarded, which costs a player their position
-// and the current run — acceptable this early, and the alternative is two
-// save shapes to support forever.
-export const SAVE_VERSION = 2;
+// Bumped to 2 (skier session): saves gained the character's appearance.
+// Bumped to 3 (character-select session): appearance changed shape — the
+// player now picks a character whose outfit is baked in, so coat/trousers/
+// boots/eyes are gone and a character index took their place. Saves written
+// before this are discarded, which costs a player their position and the
+// current run — acceptable this early, and the alternative is carrying every
+// old save shape forever.
+export const SAVE_VERSION = 3;
 
 export type SceneMode = "bedroom" | "slope";
 
@@ -134,8 +133,7 @@ export function decodeSave(json: string): SaveData | null {
   // here, where a wrong type is corruption and a stale number is healable.
   const appearance = parsed.appearance;
   if (!isRecord(appearance)) return null;
-  if (!SKIER_BASES.includes(appearance.base as Appearance["base"])) return null;
-  const indices = ["skin", "hair", "eyes", "coat", "trousers", "boots"] as const;
+  const indices = ["character", "skin", "hair"] as const;
   const picked = {} as Record<(typeof indices)[number], number>;
   for (const field of indices) {
     const value = appearance[field];
@@ -191,10 +189,7 @@ export function decodeSave(json: string): SaveData | null {
     version: SAVE_VERSION,
     mode: parsed.mode,
     muted: parsed.muted,
-    appearance: normalizeAppearance({
-      base: appearance.base as Appearance["base"],
-      ...picked,
-    }),
+    appearance: normalizeAppearance(picked),
     bedroom: {
       player: { x: player.x, z: player.z },
       cat: { x: cat.x, z: cat.z, facing: cat.facing, mood: cat.mood },

@@ -905,6 +905,76 @@ hairstyle geometry all hang off. The cheap independent fixes (cat facing,
 turn smoothing) can ride along. Then music (the deliberately **last** M2
 item: timed per-slope songs, see IDEAS.md), then the end-of-M2 tuning pass.
 
+## 2026-07-21 — M2: the character pass — a pickable, cozy roster
+
+The realistic humans are gone. The playtest verdict was that they didn't
+match the art style — too tall, too realistic, a stray asset next to the
+chunky cat. The fix wasn't to pick between the two realistic bases; it was
+to change what a Toebeans human *is*. Directive this session:
+**https://quaternius.com/packs/ultimatedanimatedcharacter.html — let players
+select from these.** That's exactly what landed.
+
+- **The pack, and a surprise.** Quaternius's Ultimate Animated Character
+  Pack is 50 CC0 characters — chunky, big-headed, cute, same artist as the
+  cat and the scenery, so they match by construction. The site only
+  advertises FBX/OBJ/Blend, but the download's Google Drive folder has a
+  `glTF` subfolder — directly usable. **A correction fell out of checking:**
+  the model the repo called `Skier_Animated.glb` was never actually from
+  this pack (it had a 41-bone Mixamo-style rig, pulled from Poly Pizza).
+  Last session's "animated base" was a stray. CREDITS.md is fixed.
+- **You pick a character now.** `shared/src/appearance.ts` changed shape:
+  the old six color regions (skin/hair/eyes/coat/trousers/boots on one body)
+  became `{character, skin, hair}` — you choose a character whose outfit is
+  baked in, and still tint skin and hair. The starter roster is 11 cozy
+  characters (Casual ×7, OldClassy ×2, Cowboy ×2); the pack's costume
+  characters (knights, ninjas, …) are parked in IDEAS.md as XP-unlock
+  candidates. Stored as indices, so a choice can't drift off-roster or
+  off-palette. 15 tests (55 total).
+- **New tool: `tools/gltf_character.py`**, the third converter in the
+  family. The pack is textureless with named materials, so recoloring is
+  rewriting `baseColorFactor` — nothing to bake. It recolors every material
+  to the palette (Skin/Hair get the character-ramp defaults; the outfit is
+  fixed), and exploits the pack's one shared skeleton: `--strip-animations`
+  drops the clips from each character, `--animations-only` keeps one shared
+  `CharacterClips.glb`. 11 characters + clips = ~5 MB instead of ~20.
+- **`client/src/skierModel.ts` rewritten.** Loads a character by id plus the
+  shared clips (bound to its bones by name), tints the Skin/Hair materials,
+  and scales off the Head bone so hats add height instead of shrinking the
+  body. Much simpler than the two-base version: no atlas vertex-color
+  rewriting, no per-base branching. Both old `Skier_*.glb` files deleted.
+- **`SAVE_VERSION` 2 → 3** (appearance changed shape); old saves are
+  discarded, indices heal by clamping as before. The temporary `B`
+  (swap-base) key became `C` (cycle character); `K`/`H` still cycle
+  skin/hair. All three are stand-ins for the M3 picker UI.
+- `npm run check` (55 tests) and `npm run build` pass. Verified in the live
+  page by driving the real modules and pixel-reading rendered frames
+  (screenshots still time out — twelfth session running). This session's
+  verification was unusually deep because three.js skinned-mesh scaling
+  *looked* broken through a long chain of camera-clipping artifacts; ground
+  truth, once framed correctly, is clean: **every character renders feet-on-
+  ground at a consistent 1.56–1.64 units** (hats push OldClassy to 1.83,
+  Cowboy to 1.72 — as intended), scaling is perfectly linear, skin/hair
+  recolor to the exact palette hexes, the baked outfit is palette-correct
+  (shirt → skier blue, pants → charcoal), and the running game cycles
+  characters/colors with `C`/`K`/`H`, persists them to the v3 save, and
+  switches scenes — all with no console errors. What the roster *looks* like
+  in motion (which characters are keepers, whether they read as cozy against
+  the slope) is the eyeballs item below.
+
+**What to playtest:** `npm run dev`. In the bedroom, press **C** to cycle
+through the 11 characters, **K** and **H** for skin and hair. The real
+questions: do these chunky characters finally sit right next to the cat and
+the world (the whole point of this pass)? Which of the 11 are keepers, and
+are any misfits worth cutting? Is 11 the right *number* to start with? Then
+Enter to ski — the character rides down with the forward lean (still no skis
+or ski animation; that's the next session, now unblocked). Ignore that the
+bedroom looks dark — that's the room's lighting, an M3 fix.
+
+**Next:** the **ski pose + skis** (now unblocked — built once on the shared
+skeleton for the whole roster), with the cheap cat-facing and bedroom
+turn-smoothing fixes able to ride along. Then music (the deliberately
+**last** M2 item), then the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -930,10 +1000,12 @@ sounds like the real game.
       phase *(slope — director call, 2026-07-21)*
 - [ ] Real (non-gray-box) assets for that area, in the *Omno*-target
       low-poly style *(slope-side trees/rocks in 2026-07-21; the cat is a
-      real rigged model as of 2026-07-21; the **skier** is a real rigged,
-      customizable character as of 2026-07-21 — two candidate bases pending
-      the director's pick. Slope surface detail and hazard art are still
-      gray-box)*
+      real rigged model as of 2026-07-21; the **character** is now a
+      pickable, chunky, customizable roster of 11 from Quaternius's Ultimate
+      Animated Character Pack as of 2026-07-21 — this replaced the two
+      rejected realistic bases and settled the art-style-match question.
+      Still to build on that body: the ski pose + skis. Slope surface detail
+      and hazard art are still gray-box)*
 - [x] Lighting pass for that area *(2026-07-21 — sun, palette-exact blue
       shadows, dawn-pink haze, visible sun disc)*
 - [x] Real UI (replace the plain-text HUD overlay) *(2026-07-21 —

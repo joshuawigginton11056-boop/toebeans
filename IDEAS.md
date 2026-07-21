@@ -77,37 +77,47 @@ land here instead of in code.
   tuxedo, calico) would mean either per-region vertex groups or a second
   color set; breed/shape variety would mean new meshes. Should ship
   alongside character customization so both live in one place.
-- **The characters don't match the art style** (director playtest,
-  2026-07-21, skier session) — **the next session's work.** The Art Style
-  Bible asks for "chunky, rounded, big-headed" characters, with the cuteness
-  in the characters carrying the warmth against an austere landscape. Both
-  candidate bases are realistically-proportioned humans (roughly 6 heads
-  tall), so they read as generic low-poly people rather than as Toebeans
-  characters — and next to the cat, which *is* cute and chunky, the mismatch
-  is obvious. Options to weigh: hunt for a genuinely stylized CC0 base;
-  modify proportions on the existing rig (scaling the head bone up and
-  limbs down is cheap and surprisingly effective, and the skeleton keeps
-  working); or accept a different art direction for humans. **Decide this
-  before building the ski pose, the skis, or hairstyles** — all three hang
-  off whichever body wins, and would have to be redone.
+- ~~**The characters don't match the art style**~~ **(RESOLVED 2026-07-21,
+  character-pass session).** The two realistic ~6-heads-tall bases were
+  replaced wholesale by Quaternius's **Ultimate Animated Character Pack** —
+  chunky, big-headed, cute-by-construction, and by the same artist as the
+  cat and the scenery. The player now *picks a character* from a curated
+  cozy roster rather than dressing one body. See ROADMAP for the build.
+- **Costume characters as level-unlocks** (noticed 2026-07-21,
+  character-pass session): the Ultimate Animated Character Pack has ~44
+  wearable characters; the starter roster ships 11 cozy ones (`CHARACTERS`
+  in `shared/src/appearance.ts`). The rest — knights, ninjas, pirates,
+  vikings, the witch, wizard, elf, chefs, doctors, cowboys' hats aside —
+  are held back as candidates to gate behind XP levels, tying character
+  choice into the progression loop (DESIGN.md → Leveling & Unlocks). Adding
+  one is a one-line `CHARACTERS` entry plus a `tools/gltf_character.py`
+  conversion; they all share the pack's skeleton and the shared
+  `CharacterClips.glb`, so there's no per-character animation cost. A few of
+  the pack's characters (the two Doctors, Casual3_Female, Chef_Female,
+  Kimono_Female) are over the bible's ~5k-tri budget and would want a
+  Blender decimate first.
+- **The cat is a real Poly Pizza model; the pack has no cat** — unchanged
+  note, but now the humans and the cat are finally the same art family.
 - **The skier has no skis, and no ski pose** (director playtest,
-  2026-07-21, skier session): on the slope the character plays a *standing
-  idle* — the animation system works fine (verified: idle drives 12 bones on
-  the modular base, 38 on the animated one), but neither CC0 pack contains
-  a skiing clip, so a standing figure with no equipment reads as frozen.
-  Two separable pieces: **skis and poles** can be built in code out of
-  simple flat-shaded shapes, the same way the cat's scarf is (cheap, and
-  bible-friendly); **the ski pose** doesn't need an animation at all — bend
-  the knees, lean the torso, bring the arms forward by setting bone
-  rotations directly, which is a static pose the existing rig already
-  supports. Both should wait for the character-style decision above.
+  2026-07-21, skier session; **now unblocked** by the character pass): on
+  the slope the character plays a *standing idle* (the shared Idle clip),
+  because no CC0 pack contains a skiing clip. Two separable pieces: **skis
+  and poles** can be built in code out of simple flat-shaded shapes, the
+  same way the cat's scarf is (cheap, bible-friendly); **the ski pose**
+  needs no animation — bend the knees, lean the torso, bring the arms
+  forward by setting bone rotations directly on the rig. The character-style
+  question that used to block this is settled, and because the whole roster
+  shares one skeleton, the ski pose and the ski-mount points are built
+  *once* and work for every character. Strong candidate for the next session.
 - **The cat should face downhill, not the camera** (director playtest,
   2026-07-21, skier session): the cat on the skier's back was deliberately
   left facing +z (back up the hill) so the player could see its face and
   signal-red scarf. The director doesn't want that. Fix is one line in
   `client/src/skiRender.ts` — `cat.group.rotation.y = Math.PI` — but it
   costs the scarf's visibility, so it's worth deciding at the same time as
-  where the cat sits on whatever body wins.
+  the cat's seat on the skier's back. The character body is now settled (the
+  roster all sits ~1.6 units with the cat mount unchanged), so this is ready
+  to do whenever the ski-pose session happens.
 - **Walking in the bedroom is jagged** (director playtest, 2026-07-21,
   skier session): movement is 8-way (four booleans in `BedroomInput`), but
   the player's *heading* snaps instantly between those eight fixed angles,
@@ -116,23 +126,24 @@ land here instead of in code.
   rendered facing toward the target angle over a few frames (shortest way
   round, so it never spins the long way), and optionally ramp the walk
   animation in and out. Worth doing whenever the character work happens.
-- **The skier is dressed for summer** (noticed 2026-07-21, skier session):
-  measuring the modular base's parts showed its "Pants" region only covers
-  0.49–0.87 units of a 1.6-unit body, with bare skin below and above — it's
-  a **t-shirt and shorts**, on a ski slope. Lit skin is the single largest
-  non-snow color in a rendered frame. The animated base is better dressed
-  (its trousers region runs the full leg). Fixing it properly means real
-  art: a jacket/trousers piece mined from the
-  [Ultimate Modular Men Pack](https://quaternius.com/packs/ultimatemodularcharacters.html)
-  (built for exactly this kind of part-swapping), or accepting it as a
-  deliberate "this cat owner is very hardy" joke. Worth settling alongside
-  the base-model choice, since it may decide it.
+- ~~**The skier is dressed for summer**~~ **(RESOLVED 2026-07-21,
+  character-pass session):** the t-shirt-and-shorts modular base is gone.
+  The roster characters are fully dressed (casual coats, the OldClassy
+  overcoat, the Cowboy jacket), and their outfits bake to the palette's
+  saturated coat colors, so lit skin is no longer the largest non-snow
+  color in a frame. Whether any of them read as *ski* clothing specifically
+  (jackets, not cardigans) is a taste question for playtest — a proper
+  parka would still be real art from the Modular Men pack.
 - **Hairstyle geometry** (director direction, 2026-07-21, skier session):
-  the call was "colors + a few hairstyles" for v1.0. The **colors** half
-  landed this session; hairstyles are geometry, not a recolor, so they need
-  a hair slot on the head bone and N meshes to pick from — the Modular Men
-  pack is the source. Its own session, and it should probably wait until
-  the base model is chosen, since the hair has to fit that skull.
+  the call was "colors + a few hairstyles" for v1.0. **Reframed by the
+  character pass:** picking a character already gives real hair-*shape*
+  variety across the roster (bald, short, long, hats), which may satisfy
+  "a few hairstyles" on its own. If the director still wants hair swappable
+  independently of the character, that's geometry — a hair slot on the
+  shared head bone and N meshes, mined from the
+  [Ultimate Modular Men Pack](https://quaternius.com/packs/ultimatemodularcharacters.html).
+  Its own session; revisit after the director sees the roster's built-in
+  variety.
 - **Player facing lives in the renderer, not the state** (noticed
   2026-07-21, skier session): `BedroomState` has a facing for the cat (its
   brain needs one) but not for the player, so `bedroomRender.ts` derives

@@ -1,32 +1,29 @@
 import { describe, expect, it } from "vitest";
 import {
-  BOOT_COLORS,
-  COAT_COLORS,
-  EYE_COLORS,
+  CHARACTERS,
   HAIR_COLORS,
   REGION_RAMPS,
-  SKIER_BASES,
   SKIN_TONES,
-  TROUSER_COLORS,
   createDefaultAppearance,
-  cycleBase,
+  cycleCharacter,
   cycleRegion,
   normalizeAppearance,
   resolveAppearance,
+  resolveCharacter,
   type CharacterRegion,
 } from "./appearance";
 
 const REGIONS = Object.keys(REGION_RAMPS) as CharacterRegion[];
 
 describe("appearance", () => {
-  it("resolves the default character to the documented colors", () => {
+  it("resolves the default to the documented skin and hair", () => {
     const colors = resolveAppearance(createDefaultAppearance());
-    // The default has to be the "you" the rest of the docs describe: the
-    // reserved skier blue coat, so the player reads instantly on snow.
-    expect(colors.coat).toBe("#4E72A8");
-    expect(colors.skin).toBe("#DCA77E");
-    expect(colors.hair).toBe("#4A3628");
-    expect(colors.eyes).toBe("#3B2B22");
+    expect(colors.skin).toBe("#DCA77E"); // honey
+    expect(colors.hair).toBe("#4A3628"); // dark brown
+  });
+
+  it("defaults to the first character in the roster", () => {
+    expect(resolveCharacter(createDefaultAppearance())).toBe(CHARACTERS[0]);
   });
 
   it("resolves every region to a color from that region's own ramp", () => {
@@ -78,56 +75,66 @@ describe("appearance", () => {
     }
   });
 
-  it("cycles through every base and wraps", () => {
+  it("cycles through every character and wraps", () => {
     let appearance = createDefaultAppearance();
-    const seen = [appearance.base];
-    for (let i = 0; i < SKIER_BASES.length - 1; i++) {
-      appearance = cycleBase(appearance);
-      seen.push(appearance.base);
+    const seen = [resolveCharacter(appearance).id];
+    for (let i = 0; i < CHARACTERS.length - 1; i++) {
+      appearance = cycleCharacter(appearance);
+      seen.push(resolveCharacter(appearance).id);
     }
-    expect(new Set(seen).size).toBe(SKIER_BASES.length);
-    expect(cycleBase(appearance).base).toBe(createDefaultAppearance().base);
+    expect(new Set(seen).size).toBe(CHARACTERS.length);
+    // One more step wraps back to the start.
+    expect(resolveCharacter(cycleCharacter(appearance)).id).toBe(
+      resolveCharacter(createDefaultAppearance()).id,
+    );
   });
 
-  it("cycling the base keeps the colors", () => {
+  it("cycling the character keeps the colors", () => {
     const before = { ...createDefaultAppearance(), skin: 6, hair: 7 };
-    const after = cycleBase(before);
+    const after = cycleCharacter(before);
+    expect(after.character).not.toBe(before.character);
     expect(after.skin).toBe(6);
     expect(after.hair).toBe(7);
   });
 
-  it("clamps indices that fall outside their ramp", () => {
-    const wild = normalizeAppearance({
-      base: "modular",
-      skin: 999,
-      hair: -5,
-      eyes: Number.NaN,
-      coat: 2.9,
-      trousers: Number.POSITIVE_INFINITY,
-      boots: 0,
-    });
-    expect(wild.skin).toBe(SKIN_TONES.length - 1); // too big → last color
-    expect(wild.hair).toBe(0); // negative → first color
-    expect(wild.coat).toBe(2); // truncated, not rounded
-    // Non-finite isn't a stale index, it's garbage — so it falls back to the
-    // first color rather than clamping to either end.
-    expect(wild.eyes).toBe(0);
-    expect(wild.trousers).toBe(0);
+  it("every character id maps to a distinct model file", () => {
+    const ids = CHARACTERS.map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of ids) {
+      // Filenames only — the client turns these into asset URLs.
+      expect(id).toMatch(/^[A-Za-z0-9_]+$/);
+    }
   });
 
-  it("falls back to a known base when the stored one is unrecognized", () => {
-    const healed = normalizeAppearance({
-      ...createDefaultAppearance(),
-      base: "claymation" as never,
+  it("clamps indices that fall outside their range", () => {
+    const wild = normalizeAppearance({
+      character: 999,
+      skin: 999,
+      hair: -5,
     });
-    expect(SKIER_BASES).toContain(healed.base);
+    expect(wild.character).toBe(CHARACTERS.length - 1); // too big → last
+    expect(wild.skin).toBe(SKIN_TONES.length - 1); // too big → last color
+    expect(wild.hair).toBe(0); // negative → first color
+  });
+
+  it("heals a non-finite index to the first entry rather than an end", () => {
+    // Non-finite isn't a stale index, it's garbage — so it falls back to the
+    // first entry rather than clamping to either end.
+    const healed = normalizeAppearance({
+      character: Number.NaN,
+      skin: Number.POSITIVE_INFINITY,
+      hair: 2.9, // and a fractional index truncates, not rounds
+    });
+    expect(healed.character).toBe(0);
+    expect(healed.skin).toBe(0);
+    expect(healed.hair).toBe(2);
   });
 
   it("does not mutate the appearance it is given", () => {
     const original = createDefaultAppearance();
     const copy = { ...original };
-    cycleRegion(original, "coat");
-    cycleBase(original);
+    cycleRegion(original, "skin");
+    cycleCharacter(original);
     normalizeAppearance(original);
     resolveAppearance(original);
     expect(original).toEqual(copy);
@@ -137,9 +144,7 @@ describe("appearance", () => {
     // Guards against a ramp being accidentally emptied or collapsed.
     expect(SKIN_TONES.length).toBeGreaterThanOrEqual(6);
     expect(HAIR_COLORS.length).toBeGreaterThanOrEqual(6);
-    expect(EYE_COLORS.length).toBeGreaterThanOrEqual(3);
-    expect(COAT_COLORS.length).toBeGreaterThanOrEqual(3);
-    expect(BOOT_COLORS.length).toBeGreaterThanOrEqual(2);
+    expect(CHARACTERS.length).toBeGreaterThanOrEqual(6);
     for (const ramp of Object.values(REGION_RAMPS)) {
       expect(new Set(ramp).size).toBe(ramp.length); // no duplicate colors
     }

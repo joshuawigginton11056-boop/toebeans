@@ -3,7 +3,7 @@ import {
   createInitialBedroomState,
   createInitialSkiState,
   createSave,
-  cycleBase,
+  cycleCharacter,
   cycleRegion,
   restoreSave,
   stepBedroom,
@@ -92,14 +92,14 @@ window.addEventListener("keydown", (event) => {
     persist();
     return;
   }
-  // Appearance keys. B is temporary — it swaps between the two candidate
-  // skier models so the director can pick one by eye, and goes away with
-  // the losing model. K and H stand in for the real customization UI (an M3
-  // item) and are the only way to see the color seam working until then.
-  if (event.code === "KeyB" || event.code === "KeyK" || event.code === "KeyH") {
+  // Appearance keys, all temporary stand-ins for the character picker and
+  // customization UI (an M3 item) — the only way to see the roster and the
+  // color seam working until then. C cycles through the character roster;
+  // K and H cycle skin and hair color.
+  if (event.code === "KeyC" || event.code === "KeyK" || event.code === "KeyH") {
     appearance =
-      event.code === "KeyB"
-        ? cycleBase(appearance)
+      event.code === "KeyC"
+        ? cycleCharacter(appearance)
         : cycleRegion(appearance, event.code === "KeyK" ? "skin" : "hair");
     applyAppearance();
     persist();

@@ -1,34 +1,59 @@
-// Character appearance (M2, skier session). Plain serializable data: which
-// colors the player's character wears. Pure logic, no rendering — the client
-// turns these into material colors in client/src/skierModel.ts.
+// Character appearance (M2). Plain serializable data: who the player is.
+// Pure logic, no rendering — the client turns this into a loaded model and
+// material colors in client/src/skierModel.ts.
 //
-// Colors are stored as **indices into the ramps below**, never as raw hex.
-// That's deliberate: an index can't drift off-palette, it survives a ramp
-// being re-tuned, and validating a save is a range check instead of a color
-// parse. The ramps themselves are the Art Style Bible's character palette
-// (DESIGN.md → Character palette) — the landscape's 12 colors are separate
-// and untouched.
+// Two kinds of choice live here, and they are deliberately different shapes:
+//
+//   * **Which character** you are. Director call, 2026-07-21: players pick
+//     from Quaternius's Ultimate Animated Character Pack rather than
+//     dressing one body. The outfit is therefore part of the model, baked
+//     to the palette at conversion time by tools/gltf_character.py — not a
+//     runtime choice, which is why the old coat/trousers/boots ramps are
+//     gone.
+//   * **Skin and hair color**, which stay live. Every character in the pack
+//     carries a Skin material and most carry a Hair one, so these two work
+//     across the whole roster.
+//
+// Colors are stored as **indices into the ramps below**, never as raw hex,
+// and the character as an index into CHARACTERS. That's deliberate: an
+// index can't drift off-palette or off-roster, it survives a ramp being
+// re-tuned, and validating a save is a range check instead of a color
+// parse. The ramps are the Art Style Bible's character palette (DESIGN.md →
+// Character palette); the landscape's 12 colors are separate and untouched.
 
-/** Which base model the character is built on. */
-export type SkierBase = "modular" | "animated";
+export interface CharacterModel {
+  /** Matches the .glb filename in assets/characters/. */
+  readonly id: string;
+  /** Shown in the character picker when that gets built (M3). */
+  readonly label: string;
+}
 
 /**
- * Both bases ship while the director picks between them by eye (DESIGN.md →
- * Character assets). The loser gets deleted once that call is made.
+ * The roster. A curated subset of the pack's ~44 characters: the ones whose
+ * outfits suit a cozy game about skiing with a cat, rather than the knights,
+ * ninjas and pirates the pack also contains (parked in IDEAS.md as unlock
+ * candidates). Every one of them shares the pack's single skeleton and clip
+ * set, so adding or removing one costs nothing but the file.
  */
-export const SKIER_BASES: readonly SkierBase[] = ["modular", "animated"];
+export const CHARACTERS: readonly CharacterModel[] = [
+  { id: "Casual_Male", label: "Casual 1" },
+  { id: "Casual_Female", label: "Casual 2" },
+  { id: "Casual2_Male", label: "Casual 3" },
+  { id: "Casual2_Female", label: "Casual 4" },
+  { id: "Casual3_Male", label: "Casual 5" },
+  { id: "Casual3_Female", label: "Casual 6" },
+  { id: "Casual_Bald", label: "Casual 7" },
+  { id: "OldClassy_Male", label: "Classic Coat 1" },
+  { id: "OldClassy_Female", label: "Classic Coat 2" },
+  { id: "Cowboy_Male", label: "Rancher 1" },
+  { id: "Cowboy_Female", label: "Rancher 2" },
+];
 
 /**
- * The six parts of a character that take a color. Every base model splits
- * into exactly these, however it happens to carry them.
+ * The parts of a character that still take a runtime color. The rest of the
+ * outfit comes with the character now.
  */
-export type CharacterRegion =
-  | "skin"
-  | "hair"
-  | "eyes"
-  | "coat"
-  | "trousers"
-  | "boots";
+export type CharacterRegion = "skin" | "hair";
 
 // Warm and slightly desaturated, so faces sit against snow rather than
 // glowing off it.
@@ -54,83 +79,25 @@ export const HAIR_COLORS = [
   "#8C8C94", // silver
 ] as const;
 
-export const EYE_COLORS = [
-  "#3B2B22", // brown
-  "#4E6E7A", // blue-gray
-  "#5A7A5C", // green
-  "#6B5B45", // hazel
-  "#2B2622", // near-black
-] as const;
-
-// Saturated mid-darks only: whatever the coat is, the player has to read
-// instantly against a field of snow.
-export const COAT_COLORS = [
-  "#4E72A8", // skier blue — palette #11, the documented "you" color
-  "#2F6D63", // pine teal
-  "#7A4E8C", // plum
-  "#C0663A", // rust
-  "#B23A48", // cranberry
-] as const;
-
-export const TROUSER_COLORS = [
-  "#3E3A3A", // charcoal
-  "#5A5F6B", // slate gray
-  "#6E6152", // taupe
-  "#2E3548", // deep navy
-] as const;
-
-export const BOOT_COLORS = [
-  "#3A2F2F", // dark brown
-  "#2B2622", // soft black
-  "#66738C", // slate
-] as const;
-
 /** The ramp each region draws from, so callers can iterate generically. */
 export const REGION_RAMPS: Record<CharacterRegion, readonly string[]> = {
   skin: SKIN_TONES,
   hair: HAIR_COLORS,
-  eyes: EYE_COLORS,
-  coat: COAT_COLORS,
-  trousers: TROUSER_COLORS,
-  boots: BOOT_COLORS,
 };
 
 export interface Appearance {
-  readonly base: SkierBase;
+  /** Index into CHARACTERS. */
+  readonly character: number;
   readonly skin: number;
   readonly hair: number;
-  readonly eyes: number;
-  readonly coat: number;
-  readonly trousers: number;
-  readonly boots: number;
 }
-
-/** Region → the appearance field holding its index. */
-const REGION_FIELDS: Record<CharacterRegion, keyof Omit<Appearance, "base">> = {
-  skin: "skin",
-  hair: "hair",
-  eyes: "eyes",
-  coat: "coat",
-  trousers: "trousers",
-  boots: "boots",
-};
 
 export function createDefaultAppearance(): Appearance {
-  // Honey skin, dark brown hair, brown eyes, and the reserved skier blue
-  // coat — so a brand-new player looks the way the rest of the docs
-  // describe "you".
-  return {
-    base: "modular",
-    skin: 2,
-    hair: 1,
-    eyes: 0,
-    coat: 0,
-    trousers: 0,
-    boots: 0,
-  };
+  // Honey skin and dark brown hair on the first character in the roster.
+  return { character: 0, skin: 2, hair: 1 };
 }
 
-/** The six regions resolved to actual hex colors, ready for rendering. */
+/** The regions resolved to actual hex colors, ready for rendering. */
 export type AppearanceColors = Record<CharacterRegion, string>;
 
 function clampIndex(value: number, length: number): number {
@@ -139,59 +106,52 @@ function clampIndex(value: number, length: number): number {
 }
 
 /**
- * Pull every index back into its ramp's range. A save written before a ramp
- * shrank would otherwise point at a color that no longer exists; clamping
- * heals that the same way restoreSave heals stale positions.
+ * Pull every index back into range. A save written before a ramp shrank —
+ * or before a character was cut from the roster — would otherwise point at
+ * something that no longer exists; clamping heals that the same way
+ * restoreSave heals stale positions.
  */
 export function normalizeAppearance(appearance: Appearance): Appearance {
-  const base: SkierBase = SKIER_BASES.includes(appearance.base)
-    ? appearance.base
-    : "modular";
   return {
-    base,
+    character: clampIndex(appearance.character, CHARACTERS.length),
     skin: clampIndex(appearance.skin, SKIN_TONES.length),
     hair: clampIndex(appearance.hair, HAIR_COLORS.length),
-    eyes: clampIndex(appearance.eyes, EYE_COLORS.length),
-    coat: clampIndex(appearance.coat, COAT_COLORS.length),
-    trousers: clampIndex(appearance.trousers, TROUSER_COLORS.length),
-    boots: clampIndex(appearance.boots, BOOT_COLORS.length),
   };
+}
+
+/** Which character model to load. */
+export function resolveCharacter(appearance: Appearance): CharacterModel {
+  return CHARACTERS[normalizeAppearance(appearance).character]!;
 }
 
 /** Turn the stored indices into the hex colors the renderer applies. */
 export function resolveAppearance(appearance: Appearance): AppearanceColors {
   const safe = normalizeAppearance(appearance);
-  const colors = {} as Record<CharacterRegion, string>;
-  for (const region of Object.keys(REGION_RAMPS) as CharacterRegion[]) {
-    const ramp = REGION_RAMPS[region];
-    colors[region] = ramp[safe[REGION_FIELDS[region]]]!;
-  }
-  return colors;
-}
-
-/**
- * Swap to the next base model. This exists so the director can compare the
- * two candidate bases in-game; it goes away with the losing model.
- */
-export function cycleBase(appearance: Appearance): Appearance {
-  const index = SKIER_BASES.indexOf(appearance.base);
   return {
-    ...appearance,
-    base: SKIER_BASES[(index + 1) % SKIER_BASES.length]!,
+    skin: SKIN_TONES[safe.skin]!,
+    hair: HAIR_COLORS[safe.hair]!,
   };
 }
 
 /**
- * Step one region to its next color, wrapping at the end of its ramp. The
- * customization UI is an M3 item; until then this is how the colors are
- * exercised and tested.
+ * Step to the next character, wrapping at the end of the roster. The picker
+ * UI is its own session; until then this is how the roster is exercised,
+ * tested, and looked at in-game.
+ */
+export function cycleCharacter(appearance: Appearance): Appearance {
+  const safe = normalizeAppearance(appearance);
+  return { ...safe, character: (safe.character + 1) % CHARACTERS.length };
+}
+
+/**
+ * Step one region to its next color, wrapping at the end of its ramp. Same
+ * story as cycleCharacter: a stand-in for the customization UI.
  */
 export function cycleRegion(
   appearance: Appearance,
   region: CharacterRegion,
 ): Appearance {
-  const field = REGION_FIELDS[region];
   const ramp = REGION_RAMPS[region];
   const safe = normalizeAppearance(appearance);
-  return { ...safe, [field]: (safe[field] + 1) % ramp.length };
+  return { ...safe, [region]: (safe[region] + 1) % ramp.length };
 }
