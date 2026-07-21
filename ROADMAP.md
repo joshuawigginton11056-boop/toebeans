@@ -663,6 +663,9 @@ position, same lives, same mute setting. Try it mid-run on the slope, and
 try it from the bedroom. Does resuming feel seamless, or is there anything
 that resets when it shouldn't (or *doesn't* reset when it should)?
 
+**Playtest verdict (director, 2026-07-21):** "The saves are working
+perfectly." Shipped as-is — no follow-ups.
+
 **Next:** per the M2 list — character art / remaining slope assets
 (skier + cat models are still gray boxes), then music (the deliberately
 **last** M2 item: timed per-slope songs, see IDEAS.md), then the
