@@ -237,6 +237,40 @@ is the playtest-and-verdict session: does the loop feel good enough to
 invest in art? Feel tuning (speeds, jump arc, pause length, follow
 distances) belongs in that session.
 
+## 2026-07-21 — Fix: cat no longer gets stuck on furniture
+
+Playtest feedback: the cat got stuck pressing against furniture. Cause:
+it always walked in a straight line at the player, and the slide-along
+collision can pin it against a face it can't slide around. Fix: the cat
+now plans a route around whatever's in the way.
+
+- `/shared` `bedroom.ts`: each frame, if the straight line to the player
+  is blocked, the cat finds the shortest route around the blocking
+  furniture — through its open corners (corners flush against a wall are
+  skipped, so it always goes round the open side) — and walks toward the
+  first waypoint. Recomputed every frame from state alone, so there's no
+  stored path and the functions stay pure. A first, simpler attempt
+  (always aim at the nearest corner) oscillated at the corner — the
+  shortest-route version is why this is a proper little route search
+  (at most 6 points, cat + 4 corners + player) rather than a one-liner.
+- The stuck behavior was actually pinned down by the old "cat is blocked
+  by furniture" test — that test now asserts the opposite: the cat walks
+  *around* the desk, never clips into it on the way, and ends up sitting
+  next to the player (28 tests total, all passing).
+- Verified by stepping the real modules in the live page (screenshots
+  still stuck): routes around the desk, the dresser, and the bed all end
+  with the cat sitting ~1.05 from the player with zero furniture
+  penetration — including starting the cat pressed flat against a desk
+  face, the exact stuck pose from the playtest.
+
+**What to playtest:** try to trap the cat again — walk so furniture is
+between you and it, from a few angles. It should round the furniture and
+settle next to you every time. Does the detour path look deliberate or
+drunk?
+
+**Next:** unchanged — the M1 fun-check verdict session (playtest +
+feel tuning).
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

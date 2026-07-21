@@ -96,25 +96,173 @@ function resolveAxis(
   return pos;
 }
 
+// How far outside a furniture piece's collision edge the cat aims when
+// walking around it, so it rounds corners instead of scraping them.
+const CAT_CORNER_CLEARANCE = 0.15;
+
+interface Box {
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minZ: number;
+  readonly maxZ: number;
+}
+
+function inflatedBox(obstacle: RoomObstacle, pad: number): Box {
+  return {
+    minX: obstacle.x - obstacle.width / 2 - pad,
+    maxX: obstacle.x + obstacle.width / 2 + pad,
+    minZ: obstacle.z - obstacle.depth / 2 - pad,
+    maxZ: obstacle.z + obstacle.depth / 2 + pad,
+  };
+}
+
+// Does the straight line from a to b pass through the box? Standard
+// slab test: clip the segment against the box's x and z ranges and see
+// whether any of it survives.
+function segmentHitsBox(
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  box: Box,
+): boolean {
+  let tMin = 0;
+  let tMax = 1;
+  const axes: ReadonlyArray<readonly [number, number, number, number]> = [
+    [ax, bx - ax, box.minX, box.maxX],
+    [az, bz - az, box.minZ, box.maxZ],
+  ];
+  for (const [start, delta, min, max] of axes) {
+    if (delta === 0) {
+      if (start < min || start > max) return false;
+      continue;
+    }
+    const t1 = (min - start) / delta;
+    const t2 = (max - start) / delta;
+    tMin = Math.max(tMin, Math.min(t1, t2));
+    tMax = Math.min(tMax, Math.max(t1, t2));
+    if (tMin > tMax) return false;
+  }
+  return true;
+}
+
+// Visibility checks use a box an epsilon thinner than real collision, so
+// a cat pressed right up against a face (exactly on the collision
+// boundary) still "sees" along it instead of every route reading as
+// blocked. Any bigger gap here and routes can cut corners the collision
+// then scrapes against.
+const VISIBILITY_PAD = CAT_RADIUS - 1e-6;
+
+interface Point {
+  readonly x: number;
+  readonly z: number;
+}
+
+// Where the cat should walk this frame: straight at the player if the
+// line is clear, otherwise the first waypoint of the shortest route
+// around the blocking furniture (cat → its open corners → player, tiny
+// Dijkstra over at most 6 nodes). Recomputed every frame from state
+// alone, so the cat rounds a corner and re-aims with no stored path.
+// (With three well-separated furniture pieces, a corner route blocked by
+// a *second* piece can't happen, so this only routes around one box.)
+function pickWalkTarget(
+  state: BedroomState,
+  cat: BedroomCat,
+  player: Point,
+): Point {
+  const blocking = state.obstacles.find((obstacle) =>
+    segmentHitsBox(
+      cat.x,
+      cat.z,
+      player.x,
+      player.z,
+      inflatedBox(obstacle, VISIBILITY_PAD),
+    ),
+  );
+  if (!blocking) return player;
+
+  const visBox = inflatedBox(blocking, VISIBILITY_PAD);
+  const box = inflatedBox(blocking, CAT_RADIUS + CAT_CORNER_CLEARANCE);
+  const corners = [
+    { x: box.minX, z: box.minZ },
+    { x: box.minX, z: box.maxZ },
+    { x: box.maxX, z: box.minZ },
+    { x: box.maxX, z: box.maxZ },
+  ].filter(
+    (corner) =>
+      // Corners squeezed against a wall (furniture sits flush with them)
+      // aren't walkable — drop them so the cat routes the open way round.
+      Math.abs(corner.x) <= state.roomWidth / 2 - CAT_RADIUS &&
+      Math.abs(corner.z) <= state.roomDepth / 2 - CAT_RADIUS &&
+      // A corner the cat is standing on adds nothing to the route graph,
+      // and keeping it would let "walk to where you already are" win.
+      Math.hypot(corner.x - cat.x, corner.z - cat.z) > 0.01,
+  );
+
+  // Shortest path over: node 0 = cat, then corners, last node = player.
+  // Two nodes are connected iff the straight line between them clears the
+  // box; diagonal corner-to-corner hops get pruned by that automatically.
+  const nodes: readonly Point[] = [{ x: cat.x, z: cat.z }, ...corners, player];
+  const playerNode = nodes.length - 1;
+  const dist = nodes.map(() => Infinity);
+  const prev = nodes.map(() => -1);
+  const done = nodes.map(() => false);
+  dist[0] = 0;
+
+  for (;;) {
+    let u = -1;
+    for (let i = 0; i < nodes.length; i++) {
+      if (!done[i] && dist[i]! < (u === -1 ? Infinity : dist[u]!)) u = i;
+    }
+    if (u === -1 || u === playerNode) break;
+    done[u] = true;
+    const from = nodes[u]!;
+    for (let v = 0; v < nodes.length; v++) {
+      if (done[v] || v === u) continue;
+      const to = nodes[v]!;
+      if (segmentHitsBox(from.x, from.z, to.x, to.z, visBox)) continue;
+      const alt = dist[u]! + Math.hypot(to.x - from.x, to.z - from.z);
+      if (alt < dist[v]!) {
+        dist[v] = alt;
+        prev[v] = u;
+      }
+    }
+  }
+
+  // No route (cat boxed in somehow): press straight at the player and let
+  // collision sliding do what it can — the pre-detour behavior.
+  if (dist[playerNode] === Infinity) return player;
+
+  let hop = playerNode;
+  while (prev[hop] !== 0) hop = prev[hop]!;
+  return nodes[hop]!;
+}
+
 // The cat's whole brain: sit until the player wanders off, walk toward
-// them (bumping around furniture like the player does), sit back down once
-// close. Runs every frame regardless of player input — the cat keeps
-// walking even while you stand still.
+// them (detouring around furniture in the way), sit back down once close.
+// Runs every frame regardless of player input — the cat keeps walking
+// even while you stand still.
 function stepCat(
   state: BedroomState,
   player: { readonly x: number; readonly z: number },
   dt: number,
 ): BedroomCat {
   const cat = state.cat;
-  const dx = player.x - cat.x;
-  const dz = player.z - cat.z;
-  const distance = Math.hypot(dx, dz);
+  const playerDistance = Math.hypot(player.x - cat.x, player.z - cat.z);
 
-  if (cat.mood === "sitting" && distance <= FOLLOW_START_DISTANCE) {
+  if (cat.mood === "sitting" && playerDistance <= FOLLOW_START_DISTANCE) {
     return cat;
   }
-  if (distance <= FOLLOW_STOP_DISTANCE) {
+  if (playerDistance <= FOLLOW_STOP_DISTANCE) {
     return cat.mood === "sitting" ? cat : { ...cat, mood: "sitting" };
+  }
+
+  const target = pickWalkTarget(state, cat, player);
+  const dx = target.x - cat.x;
+  const dz = target.z - cat.z;
+  const distance = Math.hypot(dx, dz);
+  if (distance < 1e-6) {
+    return cat.mood === "following" ? cat : { ...cat, mood: "following" };
   }
 
   const step = Math.min(CAT_SPEED * dt, distance);

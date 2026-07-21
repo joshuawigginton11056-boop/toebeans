@@ -135,18 +135,36 @@ describe("stepBedroom", () => {
     expect(state.cat.facing).toBeCloseTo(Math.PI / 2, 5);
   });
 
-  it("cat is blocked by furniture on the way to the player", () => {
-    // Cat left of the desk, player straight through it on the other side.
-    // The desk's left face is at x = 3.3; the cat's radius is 0.2.
+  it("cat walks around furniture instead of getting stuck on it", () => {
+    // Cat north of the desk, player south of it — the straight line goes
+    // through the desk, so the cat has to round its open (west) corners.
     const start: BedroomState = {
       ...createInitialBedroomState(),
-      player: { x: 4.4, z: 1.6 },
-      cat: { x: 1.9, z: 1.6, facing: 0, mood: "sitting" },
+      player: { x: 3.5, z: 3.4 },
+      cat: { x: 3.5, z: -0.8, facing: 0, mood: "sitting" },
     };
-    const state = walk(start, noInput, 500);
 
-    expect(state.cat.x).toBeCloseTo(3.3 - 0.2, 5);
-    expect(state.cat.z).toBeCloseTo(1.6, 5);
+    // Step manually so every intermediate position can be checked: the
+    // cat must never overlap the desk on the way around it.
+    // Desk collision bounds inflated by the cat's radius: x ≥ 3.1,
+    // 0.1 ≤ z ≤ 3.1.
+    let state = start;
+    for (let i = 0; i < 500; i++) {
+      state = stepBedroom(state, noInput, 0.02);
+      // Epsilon allows grazing contact with the boundary (float noise);
+      // anything past it means real penetration.
+      const e = 1e-6;
+      const insideDesk =
+        state.cat.x > 3.1 + e && state.cat.z > 0.1 + e && state.cat.z < 3.1 - e;
+      expect(insideDesk).toBe(false);
+    }
+
+    const distance = Math.hypot(
+      state.player.x - state.cat.x,
+      state.player.z - state.cat.z,
+    );
+    expect(distance).toBeLessThanOrEqual(1.2);
+    expect(state.cat.mood).toBe("sitting");
   });
 
   it("never mutates the input state", () => {
