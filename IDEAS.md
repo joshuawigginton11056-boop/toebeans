@@ -3,6 +3,57 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## Character-pass playtest verdict (director, 2026-07-21)
+
+Josh playtested the new pickable roster and flagged six issues. All parked
+for a later session (his call — "we can get to them later"). Most are about
+how the character looks *on the slope*, so they cluster naturally with the
+already-planned ski-pose session; two are independent.
+
+- **No feet.** The character reads as footless on the slope. Root cause to
+  confirm: the Ultimate Animated Character Pack characters have **no shoe /
+  boot / sock geometry at all** — their materials are Skin, Shirt, Pants,
+  Belt, Face, Hair (no "Socks"/"Boots" like the old modular base had), so
+  the legs just end in bare low-poly stumps. That, plus the feet possibly
+  sinking into the snow surface on the slope (the skier's y placement vs the
+  snow plane), is likely why they read as "no feet." Fixes to weigh:
+  build simple flat-shaded ski boots in code (same trick as the cat's scarf
+  and the planned skis — and boots are *part of* ski equipment anyway), or
+  nudge the skier's ground placement so the existing foot geometry clears
+  the snow. Best solved together with the skis/ski-pose work below.
+- **Cat sits halfway in the character's hair.** The cat's mount on the
+  skier's back is `(0, 0.95, 0.16)` in `client/src/skiRender.ts`, tuned
+  against the *old* skier bases. On the new roster bodies that height lands
+  at head/hair level, not the upper back. Needs re-tuning against the chosen
+  character body — and it should be settled at the same time as the
+  cat-facing fix (see that item below), since both are "where and how the
+  cat rides."
+- **Character stands straight while skiing — no response to lean.** Two
+  parts: (a) the fixed forward ski-lean (`SKI_LEAN = -0.22` rad ≈ 13°,
+  applied in `skiRender.ts`/`skierModel.ts`) is too subtle to read on a
+  standing figure with no ski pose, so it looks like standing upright; and
+  (b) the up/down *lean input* (which changes speed) produces **no visible
+  change** in the character — Josh expected pressing up/down to visibly tuck
+  forward / lean back. This is really the "ski pose" item below, extended: a
+  real crouched ski pose *and* driving the torso bend from the lean input so
+  the input is legible on the body. Belongs to the ski-pose session.
+- **No ski equipment** — re-confirmed; see "the skier has no skis" below.
+- **Hair does not move / is rigid.** The hair is part of the single skinned
+  mesh (via the Hair material), not a separate object, so it should follow
+  the head bone — verify it's actually weighted to `Head` and not to the
+  root (if it floats while the head turns, that's a weighting bug worth a
+  look). If it *is* head-weighted, "doesn't move" is just the low-poly
+  reality of no hair bones / no secondary motion, which is arguably fine for
+  this style — a taste call for the director, not necessarily a fix.
+  Lowest priority of the six.
+- **Character can be changed while skiing.** The `C`/`K`/`H` appearance keys
+  in `client/src/main.ts` are handled regardless of scene, so you can cycle
+  character/skin/hair mid-run on the slope. The code comment already claims
+  these are "bedroom only" but nothing enforces it. Trivial independent fix:
+  gate that keydown branch on `mode === "bedroom"`. (These keys are
+  temporary stand-ins for the M3 picker UI anyway, but the gate is one line
+  and stops the mid-run surprise.)
+
 - **Finish line / run completion** (noticed 2026-07-20, during the 9-lives
   session): the slope currently never ends — you ski past the last chasm
   forever. A finish line is needed before XP can exist, because "a
@@ -99,25 +150,31 @@ land here instead of in code.
 - **The cat is a real Poly Pizza model; the pack has no cat** — unchanged
   note, but now the humans and the cat are finally the same art family.
 - **The skier has no skis, and no ski pose** (director playtest,
-  2026-07-21, skier session; **now unblocked** by the character pass): on
+  2026-07-21, skier + character-pass sessions; **now unblocked** by the
+  character pass, and re-confirmed by the character-pass playtest above): on
   the slope the character plays a *standing idle* (the shared Idle clip),
-  because no CC0 pack contains a skiing clip. Two separable pieces: **skis
-  and poles** can be built in code out of simple flat-shaded shapes, the
-  same way the cat's scarf is (cheap, bible-friendly); **the ski pose**
-  needs no animation — bend the knees, lean the torso, bring the arms
-  forward by setting bone rotations directly on the rig. The character-style
-  question that used to block this is settled, and because the whole roster
-  shares one skeleton, the ski pose and the ski-mount points are built
-  *once* and work for every character. Strong candidate for the next session.
-- **The cat should face downhill, not the camera** (director playtest,
-  2026-07-21, skier session): the cat on the skier's back was deliberately
-  left facing +z (back up the hill) so the player could see its face and
-  signal-red scarf. The director doesn't want that. Fix is one line in
-  `client/src/skiRender.ts` — `cat.group.rotation.y = Math.PI` — but it
-  costs the scarf's visibility, so it's worth deciding at the same time as
-  the cat's seat on the skier's back. The character body is now settled (the
-  roster all sits ~1.6 units with the cat mount unchanged), so this is ready
-  to do whenever the ski-pose session happens.
+  because no CC0 pack contains a skiing clip. Three pieces now, all built
+  once against the shared skeleton so they work for every character:
+  **(1) skis and poles** in code out of simple flat-shaded shapes, the same
+  way the cat's scarf is (cheap, bible-friendly) — and **ski boots** here
+  too, which double as the fix for the "no feet" flag above; **(2) a real
+  crouched ski pose** (bend knees, lean torso, arms forward) by setting bone
+  rotations directly — no animation needed; **(3) make the up/down lean
+  input legible on the body** — drive a visible torso bend from the lean, so
+  the current invisible speed control reads as the character tucking/leaning.
+  Strong candidate for the next session.
+- **The cat should face downhill, not the camera — AND it sits too high**
+  (director playtest, 2026-07-21, skier + character-pass sessions): two cat
+  problems, both in `client/src/skiRender.ts`, to settle together as "how
+  the cat rides." (1) The cat was deliberately left facing +z (back up the
+  hill) so the player could see its face and signal-red scarf; the director
+  doesn't want that — the one-line `cat.group.rotation.y = Math.PI` faces it
+  downhill but costs scarf visibility. (2) **The cat mount `(0, 0.95, 0.16)`
+  was tuned against the old skier bases; on the new roster bodies it lands
+  halfway up the character's hair, not on the upper back.** The mount needs
+  re-tuning against the chosen character body (probably a lower y, and a
+  small forward/back offset), which is the same measurement pass the
+  cat-facing decision wants — do them at once, alongside the ski pose.
 - **Walking in the bedroom is jagged** (director playtest, 2026-07-21,
   skier session): movement is 8-way (four booleans in `BedroomInput`), but
   the player's *heading* snaps instantly between those eight fixed angles,

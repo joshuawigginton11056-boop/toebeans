@@ -970,10 +970,36 @@ Enter to ski — the character rides down with the forward lean (still no skis
 or ski animation; that's the next session, now unblocked). Ignore that the
 bedroom looks dark — that's the room's lighting, an M3 fix.
 
-**Next:** the **ski pose + skis** (now unblocked — built once on the shared
-skeleton for the whole roster), with the cheap cat-facing and bedroom
-turn-smoothing fixes able to ride along. Then music (the deliberately
-**last** M2 item), then the end-of-M2 tuning pass.
+**Playtest verdict (director, 2026-07-21): the roster reads right, but the
+character on the slope needs a polish pass.** Six issues, all parked in
+[IDEAS.md](IDEAS.md) for a later session (director's call):
+
+1. **No feet** — the pack characters have no shoe/boot geometry (legs end in
+   bare stumps), and the feet likely sink into the snow on the slope.
+2. **Character can be changed while skiing** — the `C`/`K`/`H` keys aren't
+   gated to the bedroom (trivial independent fix in `main.ts`).
+3. **Hair doesn't move** — it's part of the skinned mesh; verify it's
+   weighted to the head bone, otherwise it's just the low-poly no-secondary-
+   motion look (a taste call).
+4. **No ski equipment** — re-confirmed (already the next session's work).
+5. **Character stands straight while skiing** — the fixed forward lean is
+   too subtle to read, and the up/down lean *input* produces no visible body
+   change; wants a real ski pose driven by the lean.
+6. **Cat sits halfway in the character's hair** — the cat's back-mount
+   `(0, 0.95, 0.16)` was tuned to the old bodies and lands at head height on
+   the new ones; needs re-tuning (settle with the cat-facing fix).
+
+Issues 1, 4, 5, 6 cluster into the ski-pose session; 2 is a one-line gate; 3
+is a low-priority cosmetic. The roster itself (which 11, is 11 right) is the
+director's remaining eyeballs judgment.
+
+**Next:** the **ski pose + skis + character-on-slope polish** (now
+unblocked — built once on the shared skeleton for the whole roster): a real
+crouched ski pose driven by the lean input, code-built skis/poles/**boots**
+(the "no feet" fix), and the cat re-mounted and faced downhill. The one-line
+"change character only in the bedroom" gate and the bedroom turn-smoothing
+fix can ride along. Then music (the deliberately **last** M2 item), then the
+end-of-M2 tuning pass.
 
 ## Milestones
 
