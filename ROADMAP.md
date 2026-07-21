@@ -738,13 +738,42 @@ in both scenes — too big, too small? Does the walk animation match how fast
 it's actually moving, or does it look like it's moonwalking? And ignore how
 dark it looks in the bedroom — that's the room's lighting, fixed in M3.
 
-**Next:** the skier. The director likes the size and shape of the
-characters in Quaternius's
-[Ultimate Animated Character Pack](https://quaternius.com/packs/ultimatedanimatedcharacter.html)
-but wants real character customization (skin, hair, eyes, and so on) — the
-method for that is the open question going into the next session, and the
-answer shapes how the skier gets built. After that: music (the deliberately
-**last** M2 item), then the end-of-M2 tuning pass.
+**Next:** the skier — but three questions get answered **at the top of
+that session, before any code**, because they change how the skier is
+built and they're all cheap now and expensive later. Written up in full in
+[DESIGN.md → Characters & customization](DESIGN.md#characters--customization--open-needs-a-director-call).
+
+> **Carried-over questions for the next session (director instruction,
+> 2026-07-21):**
+>
+> 1. **The palette has no skin tones.** The bible's 12 colors were written
+>    for a landscape; its one character color is a coat (skier blue).
+>    Character customization can't happen without extending it. Pick one:
+>    (a) add a separate character ramp of 6–8 skin tones + hair colors
+>    alongside the 12 *(recommended)*; (b) fold them into the 12; or
+>    (c) stylize past it with non-realistic skin tones drawn from the
+>    existing palette.
+> 2. **How deep does customization go in v1.0?** Colors only — skin, hair
+>    color, eye color, clothing — is nearly free with the tooling that
+>    already exists. Swappable *shapes* (hairstyles, face variety) cost
+>    real art per option. v1.0 scope says "basic options"; how basic?
+> 3. **Which base character?** The director likes the proportions in
+>    Quaternius's
+>    [Ultimate Animated Character Pack](https://quaternius.com/packs/ultimatedanimatedcharacter.html),
+>    but the
+>    [Ultimate Modular Men Pack](https://quaternius.com/packs/ultimatemodularcharacters.html)
+>    is built for part-swapping (4 swappable pieces per character). Same
+>    artist, so either matches the cat; the modular one trades some
+>    proportion preference for real shape customization.
+>
+> Recommended split regardless of the answers: build the skier next
+> session **with the customization seams in place** (regions split into
+> materials, colors read from state with defaults) but **without** the
+> customization UI — that already lives in M3's "character customization
+> (basic options)", and keeps this to one feature per session.
+
+After the skier: music (the deliberately **last** M2 item), then the
+end-of-M2 tuning pass.
 
 ## Milestones
 

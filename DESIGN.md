@@ -156,6 +156,55 @@ landscape accents (7–10), ~5% character/signal (11–12). If a screenshot
 feels wrong, count the warm accents first — too many birch-amber trees
 kills the lonely-vast feeling.
 
+### Characters & customization — OPEN, needs a director call
+
+Raised 2026-07-21 (cat-model session). The director wants full character
+customization — skin color, hair, eyes, "all of the things you would want
+to control for custom characters" — built on the proportions of
+Quaternius's
+[Ultimate Animated Character Pack](https://quaternius.com/packs/ultimatedanimatedcharacter.html)
+(CC0). That collides with the palette above, so it needs deciding **before
+the skier is built**, because it's cheap now and expensive later.
+
+**The method is settled and cheap.** Quaternius colors his models with a
+shared texture atlas of flat swatches; `tools/glb_palette.py` bakes those
+into palette vertex colors and strips the texture, which leaves the model
+split into named **color regions** (the cat came out as body / belly /
+eyes / nose). A human will bake out as skin / hair / eyes / shirt /
+trousers / shoes. So:
+
+- **Color customization is nearly free.** Split the mesh by region into
+  separate materials; customizing is then setting a material color. No new
+  geometry, no textures, unlimited options. Covers skin, hair color, eye
+  color, clothing colors.
+- **Shape customization costs real art.** Hair *color* is a recolor; hair
+  *style* is geometry, needing a hair slot on the head bone and N meshes to
+  pick from. Quaternius's
+  [Ultimate Modular Men Pack](https://quaternius.com/packs/ultimatemodularcharacters.html)
+  is built exactly for this (each character split into 4 swappable pieces)
+  and is the pack to mine for parts.
+- **It fits the architecture.** The choices are plain serializable data
+  (`{skin, hair, hairColor, eyes, …}`), so they live in `GameState` and the
+  existing save system persists them for free.
+
+**The open question is the palette, not the code.** The 12 colors above
+contain **no skin tones** and no hair colors — the palette was written for
+a landscape, and the one character color in it (#11 skier blue) is a coat.
+Character customization therefore requires extending the bible. Options:
+
+1. **Add a character ramp** — a set of skin tones (say 6–8) and hair colors
+   that live *alongside* the 12 as a separate, character-only palette.
+   Keeps the landscape rules untouched; most likely right.
+2. **Fold them into the 12** — keeps one list, but 12 colors can't carry a
+   landscape *and* a range of human skin tones without going muddy.
+3. **Stylize past it** — non-realistic skin tones drawn from the existing
+   palette. Most visually cohesive, least conventional; would be a
+   deliberate art statement rather than a customization feature.
+
+Until this is called, the skier stays a gray box. Related: cat
+customization (same mechanism, already-baked regions) is parked in
+[IDEAS.md](IDEAS.md).
+
 ### Shape language
 
 - **Faceted, flat-shaded low poly.** One color per face; visible triangles
@@ -279,6 +328,16 @@ vertical-slice work across both areas at once.
 assets sourced from the Quaternius Ultimate Nature Pack (CC0) — its snow
 variants matched the bible's birch/pine/rock needs directly. The bedroom
 reaches the same polish level in M3.
+
+**Character assets (July 21, 2026, director call):** the **cat** is a
+standalone CC0 Quaternius model from
+[Poly Pizza](https://poly.pizza/m/qKICY6xla2) — rigged and animated, and
+by the same artist as the Nature Pack, so it matches the scenery by
+construction. (Neither the Nature Pack nor Quaternius's animal pack
+contains a cat; this was the one that did.) Asset research the same day
+established that **no CC0 skiing human exists** — every skier model found
+was CC-BY or paid — so the skier will be built from a generic CC0
+character, which is what makes the customization question above urgent.
 
 ### v1.0 — smallest shippable version (web launch, M5)
 

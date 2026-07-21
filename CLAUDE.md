@@ -30,9 +30,19 @@ it's explained.
 /assets   Art, audio, and other static assets (not code). Vite serves
           this directory as-is, so assets/slope/X.glb is /slope/X.glb
           in the game. Every asset needs a row in assets/CREDITS.md.
-/tools    Build-time scripts (not shipped). obj2glb_palette.py converts
-          downloaded models to palette-recolored .glb per the Art Style
-          Bible in DESIGN.md.
+          Subfolders: slope/ (scenery), characters/ (the cat, and
+          eventually the skier).
+/tools    Build-time scripts (not shipped). Two converters bring
+          downloaded models in line with the Art Style Bible in
+          DESIGN.md, depending on how the source colors itself:
+            obj2glb_palette.py — for OBJ sources with one material per
+              part (the Quaternius Nature Pack). Remaps materials.
+            glb_palette.py — for .glb sources that color themselves with
+              a shared texture atlas (Quaternius characters/animals).
+              Bakes each vertex's atlas swatch into palette vertex colors
+              and strips the texture, since the bible bans textures. The
+              baked regions (e.g. the cat's body/belly/eyes/nose) are
+              what customization recolors later.
 ```
 
 ## The core rule: state and rendering are separate
