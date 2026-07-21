@@ -293,6 +293,42 @@ part of the chosen area moved down into M3.
 
 **Next:** start phase 3 / M2 — first decision: which area gets polished.
 
+## 2026-07-21 — Art style bible written into DESIGN.md
+
+First M2 groundwork: the director supplied five *Omno* reference images
+and notes on what they liked in each (the sun haze, accurate soft
+shadows, brightness, simple rock shapes, snow trails and motion blur,
+reading distance via rolling hills and haze) and one dislike (snow with
+no depth — no footprints or carved ski trails). From that,
+[DESIGN.md](DESIGN.md#art-style-bible) gained a binding **Art Style
+Bible**:
+
+- A 12-color palette (snow whites with blue shadows, dawn-pink haze,
+  birch amber, glacial ice, reserved skier-blue and signal-red) with a
+  rough scene-balance guide.
+- Shape language: faceted flat-shaded low poly, simple silhouettes,
+  rolling-not-jagged terrain (jagged reserved for hazards), scale
+  contrast, cute characters against an austere landscape, no textures.
+- Lighting: one bright sun, soft blue shadows (never black), mandatory
+  pink-tinted distance haze (it's also the gameplay depth cue), visible
+  glowing sun.
+- Snow & motion rules from the director's dislike: skis carve persistent
+  grooves, feet leave prints, speed is visible in spray/blur — tracked
+  as M2/M4 detail-touch work.
+- Asset sourcing rules: free CC0 packs first (Kenney, Quaternius,
+  Poly Pizza, OpenGameArt), CC-BY second, AI-generated last resort only
+  if it matches the bible; a style-match test every asset must pass;
+  props under ~2k triangles (characters/set pieces ~5k); `.glb`, meters,
+  Y-up, origin at base.
+- Created [assets/CREDITS.md](assets/CREDITS.md) — every asset gets a
+  license row there before it's committed, no exceptions.
+
+No code changed this session; `npm run check` unaffected.
+
+**Next:** unchanged — pick which area (bedroom or slope) gets the M2
+polish. The bible's snow/motion rules lean toward the slope being the
+richer showcase, but that's the director's call.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

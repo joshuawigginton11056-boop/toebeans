@@ -100,6 +100,136 @@ interact with your space for more XP → repeat.
 - **Audio:** LOFI music plus ambient sounds — rain, birdsong, wind — and
   appropriate sounds for furniture, appliances, and decorations.
 
+## Art Style Bible
+
+The binding reference for all art in the game. Written 2026-07-21 from the
+director's five *Omno* reference images and their notes on each. When
+choosing or making any visual asset, it must pass this section. Expands the
+"Graphics" line in Look & Feel above.
+
+**What the director singled out in the references:** the haze from the sun
+and in the distance (called out in 3 of 5 images); accurate, soft shadows;
+brightness; simple-but-admirable rock shapes; snow trails and motion blur
+showing speed; being able to *read distance* — rolling hills and haze
+telling you how far away things are. **Called out as missing:** the snow
+had no depth — no footprints, no ski trails carved into it.
+
+**Emotional target:** lonely-and-vast, littered with obstacles — but cute.
+Big empty bright spaces where the skier and cat are small; the warmth comes
+from the characters, not the landscape.
+
+### Palette (12 colors)
+
+Every material in the game comes from this list (small value shifts for
+shading are fine; new hues are not).
+
+| # | Hex | Name | Used for |
+|---|-----|------|----------|
+| 1 | `#F8F5EF` | Sunlit snow | Default ground. Warm off-white — never pure `#FFFFFF`. |
+| 2 | `#D3DFF0` | Snow shadow | Every shadow cast on snow. Soft blue — never gray or black. |
+| 3 | `#AFC2DE` | Carved snow | Inside of ski trails, footprints, drifts, chasm lips. |
+| 4 | `#BFDCF5` | Sky blue | Upper sky on a bright day. |
+| 5 | `#F6D7CE` | Dawn pink | Horizon, and the distance-fog tint. |
+| 6 | `#FFF4DA` | Sun glow | The sun and its halo — brightest value in any scene. |
+| 7 | `#E9A960` | Birch amber | Tree canopies. The main warm accent in the landscape. |
+| 8 | `#E3DCCD` | Birch bark | Trunks, branches, pale wooden props. |
+| 9 | `#66738C` | Slate rock | Cliffs, boulders, chasm walls, distant ridges. |
+| 10 | `#79B7D8` | Glacial ice | Ice walls and frozen hazards — the coldest, most saturated blue. |
+| 11 | `#4E72A8` | Skier blue | The player's coat. Reserved — nothing else in a scene uses it, so the player always reads instantly. |
+| 12 | `#C6473E` | Signal red | The cat's scarf/accent, hazard warnings, small critters. Also reserved — red means "look at this." |
+
+Rough scene balance: ~60% snow whites (1–3), ~25% sky/haze (4–6), ~10%
+landscape accents (7–10), ~5% character/signal (11–12). If a screenshot
+feels wrong, count the warm accents first — too many birch-amber trees
+kills the lonely-vast feeling.
+
+### Shape language
+
+- **Faceted, flat-shaded low poly.** One color per face; visible triangles
+  are the style, not a budget compromise. No smooth shading on terrain or
+  rocks (characters may be smoothed lightly to stay cute).
+- **Simple silhouettes, admirable from far away.** Rocks and ridges are a
+  few big confident facets, like the reference spires — if a shape needs a
+  close look to read, it's too detailed.
+- **Rolling, not jagged.** Slopes are long soft curves built from large
+  triangles. Jagged is reserved for hazards (ice, chasm edges) so danger
+  has its own shape vocabulary.
+- **Scale contrast.** The skier and cat stay small in frame; hills roll
+  away to a hazy horizon. Wide open negative space is a feature.
+- **Cute lives in the characters.** Chunky, rounded, big-headed skier and
+  cat against an austere landscape — never cartoon-ify the landscape
+  itself.
+- **No texture detail.** Color comes from flat materials or vertex colors.
+  No photo textures, no painted-on detail, no normal maps.
+
+### Lighting & atmosphere
+
+- **One sun, bright and high-key.** A single directional light, sun low
+  enough to throw long readable shadows. The whole game is bright — dark
+  moods are out of scope.
+- **Shadows are soft blue, never black.** Shadow color is palette #2. Use
+  soft shadow edges (PCFSoft in Three.js). The director called out
+  "accurate" shadows — shadows must track objects correctly, especially
+  the skier's shadow on the snow, which is a key height cue during jumps.
+- **Haze is mandatory.** Distance fog tinted dawn pink (#5) near the
+  horizon fading from sky blue (#4). Faraway objects lighten and lose
+  saturation toward the fog color. This is the single most-praised thing
+  in the references *and* it's gameplay: haze plus rolling hills is how
+  the player reads how far away the next obstacle is.
+- **The sun glows.** Visible sun disc in sun-glow (#6) with a soft halo.
+  Subtle bloom is welcome; lens-flare streaks are not.
+
+### Snow & motion rules
+
+The director's one explicit dislike in the references: snow with no depth.
+Snow in Toebeans is a surface that *remembers*.
+
+- **Skis carve.** The ski trail is a visible carved groove (palette #3),
+  not a decal painted on top. It persists behind the skier.
+- **Feet print.** The cat and any critters leave footprints. Depth of
+  impression matches the creature's size.
+- **Speed is visible.** Trail spray/kick-up grows with speed; at high
+  speed, slight motion blur or speed-lines on the world edges (as in the
+  birch-forest reference). Boost should be readable from a screenshot.
+
+(These are rendering features, not just style notes — tracked as the
+"detail touches" items in [ROADMAP.md](ROADMAP.md) M2/M4.)
+
+### Asset sourcing rules (.glb)
+
+Priority order:
+
+1. **Free CC0 packs first.** Check in order: [Kenney](https://kenney.nl)
+   (all CC0), [Quaternius](https://quaternius.com) (CC0),
+   [Poly Pizza](https://poly.pizza) with the license filter set to CC0,
+   [OpenGameArt](https://opengameart.org) filtered to CC0. CC0 means no
+   legal strings attached — we credit anyway (see below).
+2. **Other free licenses (CC-BY etc.) second**, only if CC0 has no match —
+   attribution requirements go in CREDITS.md and must be honored in-game
+   at launch.
+3. **AI-generated only as a last resort**, and only if the result actually
+   matches this bible after cleanup (flat-shaded, palette-recolored, under
+   budget). Mark it clearly as AI-generated in CREDITS.md, including the
+   tool used. If it doesn't match the bible, we model it ourselves or cut
+   the prop.
+
+Every asset must pass the **style-match test** before it enters the repo:
+
+- Flat-shaded low poly, no photo/painted textures, no normal maps.
+- Recolorable: materials swapped to the 12-color palette. If an asset
+  can't be cleanly recolored, it doesn't come in.
+- Silhouette reads at gameplay distance in the 2.5D ski camera.
+- **Props stay under ~2,000 triangles.** Characters and large one-off set
+  pieces may go to ~5,000. Check in Blender or with `gltf-transform
+  inspect` before committing.
+- Format: `.glb`, real-world meters, Y-up, origin at the base of the
+  object (where it touches the ground).
+
+**Every asset gets a line in [assets/CREDITS.md](assets/CREDITS.md)** —
+filename, what it is, source URL, author, license, and what we changed
+(recolor, decimation, etc.). No exceptions, including CC0 and
+AI-generated. An asset with no CREDITS.md line gets removed.
+
 ## Design intent
 
 - **What "cozy" means:** Cozy is about comfort. The game should feel
