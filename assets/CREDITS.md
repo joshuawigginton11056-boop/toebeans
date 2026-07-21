@@ -16,6 +16,7 @@ An asset with no row here gets removed.
 | `slope/TreeStump_Snow.glb` | Snowy tree stump | same | Quaternius | CC0 | Same pipeline. |
 | `slope/WoodLog_Snow.glb` | Snowy fallen log | same | Quaternius | CC0 | Same pipeline. |
 | `slope/Bush_Snow_{1,2}.glb` | Snowy bushes (2 variants) | same | Quaternius | CC0 | Same pipeline. |
+| `characters/Cat.glb` | The cat — rigged, 8 animation clips (Idle, Walk, Run, Jump, …), 2,448 tris | [Poly Pizza](https://poly.pizza/m/qKICY6xla2) | Quaternius | CC0 | Texture atlas baked out to palette vertex colors via `tools/glb_palette.py` (body → birch amber, belly → birch bark, eyes → deep slate, nose → signal red); all textures/images stripped. Red scarf is added in code, not part of the model. |
 
 Notes:
 

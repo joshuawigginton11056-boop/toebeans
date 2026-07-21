@@ -1,17 +1,14 @@
 import * as THREE from "three";
-import { CAT_RADIUS, PLAYER_RADIUS, type BedroomState } from "@toebeans/shared";
+import { PLAYER_RADIUS, type BedroomState } from "@toebeans/shared";
+import { createCatRig, type CatRig } from "./catModel";
 
 export interface BedroomSceneHandle {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
   readonly player: THREE.Mesh;
-  readonly cat: THREE.Mesh;
+  readonly cat: CatRig;
 }
-
-// The walking cat is a low box, longer than it is wide so facing reads.
-const CAT_BODY_HEIGHT = 0.4;
-const CAT_BODY_LENGTH = 0.6;
 
 const WALL_HEIGHT = 1.2;
 const WALL_THICKNESS = 0.3;
@@ -97,13 +94,10 @@ export function createBedroomScene(
   player.position.y = 0.8;
   scene.add(player);
 
-  // Same orange as the cat riding along in the ski scene.
-  const cat = new THREE.Mesh(
-    new THREE.BoxGeometry(CAT_RADIUS * 2, CAT_BODY_HEIGHT, CAT_BODY_LENGTH),
-    // Palette birch amber — the same cat color as the ski scene.
-    new THREE.MeshStandardMaterial({ color: 0xe9a960 }),
-  );
-  scene.add(cat);
+  // The real cat model — the same rig that rides along on the slope, so
+  // it's recognizably one animal in both scenes.
+  const cat = createCatRig();
+  scene.add(cat.group);
 
   return { renderer, scene, camera, player, cat };
 }
@@ -113,19 +107,16 @@ export function createBedroomScene(
 export function syncBedroomSceneToState(
   handle: BedroomSceneHandle,
   state: BedroomState,
+  dt: number,
 ): void {
   handle.player.position.set(state.player.x, 0.8, state.player.z);
 
-  // Sitting: the same box stood up taller and shorter front-to-back, so
-  // "sitting up" vs "walking" reads at a glance from the bird's-eye view.
-  const sitting = state.cat.mood === "sitting";
-  handle.cat.scale.set(1, sitting ? 1.4 : 1, sitting ? 0.65 : 1);
-  handle.cat.position.set(
-    state.cat.x,
-    (CAT_BODY_HEIGHT / 2) * handle.cat.scale.y,
-    state.cat.z,
-  );
-  handle.cat.rotation.y = state.cat.facing;
+  // The cat's two moods map straight onto two animation clips — no more
+  // squash-and-stretch box tricks to tell sitting from walking.
+  handle.cat.setPose(state.cat.mood === "sitting" ? "sitting" : "walking");
+  handle.cat.update(dt);
+  handle.cat.group.position.set(state.cat.x, 0, state.cat.z);
+  handle.cat.group.rotation.y = state.cat.facing;
 }
 
 export function renderBedroom(handle: BedroomSceneHandle): void {

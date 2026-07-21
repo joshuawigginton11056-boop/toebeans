@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { SkiState } from "@toebeans/shared";
+import { createCatRig, type CatRig } from "./catModel";
 
 // Art Style Bible palette (DESIGN.md) — every color in this scene comes
 // from these 12 (or a value shift of one, which the bible allows).
@@ -32,6 +33,7 @@ export interface SkiSceneHandle {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
   readonly player: THREE.Group;
+  readonly cat: CatRig;
   readonly chasmMeshes: ReadonlyMap<string, THREE.Mesh>;
   readonly checkpointMeshes: ReadonlyMap<number, THREE.Mesh>;
   readonly slope: THREE.Mesh;
@@ -134,13 +136,13 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   skierMesh.castShadow = true; // the skier's shadow is the height cue on jumps
   player.add(skierMesh);
 
-  const catMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(0.3, 0.25, 0.4),
-    new THREE.MeshStandardMaterial({ color: PALETTE.birchAmber }),
-  );
-  catMesh.position.set(0, 1.1, -0.15);
-  catMesh.castShadow = true;
-  player.add(catMesh);
+  // The cat rides on your back (DESIGN.md's core fantasy) — the same rig as
+  // the bedroom cat, sitting, parented to the skier so it goes along for the
+  // ride including the crash tip-over.
+  const cat = createCatRig();
+  cat.setPose("sitting");
+  cat.group.position.set(0, 0.95, -0.2);
+  player.add(cat.group);
 
   scene.add(player);
 
@@ -153,6 +155,7 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     scene,
     camera,
     player,
+    cat,
     chasmMeshes: new Map(),
     checkpointMeshes: new Map(),
     slope,
@@ -164,7 +167,12 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
 
 // Pure with respect to SkiState: only reads state to sync mesh transforms
 // and the camera, never writes back into it.
-export function syncSkiSceneToState(handle: SkiSceneHandle, state: SkiState): void {
+export function syncSkiSceneToState(
+  handle: SkiSceneHandle,
+  state: SkiState,
+  dt: number,
+): void {
+  handle.cat.update(dt);
   handle.player.position.set(state.lateral, state.height, -state.distance);
   // Fallen over sideways during the crash pause, upright otherwise.
   handle.player.rotation.z = state.status === "crashed" ? Math.PI / 2 : 0;

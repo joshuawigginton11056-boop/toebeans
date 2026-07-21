@@ -671,6 +671,81 @@ perfectly." Shipped as-is — no follow-ups.
 **last** M2 item: timed per-slope songs, see IDEAS.md), then the
 end-of-M2 tuning pass.
 
+## 2026-07-21 — M2: the cat is a real cat
+
+The orange box is gone. The cat is now an actual rigged, animated model —
+the same one in both scenes, so it's recognizably one animal whether it's
+trotting around the bedroom or riding on your back down the slope.
+
+- **Sourced, not built.** Asset research first, per the director's ask: no
+  CC0 skiing *human* exists anywhere (only CC-BY or paid), but a **CC0 cat
+  by Quaternius** does — [on Poly Pizza](https://poly.pizza/m/qKICY6xla2),
+  rigged with 8 animation clips. Quaternius is the same artist as the
+  Nature Pack all 24 slope trees and rocks came from, so it matches the
+  existing scenery by construction. Director call: take this cat now, and
+  decide the human separately.
+- **New tool: `tools/glb_palette.py`.** The downloaded `.glb` colored
+  itself with a shared 512×512 texture atlas, and the Art Style Bible bans
+  textures outright. So the tool reads the flat swatch each vertex lands
+  on, remaps it to a palette color, writes that into the mesh's vertex
+  colors, and deletes the texture entirely. The cat came out as exactly
+  four color regions: body → birch amber, belly → birch bark, eyes → deep
+  slate (the bible bans pure black), nose → signal red. 2,448 triangles,
+  inside the bible's ~5,000 character budget.
+- **The four regions are the customization seam.** Because every vertex
+  knows which region it came from, recoloring the cat later is one
+  attribute rewrite at runtime — no new meshes, no textures. Parked in
+  [IDEAS.md](IDEAS.md) as the director asked.
+- `client/src/catModel.ts` (new) owns the model's quirks in one place, so
+  both scenes share it: it measures the loaded model and normalizes it to
+  0.42 units tall with its paws on the ground (rather than hardcoding a
+  magic scale), cross-fades between clips, and adds the signal-red scarf —
+  built in code, positioned off the actual head bone — that ties the animal
+  to the nine cat faces in the HUD.
+- **Two moods, two clips.** The bedroom cat's existing `sitting` /
+  `following` states now drive the Idle and Walk animations instead of the
+  old trick of squashing a box taller to mean "sitting". On the slope the
+  cat sits on your back, parented to the skier, so it tips over with you on
+  a crash for free.
+- No `/shared` changes — this is all rendering. Test count stays at 38;
+  `npm run check` and `npm run build` both pass, and the build ships the
+  `.glb`.
+- Verified in the live page by driving the real modules (screenshots timed
+  out again — tenth session running): the model loads with palette vertex
+  colors intact and all four hexes round-tripping exactly, feet land on
+  y=0 and the model measures 0.29 × 0.42 × 0.49, the head bone sits at +Z
+  so the existing facing math needed no offset, the Walk clip genuinely
+  moves the leg bones and the pose switch settles them, and a pixel window
+  around the cat on the skier's back reads skier blue `#5776A8`, cat amber
+  `#C69960`, and cream belly `#EEDFCB` — all palette colors under the ski
+  scene's lighting. Two bugs were caught and fixed this way: the scarf
+  floated above the cat's head, and it was oriented like a halo instead of
+  a collar.
+- **Found, deliberately not fixed:** the cat renders muddy (`#93734E`) in
+  the *bedroom* — but so does everything else in that room. The bedroom's
+  gray-box lighting predates the ski scene's physical-lights fix, so the
+  whole room is ~45% too dark. That's the M3 "bedroom to the same polish
+  level" item, not a cat problem; flagged in [IDEAS.md](IDEAS.md) so the
+  cat doesn't get blamed for it at playtest.
+
+**What to playtest:** `npm run dev` — the cat should trot over to you in
+the bedroom on its own, now actually walking rather than sliding. Watch its
+legs; watch it sit back down. Then Enter to ski and look over your
+shoulder — the cat is riding on your back with its red scarf. Crash on
+purpose: it should tip over with you. Questions: does the cat read as
+*your* cat (does the scarf tie it to the HUD faces)? Is it the right size
+in both scenes — too big, too small? Does the walk animation match how fast
+it's actually moving, or does it look like it's moonwalking? And ignore how
+dark it looks in the bedroom — that's the room's lighting, fixed in M3.
+
+**Next:** the skier. The director likes the size and shape of the
+characters in Quaternius's
+[Ultimate Animated Character Pack](https://quaternius.com/packs/ultimatedanimatedcharacter.html)
+but wants real character customization (skin, hair, eyes, and so on) — the
+method for that is the open question going into the next session, and the
+answer shapes how the skier gets built. After that: music (the deliberately
+**last** M2 item), then the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -695,8 +770,9 @@ sounds like the real game.
 - [x] Pick the area to polish (bedroom or slope) — first decision of the
       phase *(slope — director call, 2026-07-21)*
 - [ ] Real (non-gray-box) assets for that area, in the *Omno*-target
-      low-poly style *(slope-side trees/rocks in — characters, slope
-      surface detail, and hazard art still gray-box)*
+      low-poly style *(slope-side trees/rocks in 2026-07-21; the cat is a
+      real rigged model as of 2026-07-21 — the skier, slope surface detail,
+      and hazard art are still gray-box)*
 - [x] Lighting pass for that area *(2026-07-21 — sun, palette-exact blue
       shadows, dawn-pink haze, visible sun disc)*
 - [x] Real UI (replace the plain-text HUD overlay) *(2026-07-21 —

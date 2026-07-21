@@ -123,11 +123,11 @@ function loop(now: number): void {
 
   if (mode === "bedroom") {
     bedroomState = stepBedroom(bedroomState, readBedroomInput(), dt);
-    syncBedroomSceneToState(bedroomScene, bedroomState);
+    syncBedroomSceneToState(bedroomScene, bedroomState, dt);
     renderBedroom(bedroomScene);
   } else {
     skiState = stepSkiing(skiState, readSkiInput(), dt);
-    syncSkiSceneToState(skiScene, skiState);
+    syncSkiSceneToState(skiScene, skiState, dt);
     render(skiScene);
   }
   hud.sync(mode, skiState);
