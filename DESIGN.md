@@ -407,6 +407,24 @@ The game ships with a key that swaps between them so the choice is made
 with eyes, not spreadsheets. **The loser gets deleted** once the director
 calls it — carrying two bases is a temporary state, not the design.
 
+**Playtest outcome (July 21, 2026): neither one is right yet.** The
+director's verdict was that the characters **don't match the art style**.
+Both bases are realistically-proportioned humans (roughly 6 heads tall),
+which fails this bible's own *"Cute lives in the characters"* rule under
+Shape language: the landscape is deliberately austere, so the warmth has to
+come from chunky, rounded, big-headed characters — and next to the cat,
+which is chunky and cute, a realistic human reads as a stray asset from a
+different game.
+
+So the open question is no longer "which of these two", it's **what a
+Toebeans human looks like**. Weighed together in the character session:
+find a genuinely stylized CC0 base; adjust proportions on the rig we
+already have (scaling the head bone up and the limbs down is cheap and
+keeps the skeleton and all the animation working); or set a deliberate
+different direction for humans. The skier's ski pose, the skis themselves,
+and any hairstyle geometry all hang off whichever body wins, so they wait
+for it rather than getting built twice.
+
 ### v1.0 — smallest shippable version (web launch, M5)
 
 Everything needed for the full loop — ski → earn XP → level up → unlock →

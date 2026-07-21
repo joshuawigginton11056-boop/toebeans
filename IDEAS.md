@@ -77,6 +77,45 @@ land here instead of in code.
   tuxedo, calico) would mean either per-region vertex groups or a second
   color set; breed/shape variety would mean new meshes. Should ship
   alongside character customization so both live in one place.
+- **The characters don't match the art style** (director playtest,
+  2026-07-21, skier session) — **the next session's work.** The Art Style
+  Bible asks for "chunky, rounded, big-headed" characters, with the cuteness
+  in the characters carrying the warmth against an austere landscape. Both
+  candidate bases are realistically-proportioned humans (roughly 6 heads
+  tall), so they read as generic low-poly people rather than as Toebeans
+  characters — and next to the cat, which *is* cute and chunky, the mismatch
+  is obvious. Options to weigh: hunt for a genuinely stylized CC0 base;
+  modify proportions on the existing rig (scaling the head bone up and
+  limbs down is cheap and surprisingly effective, and the skeleton keeps
+  working); or accept a different art direction for humans. **Decide this
+  before building the ski pose, the skis, or hairstyles** — all three hang
+  off whichever body wins, and would have to be redone.
+- **The skier has no skis, and no ski pose** (director playtest,
+  2026-07-21, skier session): on the slope the character plays a *standing
+  idle* — the animation system works fine (verified: idle drives 12 bones on
+  the modular base, 38 on the animated one), but neither CC0 pack contains
+  a skiing clip, so a standing figure with no equipment reads as frozen.
+  Two separable pieces: **skis and poles** can be built in code out of
+  simple flat-shaded shapes, the same way the cat's scarf is (cheap, and
+  bible-friendly); **the ski pose** doesn't need an animation at all — bend
+  the knees, lean the torso, bring the arms forward by setting bone
+  rotations directly, which is a static pose the existing rig already
+  supports. Both should wait for the character-style decision above.
+- **The cat should face downhill, not the camera** (director playtest,
+  2026-07-21, skier session): the cat on the skier's back was deliberately
+  left facing +z (back up the hill) so the player could see its face and
+  signal-red scarf. The director doesn't want that. Fix is one line in
+  `client/src/skiRender.ts` — `cat.group.rotation.y = Math.PI` — but it
+  costs the scarf's visibility, so it's worth deciding at the same time as
+  where the cat sits on whatever body wins.
+- **Walking in the bedroom is jagged** (director playtest, 2026-07-21,
+  skier session): movement is 8-way (four booleans in `BedroomInput`), but
+  the player's *heading* snaps instantly between those eight fixed angles,
+  and movement starts and stops instantly. So turning pops rather than
+  turns. The fix is presentation-only and doesn't touch `/shared`: ease the
+  rendered facing toward the target angle over a few frames (shortest way
+  round, so it never spins the long way), and optionally ramp the walk
+  animation in and out. Worth doing whenever the character work happens.
 - **The skier is dressed for summer** (noticed 2026-07-21, skier session):
   measuring the modular base's parts showed its "Pants" region only covers
   0.49–0.87 units of a 1.6-unit body, with bare skin below and above — it's

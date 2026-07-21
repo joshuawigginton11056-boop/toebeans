@@ -870,10 +870,40 @@ still read as "you" at slope distance now that they're not a blue box? Then
 Enter to ski: does the forward lean look like skiing, and can you see the
 cat on your back?
 
-**Next:** the base-model call, then music (the deliberately **last** M2
+**Playtest verdict (director, 2026-07-21): the character needs another
+pass.** Five issues, and the headline is the last one:
+
+1. **No animation on the slope.** The skier stands there. *Diagnosed after
+   the report: the animation system is fine* — idle drives 12 bones on the
+   modular base and 38 on the animated one, verified by watching bone
+   transforms. The problem is that the slope plays a **standing idle**,
+   because neither CC0 pack contains a skiing clip, and subtle idle
+   breathing on a small figure at slope distance reads as frozen.
+2. **No skis.** There is no ski equipment on the character at all — he's
+   sliding downhill in his shoes.
+3. **The cat faces the camera.** That was a deliberate call this session
+   (so you could see its face and scarf) and it's wrong; it should face
+   downhill with the skier.
+4. **Walking in the room is jagged.** Movement is 8-way (four booleans), but
+   the *heading* snaps instantly between those eight fixed angles with no
+   turn smoothing, and starts and stops with no easing — so turning pops.
+5. **The characters don't match the art style.** The bible asks for
+   "chunky, rounded, big-headed" characters whose cuteness carries the
+   warmth against an austere landscape. Both candidate bases are
+   realistically-proportioned humans (~6 heads tall). This is the real
+   problem, and the director's call is to **work on the characters as their
+   own next session**.
+
+All five are parked in [IDEAS.md](IDEAS.md) with what each would take. Note
+that (1), (2) and (5) interact: if the character is re-based or re-modeled
+for style, the ski pose and the skis should be built against whatever body
+wins, not against a body we're about to replace.
+
+**Next:** the **character pass** (director call, 2026-07-21) — art style
+first, since it decides the body that the ski pose, the skis, and any
+hairstyle geometry all hang off. The cheap independent fixes (cat facing,
+turn smoothing) can ride along. Then music (the deliberately **last** M2
 item: timed per-slope songs, see IDEAS.md), then the end-of-M2 tuning pass.
-Hairstyle geometry and the skier's winter clothes are both parked and
-should probably follow the base-model decision.
 
 ## Milestones
 
