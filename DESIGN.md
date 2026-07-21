@@ -99,6 +99,14 @@ interact with your space for more XP → repeat.
   decor; lamps glow; fireplaces crackle; book pages bend; cats meow.
 - **Audio:** LOFI music plus ambient sounds — rain, birdsong, wind — and
   appropriate sounds for furniture, appliances, and decorations.
+  *Director call (2026-07-21): on the slope, effects come first — the
+  music direction (lofi vs ambient-only vs instrumental) gets decided
+  after hearing the effects in place.*
+- **UI tone (director call, 2026-07-21):** middle ground between
+  soft-rounded and Omno-minimal — the cat faces stay cute, but panels,
+  pills, and lettering calm down (less pill, less chunk, quieter panels).
+  Lives-as-nine-icons and HUD-only scope stand; the title screen idea
+  evolved into the dynamic showcase concept in IDEAS.md.
 
 ## Art Style Bible
 

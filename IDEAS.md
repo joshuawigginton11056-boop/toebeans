@@ -25,7 +25,11 @@ land here instead of in code.
   under the SIL Open Font License — would push the cozy tone further.
   Needs a director yes/no because it means downloading a font file into
   the repo (plus a CREDITS.md row). Cheap to do in any later UI session.
-- **Title screen** (noticed 2026-07-21, real-UI session): the game still
-  drops you straight into the bedroom with no framing — no game name, no
-  "press Enter". Deliberately left out of the real-UI session to keep it
-  one feature; a natural small follow-up session.
+- **Dynamic title screen** (director direction, 2026-07-21, sound
+  session): the game still drops you straight into the bedroom with no
+  framing — no game name, no "press Enter". The director's call: when it
+  gets built, it should be a *dynamic* title screen that showcases the
+  game world — landscape, enemies, rough terrain, animals, and other
+  objects — growing richer as those things are added to the game. Not
+  scheduled yet; revisit once there's more world to show off (snowballs,
+  tree limbs, critters are all still unbuilt).

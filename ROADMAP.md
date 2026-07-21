@@ -499,6 +499,64 @@ defaults (HUD-only scope, nine icons, soft-rounded tone). Slope-side
 character art (skier/cat models) also remains open under the M2 assets
 item.
 
+## 2026-07-21 — M2: slope sound effects (synthesized, no files)
+
+Direction questions re-asked first, per last session's instruction.
+Director calls: **effects before music** (pick the music direction after
+hearing the effects in place); UI defaults — nine cat-face lives and
+HUD-only scope ratified, but the **visual tone moves to a middle ground**
+(cat faces stay cute; pills/chunk/panels calm down — that restyle is its
+own next session), and the title screen idea evolved into a **dynamic
+showcase title screen** (parked in IDEAS.md with the details).
+
+The build: the slope now sounds like skiing. Every sound is synthesized
+in the browser with the Web Audio API — no audio files in the repo, no
+licenses to track, and the continuous sounds can follow your actual speed,
+which a looped recording can't do. New `client/src/audio.ts`; audio reads
+game state and never writes it, same rule as rendering.
+
+- **Continuous layers:** wind (deep, gusting slowly, louder with speed and
+  a bit louder mid-air) and the ski-carve hiss (louder *and* brighter with
+  speed, silent while airborne — so every jump gets a held-breath hush and
+  the landing brings the hiss back). Boosting adds a high rush on top.
+- **One-shots on game events:** a rising whoosh on jump takeoff, a soft
+  snow-compression thump on landing, a bigger flop-into-powder thump on
+  crash (soft-bodied on purpose — it's a cozy game), two rising plucks
+  when you bank a checkpoint, a small pluck on respawn, and three gentle
+  falling notes for the forfeit. Events are detected by comparing the
+  previous frame's state to the current one — `/shared` stays ignorant of
+  audio, and the fresh-run reset (Enter) is guarded so it never fires
+  fake sounds.
+- **M mutes**, with a new keycap chip in both scenes' hint bars. Browsers
+  only allow sound after the player's first input, so the audio engine
+  wakes on the first keypress.
+- `/shared` change is additive only: `MAX_SPEED` and `BOOST_SPEED` are now
+  exported so audio can scale loudness off real speed instead of magic
+  numbers. No logic changes; `npm run check` (28 tests) and
+  `npm run build` pass.
+- Verified in the live page by instrumenting the real audio module and
+  driving it with real game states (screenshots still time out — seventh
+  session running): the engine reports *running*, layer loudness matches
+  the design numbers exactly at cruise/airborne/boost/crash, each
+  transition fires exactly its own sound (jump 1, land 2, crash 2,
+  respawn 1, checkpoint 2, forfeit 3 nodes), going home silences all
+  layers, the fresh-run guard fires nothing, and mute swings the master
+  volume 0.9 → 0 → 0.9. What the effects *sound like* is the one thing
+  only ears can judge — that's the headline playtest item.
+
+**What to playtest:** `npm run dev`, press Enter to ski — with sound on.
+Does the carve hiss make speed feel real? Does the mid-air hush + landing
+thump make jumps feel better? Crash on purpose: does the powder-flop
+read as soft rather than punishing? Is the checkpoint pluck satisfying?
+Is anything annoying after three runs (that's the real test of a
+synthesized sound)? And the standing question, now answerable: with these
+effects in your ears, what should the music be — lofi, ambient-only, or
+calm instrumental?
+
+**Next:** the UI tone restyle (middle ground — this session's director
+call), then save/load to finish the M2 list. Music direction is decided
+by the director after playtesting the effects.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -530,7 +588,10 @@ sounds like the real game.
 - [x] Real UI (replace the plain-text HUD overlay) *(2026-07-21 —
       cat-face lives, crash/forfeit banners, keycap hints; title screen
       still open, parked in IDEAS.md)*
-- [ ] Sound for that area (music + effects)
+- [ ] Sound for that area (music + effects) *(effects in 2026-07-21,
+      synthesized; music direction decided after the director hears them)*
+- [ ] UI tone restyle to the middle-ground direction *(added 2026-07-21 —
+      director call from the ratify pass; cat faces stay, panels calm down)*
 - [ ] Save/load (browser storage)
 - [ ] Ongoing: feel tuning as polish exposes rough edges *(director call,
       2026-07-21: picky visual tweaks wait until all M2 items land, then

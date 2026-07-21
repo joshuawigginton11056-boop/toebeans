@@ -34,9 +34,11 @@ export interface SkiState {
 
 const BASE_SPEED = 8;
 const MIN_SPEED = 4;
-const MAX_SPEED = 12;
+// Exported for the client: audio scales wind/carve loudness off these
+// (speed / BOOST_SPEED, and "is this a boost" = speed > MAX_SPEED).
+export const MAX_SPEED = 12;
 const LEAN_ACCEL = 6;
-const BOOST_SPEED = 16;
+export const BOOST_SPEED = 16;
 const STEER_SPEED = 5;
 const LATERAL_LIMIT = 4;
 const JUMP_VELOCITY = 7;

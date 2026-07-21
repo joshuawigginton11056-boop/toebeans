@@ -159,6 +159,7 @@ interface Hint {
 const BEDROOM_HINTS: readonly Hint[] = [
   { key: "WASD / ←↑↓→", label: "walk" },
   { key: "Enter", label: "go skiing" },
+  { key: "M", label: "mute" },
 ];
 
 const SLOPE_HINTS: readonly Hint[] = [
@@ -166,6 +167,7 @@ const SLOPE_HINTS: readonly Hint[] = [
   { key: "↑ ↓", label: "lean" },
   { key: "Space", label: "jump" },
   { key: "Shift", label: "boost" },
+  { key: "M", label: "mute" },
   { key: "Enter", label: "home" },
 ];
 

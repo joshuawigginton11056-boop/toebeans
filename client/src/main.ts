@@ -11,6 +11,7 @@ import {
   renderBedroom,
   syncBedroomSceneToState,
 } from "./bedroomRender";
+import { createAudio } from "./audio";
 import { createHud } from "./hud";
 import { createSkiScene, render, syncSkiSceneToState } from "./skiRender";
 
@@ -45,8 +46,15 @@ showActiveCanvas();
 const hud = createHud();
 hud.sync(mode, skiState);
 
+// Sound effects (see audio.ts). Reads state only, like the HUD.
+const audio = createAudio();
+
 const heldKeys = new Set<string>();
 window.addEventListener("keydown", (event) => {
+  if (event.code === "KeyM") {
+    audio.toggleMuted();
+    return;
+  }
   if (event.code === "Enter") {
     if (mode === "bedroom") {
       mode = "slope";
@@ -99,6 +107,7 @@ function loop(now: number): void {
     render(skiScene);
   }
   hud.sync(mode, skiState);
+  audio.sync(mode, skiState);
 
   requestAnimationFrame(loop);
 }
