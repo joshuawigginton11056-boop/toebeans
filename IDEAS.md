@@ -3,6 +3,19 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope) Push-off audio — a pole scrape synced to the push cycle
+
+The momentum session (2026-07-22) gave the push-off its visuals but no
+sound: a soft rhythmic pole-scrape/crunch per push would sell the effort.
+The catch: audio derives everything from `SkiState` diffs, but the push
+cycle's *phase* is a renderer-side clock (`poseTime` in skierModel), so a
+state-driven scrape would drift out of sync with the visible arm strokes.
+Options when picked up: expose the push phase from the rig to the audio
+module (crosses the current audio-reads-state-only boundary), or accept a
+speed-gated aperiodic scuffing bed (no discrete strokes, nothing to
+desync). Decide in-session; goes well with the end-of-M2 tuning pass or
+the music session.
+
 ## (bedroom) ~~Orbit-camera playtest verdict (director, 2026-07-22)~~ — RESOLVED
 
 **(RESOLVED 2026-07-22, bedroom camera round 2 — see ROADMAP.md.)** Both
@@ -99,18 +112,15 @@ Six issues, with causes and what each fix takes:
   numbers as the foot pins, so stance width and stagger breathe slowly
   per side. (The *turn-driven* leg motion is the separate reopened item
   above — this one was about idle life, which landed.)
-- **No momentum: runs start at speed, and speed comes back instantly after
-  nearly stopping.** Wants resistance, and a pole push-off to get going.
-  ⚠️ This is a **/shared gameplay change**, not presentation — the first
-  since M1: `stepSkiing` computes speed directly from input every frame
-  (base ± lean, clamped; boost instant) and `createInitialSkiState` starts
-  at BASE_SPEED. Fix: speed becomes inertial — eases toward its target
-  with acceleration/drag — and runs start near zero with a push-off phase;
-  the presentation side adds a pole-plant push cycle at low speed (the
-  poles already glue to the fists, so the arms doing a push animation
-  carries the poles for free). Touches run timing → chasm jump timing and
-  several tests; interacts with the future finish-line/XP timing. Its own
-  session, not a ride-along.
+- ~~**No momentum: runs start at speed, and speed comes back instantly
+  after nearly stopping.**~~ **(RESOLVED 2026-07-22, momentum session):**
+  speed is inertial now — the inputs set a target, actual speed eases
+  toward it (accel 4 u/s², boost accel 8, coast-down drag 4, braking bite
+  10), runs and respawns start at a standstill, speed freezes mid-air, and
+  steering authority scales with speed. The presentation side is a real
+  double-pole push cycle at low speed: arms reach-plant-drive with the
+  poles pivoting at the grip, trunk crunching into each drive. One
+  follow-on parked below (push-off *audio*).
 - **Knees don't bend to jump.** Cause: the sim's jump is instant (velocity
   applied the frame you press), and the presentation neither anticipates
   nor absorbs. Cheap fix: a takeoff leg-extension + landing crouch-absorb

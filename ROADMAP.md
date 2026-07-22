@@ -1446,6 +1446,80 @@ and parked in [IDEAS.md](IDEAS.md) for the next bedroom session:
 orbit, details in IDEAS.md), unless the director redirects — real
 furniture assets and the bedroom lighting pass are still queued.
 
+## (slope) 2026-07-22 — M2: momentum + pole push-off — runs start from a standstill
+
+Director's pick from the round-2 list: the momentum session — the first
+`/shared` gameplay change since M1. Speed is no longer teleported from
+input every frame: runs (and every checkpoint respawn) start at a
+standstill, and the character visibly double-poles up to cruise speed
+before gravity takes over.
+
+- **Speed is inertial now** (`shared/src/skiing.ts`). The lean/boost
+  inputs set a *target* speed, and the actual speed eases toward it:
+  4 u/s² of push-off/gravity acceleration, 8 under boost, 4 of drag when
+  coasting down from a released boost, 10 when braking bites. Getting up
+  to speed takes ~2 seconds; losing it is quicker than gaining it — the
+  "resistance" the playtest asked for. `createInitialSkiState` starts
+  speed at 0, and a crash scrubs your speed too: respawning means pushing
+  off again, so momentum lost is a real part of the crash's cost.
+- **Speed freezes mid-air.** Airborne there's no snow to push against or
+  brake with, so you land carrying exactly your takeoff speed — the same
+  reasoning as the audio's mid-air carve hush, now in the sim. Jump slow
+  and you'll land slow; hit a chasm without speed and you won't clear it.
+- **Steering authority scales with speed.** The old sim steered at full
+  rate even at speed 0, which would have let you moonwalk sideways at a
+  standstill (and slammed the renderer's carve angle to ±88°). Carving
+  comes from the skis biting: no authority at 0, full from MIN_SPEED up.
+- **The pole push-off is a real double-pole cycle** (`skierModel.ts` /
+  `skiRender.ts`, presentation only). The scene detects "on the snow,
+  below cruise, actually gaining" by frame-diffing speed — the same
+  pattern as the carve steer — so braking never pumps the arms, and
+  passes a push strength that fades out toward cruise speed. On the body:
+  both arms reach forward together on the pack's adduction axis with the
+  elbows straightening, the poles pivot at the grip to plant tip-forward,
+  then arms and poles drive back past the hips while the trunk crunches
+  into the stroke (neck countering, eyes downhill) and the body dips into
+  each drive. At cruise the whole layer eases out and the poles settle
+  back to their rest tilt.
+- `/shared` exports gained `BASE_SPEED` (the client fades the push cycle
+  against it). No save-shape change — the save layer already clamps speed
+  to [0, BOOST_SPEED], so **no SAVE_VERSION bump**; old saves load fine.
+- Tests: 55 → 59 (two speed tests rewritten for the momentum model, six
+  new: push-off curve, standstill steering, boost ramp, coast-down,
+  brake-vs-coast rates, airborne freeze, respawn-at-zero).
+- Verified in the live page by driving the real modules on this session's
+  own dev server (5302): the sim's curve lands exactly on design (0 → 2 →
+  4 → 8 u/s at 0.5/1/2s; boost 8→16 in 1s; coast 16→12 in 1s; brake 10
+  u/s²; airborne speed pinned; crash at 20.03; respawn skiing at speed 0).
+  On the renderer: during push-off the fists sweep 0.225 units fore-aft
+  phase-locked to the pole pivot (correlation 0.93) — pole tip plants
+  0.15 *ahead* of the body just off the snow and releases 0.15 *behind*
+  with the basket kicked up, measured against the live bones — while the
+  feet stay welded to the skis (zero y-variation through the whole cycle);
+  at cruise the cycle fades to nothing and the poles settle at exactly
+  their 0.7 rest tilt. Crash pause shows no pushes, pushes resume after
+  respawn, and outside the (pre-existing) 90° tip-over frames the largest
+  frame-to-frame fist step is 19mm — no pops. ASCII silhouette reads at
+  the reach and drive extremes show two clearly different arm shapes.
+  Fresh page load: game boots to the bedroom with zero console errors.
+
+**What to playtest:** `npm run dev`, Enter to ski — and just wait a beat
+at the top. The character should pole-push up to speed over the first
+couple of seconds: does the push-off read as *effort* (arms reaching,
+poles planting, body dipping into each stroke)? Does earning your speed
+make the run's start feel better or just slower? Crash on purpose: does
+respawning at a standstill and pushing off again feel like a fair cost or
+an annoying one? Then feel the momentum everywhere else: boost ramps in
+and coasts out instead of snapping — better? And jump while slow versus
+fast: the air now keeps your takeoff speed, so slow jumps land short.
+Anything that feels sluggish rather than weighty, say so — the accel
+numbers are one-line tunes for the end-of-M2 pass.
+
+**Next:** remaining round-2 list by director's pick — jump anticipation,
+gear style + longer skis, always-on feet, angulation round 3 + the
+boot-containment fix, or the hair-roots + cat-tail fixes. Then music
+(still deliberately last), then the end-of-M2 tuning pass.
+
 ## (bedroom) 2026-07-22 — Bedroom camera round 2: mouse drag + vertical tilt
 
 The two things the orbit-camera playtest asked for. **Drag the room with
