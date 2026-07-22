@@ -2712,10 +2712,26 @@ switch: the recovery should be brisk *and* keep your speed. And spin
 mid-air with Shift held — the 1.4× applies there too; intentional-feeling
 or unwanted?
 
-**Next:** the remaining round-2 list (gear style + longer skis,
-always-on feet, angulation round 3 + the boot-containment fix,
-hair-roots + cat-tail), then music (still deliberately last), then the
-end-of-M2 tuning pass.
+**Playtest verdict (director, 2026-07-22): the stance flip fails — the
+headline question's answer is snap.** In the director's words: "Momentum
+should be lost if the skis are sideways. Instead, it's jerking backwards
+while it should still be sliding downhill. Sometimes it starts to go in
+reverse and then jerks forward again." The backwards jerk is the flip's
+lateral mirror (the honest note above); the reverse-then-forward jerk is
+the flip re-firing on every ±π/2 wiggle at carried magnitude; and the
+model correction is that nothing scrubs speed near sideways, so the flip
+has ~13.5 u/s to mirror when it should have almost none. The boost 1.4×
+half of round 5 wasn't flagged and stands. Full diagnosis + fix options
+(recommended: a skid scrub that ramps with how far the skis are off the
+fall line, keeping the flip as a near-zero-magnitude never-uphill
+guarantee) parked in [IDEAS.md](IDEAS.md)'s top block as **turning
+round 6**.
+
+**Next:** turning round 6 (the sideways momentum scrub above — director
+picks from the sketched options), then the remaining round-2 list (gear
+style + longer skis, always-on feet, angulation round 3 + the
+boot-containment fix, hair-roots + cat-tail), then music (still
+deliberately last), then the end-of-M2 tuning pass.
 
 ## (slope-vis) 2026-07-22 — Texture direction called + the sessions restructure
 
