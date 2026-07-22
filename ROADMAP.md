@@ -2325,10 +2325,20 @@ authority floor make the middle of the turnaround drag? Does W gently
 straightening your line during normal skiing ever fight a carve you
 meant to hold?
 
-**Next:** the remaining round-2 list by director's pick — jump
-anticipation, gear style + longer skis, always-on feet, angulation
-round 3 + the boot-containment fix, or the hair-roots + cat-tail fixes —
-then music (still deliberately last), then the end-of-M2 tuning pass.
+**Playtest verdict (director, 2026-07-22): "Looks good."** Turning
+round 4 stands — the W-recovery feel questions weren't flagged, so the
+turning saga (rounds 1–4) is closed unless tuning reopens it.
+
+**Directive for the next session (director, 2026-07-22): open up the
+skiable area.** The lane is too narrow to really test the turning —
+carving, hockey stops, and switch riding all want room. Sketched in
+[IDEAS.md](IDEAS.md) with what it touches.
+
+**Next:** open up the skiable area (director directive above) — then the
+remaining round-2 list (jump anticipation, gear style + longer skis,
+always-on feet, angulation round 3 + the boot-containment fix,
+hair-roots + cat-tail), then music (still deliberately last), then the
+end-of-M2 tuning pass.
 
 ## Milestones
 

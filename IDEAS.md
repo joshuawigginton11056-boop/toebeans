@@ -3,6 +3,40 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope) Open up the skiable area (director directive, 2026-07-22)
+
+Round-4 playtest: turning passes ("looks good"), and the follow-on call
+is that **the lane is too narrow to really test it** — real turning
+wants real width for carving lines, hockey stops, and switch riding.
+Written for the next slope session; the width numbers are the session's
+tuning calls, but what it touches is known:
+
+- **`LATERAL_LIMIT`** (shared/src/skiing.ts, currently 4 — an 8-unit
+  lane): the one-line core. It's exported and used by `save.ts` for the
+  position heal, which just clamps — a wider limit heals fine, **no
+  SAVE_VERSION bump**.
+- **Decide the edge behavior while in there:** today the edge is a hard
+  invisible-wall clamp, which reads worse the wider and more open the
+  area gets. Options: keep the clamp (cheapest), soft snow berm that
+  bleeds speed, or terrain that visibly ends (a treeline you can't ski
+  through). Whatever's picked, the edge should be *visible* once the
+  lane is wide — right now the flanking decor is the only cue.
+- **Decor scatter** (client/src/skiRender.ts): trees/rocks scatter from
+  the lane edge outward with a seeded layout ("nothing ever inside the
+  lane") — the scatter bounds are keyed to the lane width and need
+  re-tuning so the open area doesn't go empty-vast or the treeline
+  doesn't sit miles away.
+- **Checkpoint stripes and chasms** span the lane visually; chasm gaps
+  are lateral-independent in the sim (start/width along distance), so a
+  wider lane makes chasms *longer* obstacles side to side — fine for
+  testing turning, but worth an eyeball on whether full-width gaps
+  still read fair when there's room to route around... (they can't be
+  routed around — that may itself be the point to check).
+- **Camera/haze sanity:** the follow camera, sun + shadow-camera
+  follow, and the snowfield plane all track the skier already; the
+  shadow camera's frustum and the fog distances were tuned against a
+  narrow lane and should get a look at the new width.
+
 ## (slope) ~~Turning round 4~~ — BUILT 2026-07-22 (W means "downhill")
 
 **(BUILT 2026-07-22 — see ROADMAP. Option 1, director-picked: while W is
