@@ -2233,6 +2233,77 @@ longer skis, always-on feet, angulation round 3 + the boot-containment
 fix, hair-roots + cat-tail), then music (still deliberately last), then
 the end-of-M2 tuning pass.
 
+## (slope) 2026-07-22 — M2: turning round 4 — W means "downhill"
+
+The clunky recovery from switch is fixed. Director's pick from the three
+parked options: **option 1 — W seeks the fall line.** On top of its
+speed-up meaning, holding W now steers the skis home: the heading eases
+toward straight-downhill at the normal turn rate, the shortest way
+around. The director's bar is met literally — you can carve into switch
+and return to forward running without ever letting off W.
+
+- `/shared` `skiing.ts`: while W is held, steering becomes
+  target-seeking — the heading eases toward 0 (or toward a ±45° carve
+  diagonal when a steer key is held too, so **W+A/D holds a stable
+  diagonal** instead of the two inputs fighting to a draw at whatever
+  angle you happened to be at). Left/right alone still steer additively,
+  exactly as before, and S stays a pure brake. The seek runs through the
+  same turn rate and speed-scaled authority (with the 40% standstill
+  floor) as manual steering — one steering system, per the sketch's
+  suggestion.
+- **Shortest-way-around fell out of the math**: easing toward the
+  *nearest equivalent* of the target angle always takes the short way —
+  which is also the side you're already drifting toward — and from
+  exactly backwards, where both ways are equidistant, the tie breaks to
+  a right turn (the sketch's suggested tie-break, honored exactly).
+- **W re-aims mid-air too** — same steering system, so the body comes
+  around for a landing while the flight stays ballistic along the frozen
+  takeoff direction. Already pointing downhill, W adds nothing: it stays
+  a pure speed lean, today's behavior preserved.
+- **No SAVE_VERSION bump** — no state-shape change at all; only how the
+  heading responds to an input changed.
+- The renderer needed **zero changes**: the sketch predicted the
+  over-shoulder un-twist would come free, and it does — the switch look
+  is eased internally with a deadband at the speed zero-crossing, and
+  the body yaw follows the continuous heading through its existing
+  easing.
+- The slope hint bar's "↑ ↓ · lean" chip split into **"↑ · downhill"**
+  and **"↓ · brake"** — downhill is the half of W's meaning a player
+  can't guess (small shared-territory edit in `hud.ts`).
+- Tests 77 → 83: the director's-bar scenario end to end (switch →
+  forward on W alone, zero crashes), W as a pure lean when already
+  straight, the stable diagonal approached from both sides, shortest-way
+  in both directions, the exactly-backwards right-turn tie-break, and
+  the mid-air re-aim with the flight path pinned.
+- `npm run check` (83 tests) and `npm run build` pass. Verified against
+  the real served modules in the live page (port 5302 was again held by
+  an older chat's server for the same folder — same live source, driven
+  through a plain browser tab): from switch, W alone brings the heading
+  home in 1.72s and the run back above cruise-threshold speed at 3.7s
+  with zero crashes; both diagonal approaches land on exactly π/4; the
+  tie-break turns right and keeps turning right; mid-air W moves the
+  body while flightHeading, speed, and the lateral path stay exactly
+  frozen; manual steering still measures exactly 0.18 rad per 100ms; the
+  hint bar renders the new downhill/brake chips; and a fresh page load
+  boots with zero console errors. What the pivot *feels* like under W is
+  the eyeballs item below.
+
+**What to playtest:** `npm run dev`, Enter to ski. Turn hard past
+sideways into switch — then just hold W: you should come all the way
+back around to forward running without touching another key. Does the
+recovery feel intuitive now — does W finally mean "go down the hill"?
+Try W+A/D: it should settle into a steady diagonal carve instead of
+straightening you out. And two feel questions: is the pivot through the
+slow zone (where speed crosses zero) brisk enough, or does the 40%
+authority floor make the middle of the turnaround drag? Does W gently
+straightening your line during normal skiing ever fight a carve you
+meant to hold?
+
+**Next:** the remaining round-2 list by director's pick — jump
+anticipation, gear style + longer skis, always-on feet, angulation
+round 3 + the boot-containment fix, or the hair-roots + cat-tail fixes —
+then music (still deliberately last), then the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

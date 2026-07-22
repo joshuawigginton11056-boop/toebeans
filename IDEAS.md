@@ -3,7 +3,19 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (slope) Turning round 4 — W means "downhill" (director playtest, 2026-07-22)
+## (slope) ~~Turning round 4~~ — BUILT 2026-07-22 (W means "downhill")
+
+**(BUILT 2026-07-22 — see ROADMAP. Option 1, director-picked: while W is
+held the heading eases toward the fall line at the normal turn rate
+through the same authority system — implemented as a target the heading
+eases toward (0 alone; a ±45° carve diagonal with a steer key, so W+A/D
+holds a stable diagonal instead of fighting the steer to a draw).
+Shortest-way-around falls out of easing toward the nearest equivalent
+angle — which is also the drift side — and exactly-backwards tie-breaks
+to a right turn. Works mid-air too (one steering system; flight stays
+ballistic). Left/right alone unchanged; S stays a pure brake; no
+SAVE_VERSION bump. The renderer un-twist came free as predicted — the
+over-shoulder look is eased with a deadband at the speed zero-crossing.)**
 
 Verdict on turning round 3: **turning around feels good; turning back
 around is clunky and not intuitive.** Holding W just continues in the
