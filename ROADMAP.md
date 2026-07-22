@@ -1434,9 +1434,17 @@ the important one: walk while spinning — "up" should always mean "away
 from the camera"; does walking stay intuitive mid-spin, or does the
 remapping ever surprise you?
 
-**Next (bedroom session):** by director's pick — real furniture assets
-(replacing the gray boxes, the pipeline already exists) or the bedroom
-lighting pass (the room renders ~45% too dark; flagged in IDEAS.md).
+**Playtest verdict (director, 2026-07-22): two things missing** — recorded
+and parked in [IDEAS.md](IDEAS.md) for the next bedroom session:
+
+1. **No mouse control** — the camera can't be changed by dragging with the
+   mouse; Q/E-plus-scroll is keyboard-only.
+2. **No vertical movement** — the downward tilt is fixed; you can't orbit
+   the camera up toward overhead or down toward eye level.
+
+**Next (bedroom session):** the camera round 2 (mouse drag + vertical
+orbit, details in IDEAS.md), unless the director redirects — real
+furniture assets and the bedroom lighting pass are still queued.
 
 ## Milestones
 
