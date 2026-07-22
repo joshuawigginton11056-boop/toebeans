@@ -41,6 +41,14 @@ interact with your space for more XP → repeat.
 - Everyone starts at level 1 with basic items. **All players have identical
   base statistics** — no stat upgrades, ever. Greatness is earned only
   through high levels.
+- **Director refinement (2026-07-22, furniture playtest):** "basic items"
+  means nearly nothing — the bedroom **starts bare, a mattress at most**.
+  Furniture and decoration are *earned*: XP comes from races, and every
+  piece arrives through a level unlock. The furniture models already in
+  `assets/bedroom/` become the unlock pool rather than the starting set.
+- **Unlocks-by-level UI (director call, 2026-07-22):** a screen/panel
+  showing furniture and decoration unlocks laid out by level, so players
+  can see what they're skiing toward. In v1.0 scope (see below).
 - Leveling unlocks:
   - **New environments:** bedroom → apartment → skyrise → and beyond (space
     shuttle, laboratory, Mars, Heaven, jungle, and others).
@@ -121,6 +129,19 @@ interact with your space for more XP → repeat.
   evolved into the dynamic showcase concept in IDEAS.md.
 
 ## Art Style Bible
+
+> **⚠ Under review (director playtest, 2026-07-22):** after seeing the
+> furnished bedroom, the director's verdict challenges two of the bible's
+> foundations: **"I don't like the flat graphics. And there's no
+> texture."** The no-textures / flat-shaded rule below is what produced
+> that look — and the director's new interior direction (a **rundown**
+> house: shaggy *stained* carpet, *peeling* wallpaper) is inherently a
+> texture-and-grime ask that flat vertex colors can't deliver. This
+> touches both scenes and most existing assets, so it needs its own
+> direction session (options sketched in [IDEAS.md](IDEAS.md)) before
+> any rewrite here. Until that session lands, the bible below still
+> governs — but don't invest in new flat-shaded assets without checking
+> the IDEAS entry first.
 
 The binding reference for all art in the game. Written 2026-07-21 from the
 director's five *Omno* reference images and their notes on each. When
@@ -434,8 +455,12 @@ above).
 - Cat customization (basic options)
 - One environment: the starting bedroom — a complete room (full-height
   walls, ceiling) with a behind-the-character follow camera *(camera
-  direction changed by director call, 2026-07-22)*
+  direction changed by director call, 2026-07-22)*; **starts nearly bare
+  (a mattress at most) and rundown** — furniture is earned, not given
+  *(director call, 2026-07-22)*
 - Furniture/appliance placement system (place, move, store owned items)
+- **Unlocks-by-level UI** — furniture/decoration unlock tree laid out by
+  level *(director call, 2026-07-22)*
 - **6–8 starter furniture/appliance items**: at least one timed-task item
   (e.g. a TV or grill) and one passive/AFK item (the bed), plus a few
   decorative pieces
