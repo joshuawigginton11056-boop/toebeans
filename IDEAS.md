@@ -3,6 +3,76 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope-mech) Turning round 6: sideways should scrub momentum — the stance flip jerks (playtest, 2026-07-22)
+
+**The verdict (director, on round 5):** "Momentum should be lost if the
+skis are sideways. Instead, it's jerking backwards while it should still
+be sliding downhill. Sometimes it starts to go in reverse and then jerks
+forward again." The round-5 stance flip fails playtest. (The other half
+of round 5 — boost turning 1.4× harder — wasn't flagged and stands.)
+
+**The new bar:** turning the skis sideways at speed *bleeds* the speed,
+hard — a skid, like a real hockey stop. Sliding downhill continues while
+the skis pivot; no phase of uphill travel (the round-5 bar that still
+holds); and no jerk in either direction at the sideways moment.
+
+**Why round 5 jerks** (`shared/src/skiing.ts`):
+
+1. **The backwards jerk is the flip's lateral mirror.** Travel is
+   constrained to the ski axis, so at the ±π/2 crossing the only way to
+   keep the downhill component non-negative is to mirror the sideways
+   component — measured +13.6 → −13.5 u/s lateral *in one frame*. The
+   round-5 entry flagged this as the headline feel question ("edge bite
+   or snap?"); the answer is snap.
+2. **The reverse-then-forward jerk is the flip re-firing.** Steering
+   that wiggles across ±π/2 flips the stance on every crossing, and the
+   flip carries full magnitude each time — visible direction reversals
+   back to back.
+3. **The root enabler: nothing scrubs speed near sideways.** The cosine
+   projection collapses the *target* to ~0 at sideways, but the decay
+   toward it runs at `COAST_DRAG` (4 u/s²) — so a boosted pivot arrives
+   at the crossing still carrying ~13.5 u/s for the flip to mirror. If
+   the magnitude were small there, both jerks would be invisible.
+
+**Fix options for the build session (director picks):**
+
+1. **Skid scrub toward sideways** *(probably recommended — it is
+   literally the director's sentence)*: the speed-loss rate scales with
+   how far the skis are turned off the fall line — aligned coasting
+   stays `COAST_DRAG` (4), ramping toward a hard scrub at full sideways
+   (~`BRAKE_DECEL` 10, maybe 12–15; tune on the hill). Turning sideways
+   then dumps momentum by itself: a boosted pivot reaches the crossing
+   at a walking pace, the stance flip (kept, as the never-uphill
+   guarantee) fires at near-zero magnitude, and both jerks dissolve
+   without special-casing the crossing. Side effects, both deliberate:
+   hockey stops get much quicker (today a sideways stop from boost
+   takes ~4s), and the round-5 "W+Shift recovery carries your speed
+   through the pivot" nicety goes away — a turnaround now passes
+   through a slow point and rebuilds via `BOOST_ACCEL`, which is
+   exactly the director's physics.
+2. **Scrub at the crossing only**: replace the flip's magnitude-carry
+   with a dump to ~0 right at ±π/2. Smaller patch, kills both jerks —
+   but a boosted skier could still *hold* near-sideways at 13+ u/s, so
+   "momentum lost when sideways" would only be true at the crossing
+   itself, not on the approach. The model stays half-wrong.
+3. **Hysteresis on the flip** (composes with either, if re-fire jitter
+   somehow survives): the stance only flips once the heading is a small
+   band (~0.1 rad) past ±π/2, so dithering on the boundary can't
+   flip-flop. Probably unnecessary once the magnitude at the crossing
+   is small.
+
+**Tests that must change if 1 lands:** the round-5 tests pin the
+magnitude-carry that is now wrong — "carries its magnitude through the
+stance flip" and the bar test's riding-switch-at-boost-speed ending
+(`speed < -MAX_SPEED`) must be rewritten to assert the scrub instead
+(the pivot ends *slow*, then rebuilds). The frame-by-frame never-uphill
+assertion stays exactly as is. The hockey-stop and below-epsilon tests
+should survive; "bleeds to a stop held fully sideways" will just
+converge faster.
+
+**Current state until round 6 lands:** round 5 is merged to master, so
+the jerky crossing is what's live.
+
 ## (bedroom) Where does the progression loop live now? (parked by director call, 2026-07-22)
 
 The walkable bedroom is scrapped — the game opens on a **menu-style lobby**
