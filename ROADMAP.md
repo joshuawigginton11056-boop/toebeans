@@ -1259,10 +1259,31 @@ do the legs read as alive now? Watch the feet through a few turns: does
 the spacing drifting slightly feel natural or noticeable? And since the
 bank got stronger: does a hard swerve feel dynamic or excessive?
 
-**Next:** by director's pick from the remaining round-2 list — the
+**Playtest verdict (director, 2026-07-22): not landed — and parked.** Two
+issues, honestly recorded:
+
+1. **It still doesn't feel like the legs are being pushed out** — it feels
+   like the front of the ski is turning everything else. The movement
+   needs to be *in the legs*. (Cause analysis in [IDEAS.md](IDEAS.md): the
+   turn is still assembled at the group level — yaw and roll carry the
+   whole character while the leg bones stay turn-blind, so the eye reads
+   the sweeping ski tips as the thing doing the turning.)
+2. **The feet are no longer actually in the boots** — a regression from
+   this session's snow-contact fix: the boots now counter-roll mid-carve
+   while the foot bones keep their level rest orientation, so the boot
+   tilts around the foot and the foot shows. Worth recording as a
+   verification gap too: the live checks measured boot↔foot *center
+   distance* (5mm — glued) but never orientation or mesh containment,
+   which is exactly where this hid.
+
+**Director's call: park both and change focus** — angulation round 3 and
+the boot fix go back on the round-2 list rather than being nibbled at now.
+
+**Next:** director picks the new focus from the remaining list — the
 momentum/pole-push-off gameplay session, jump anticipation, cat hug + hair
-physics, gear style + longer skis, always-on feet. Then music (still
-deliberately last), then the end-of-M2 tuning pass.
+physics, gear style + longer skis, always-on feet, or the parked
+angulation round 3 + boot-containment fix. Then music (still deliberately
+last), then the end-of-M2 tuning pass.
 
 ## Milestones
 

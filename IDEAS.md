@@ -3,25 +3,61 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## Angulation playtest verdict (director, 2026-07-22) — parked, focus shifted
+
+The angulation session measured right but didn't *read* right. Two issues,
+parked by director's call (work continues elsewhere first):
+
+- **The movement must live in the legs — round 3.** The director: "It
+  still doesn't feel like the legs are being pushed out. It feels like
+  the front of the ski is turning everything else." Cause: the turn is
+  still assembled at the *group* level — the carve group yaws and rolls
+  the whole character, and the foot pins translate outward, but no leg
+  BONE changes shape in response to a turn (the leg chain's rotations are
+  identical at steer 0 and full carve; only the speed wobble touches
+  them). The long skis sweeping under a group yaw are the most visible
+  moving thing, so the eye reads "skis steer the mannequin" instead of
+  "legs drive the skis." Fix direction for round 3: put the turn *into
+  the leg chain* — lean the UpperLeg bones sideways toward the
+  pushed-out feet so the knees visibly drive out from under the body,
+  bend the outside leg deeper than the inside one (real carving is
+  one long leg, one short leg), and shrink the group-level roll further
+  so the legs supply the shape and the body just follows. The per-frame
+  foot pins and per-side ski assemblies from this session are the right
+  substrate; what's missing is the leg bones participating.
+- **Feet out of the boots (regression, this session).** The snow-contact
+  fix counter-rolls each boot assembly by (edge − bank) about its ground
+  origin, but the foot bones keep their level rest orientation and only
+  get position-compensated — so mid-carve the boot tilts around a level
+  foot and the foot mesh shows outside the boot box. Fix: roll the foot
+  pin's quaternion by the same angle its boot assembly gets (one
+  setFromAxisAngle multiply against the rest quaternion), then re-verify
+  at the MESH level, not the center level. Verification lesson recorded:
+  boot↔foot center distance stayed 5mm through every probe — containment
+  failures live in orientation and mesh extent, so the next pass should
+  pixel-read the boot region or intersect bounding boxes instead of
+  comparing centers.
+
 ## Motion & life playtest verdict (director, 2026-07-22)
 
 The turn/bank + life-layer session moved things but didn't land the feel.
 Six issues, with causes and what each fix takes:
 
-- ~~**The whole body turns as one unit — not fluid.**~~ **(RESOLVED
-  2026-07-22, angulation session):** the bank is split — the carve roll
-  (now stronger) supplies the leg lean, the spine counter-rotates ~75% of
-  it back out so the torso rides near-upright, and the foot pins push
-  laterally out from under the body. Bonus fix found while measuring: the
-  old center-roll lifted the outside ski off the snow; the per-side ski
-  assemblies now counter-roll to their true edge angle and stay grounded.
-  See ROADMAP.md for the measured numbers.
+- ~~**The whole body turns as one unit — not fluid.**~~ **(Attempted
+  2026-07-22, angulation session — REOPENED by the verdict above):** the
+  bank was split (carve roll = lean, spine counter-rotation, foot pins
+  pushed out) and the skis now stay grounded through carves (the old
+  center-roll lifted the outside ski — that fix stands), but the leg
+  bones themselves still don't participate in the turn, and the director
+  still reads the skis as steering the body. Round 3 is the top block
+  above: the turn goes into the leg chain itself.
 - ~~**The legs are still static.**~~ **(RESOLVED 2026-07-22, angulation
   session):** leg bones joined the wobble layer (knees pump independently;
   the root-level foot pins mean a boot can never slide off), and the gear
   was rebuilt into per-side assemblies driven by the same placement
   numbers as the foot pins, so stance width and stagger breathe slowly
-  per side.
+  per side. (The *turn-driven* leg motion is the separate reopened item
+  above — this one was about idle life, which landed.)
 - **No momentum: runs start at speed, and speed comes back instantly after
   nearly stopping.** Wants resistance, and a pole push-off to get going.
   ⚠️ This is a **/shared gameplay change**, not presentation — the first
