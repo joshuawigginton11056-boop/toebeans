@@ -2011,9 +2011,29 @@ wanting to spin off a held key sometimes? And the two standing defaults
 to ratify whenever: 360s as a legal trick, and over-rotated landings
 crashing instantly vs a brief grace window.
 
-**Next:** the remaining round-2 list (jump anticipation, gear style +
-longer skis, always-on feet, angulation round 3 + the boot-containment
-fix, hair-roots + cat-tail) unless the director redirects — then music
+**Playtest verdict (director, 2026-07-22): rejected — redirect.** The
+double-press to flip doesn't feel right. The director's new turning
+direction supersedes this session's held/fresh mechanic *and* the fall
+mechanic itself, in three parts:
+
+1. **One turn rate everywhere** — the air turns at the same rate as the
+   ground. No fast trick rate, no held/fresh split (the two
+   `heldSinceTakeoff` booleans come back out of `SkiState`).
+2. **The fall is removed** — turning past sideways no longer crashes.
+3. **Landing backwards means skiing backwards** — riding switch, not a
+   botched landing. This also retires the two un-ratified turning-round-2
+   defaults (360s-legal, crash-on-first-grounded-frame): with no fall
+   there's nothing left to ratify — any landing angle is legal and just
+   sets your stance.
+
+Full sketch with the open design questions (backwards movement physics,
+switch stance rendering, mirrored-or-not steering while backwards) in
+[IDEAS.md](IDEAS.md)'s top block, written for the next session.
+
+**Next:** turning round 3 — the redirect above (remove the fall,
+backwards skiing, uniform turn rate) — then the remaining round-2 list
+(jump anticipation, gear style + longer skis, always-on feet, angulation
+round 3 + the boot-containment fix, hair-roots + cat-tail), then music
 (still deliberately last), then the end-of-M2 tuning pass.
 
 ## Milestones

@@ -3,6 +3,49 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope) Turning round 3 — no falls, backwards skiing, one turn rate (director redirect, 2026-07-22)
+
+Director verdict on air-spin round 2: **the double-press to flip doesn't
+feel right — rejected.** New direction, superseding both the held/fresh
+mechanic and the fall itself. Three parts, director-called:
+
+1. **One turn rate everywhere.** Air steering runs at the same rate as
+   ground carving. `AIR_TURN_RATE` and the two `heldSinceTakeoff`
+   booleans come back out of `shared/src/skiing.ts` (they were never
+   saved, so removing them needs no SAVE_VERSION bump either).
+2. **Remove the fall.** The `FALL_HEADING` fall-over goes away — turning
+   past sideways on the snow is legal, and chasms become the game's only
+   crash. `save.ts`'s heading heal (collapse + clamp into the standing
+   range) simplifies to just the whole-turn collapse.
+3. **Landing backwards means skiing backwards** — riding switch, not a
+   crash. This retires the two un-ratified turning-round-2 defaults
+   (360s-legal via downhill-equivalence, crash-on-first-grounded-frame):
+   with no fall there's nothing to ratify — any landing angle is legal
+   and just sets your stance.
+
+Design questions the build session must settle (the reason this is a
+session and not a constant tweak):
+
+- **Backwards movement physics.** Movement currently follows where the
+  skis *point* (`cos`/`sin` of heading) — pointed uphill, that would ski
+  you uphill. Riding switch means traveling down the hill along the ski
+  axis while facing up it — movement needs to follow the downhill *end*
+  of the axis, and the ground behavior between sideways and backwards
+  needs defining (naïve mirroring flips the lateral direction
+  discontinuously at exactly 90°). Decide whether braking-by-turning — a
+  technique the director kept from the real-turning session — survives
+  unchanged on the way to fully sideways.
+- **Steering while switch.** Which key is "left" when you're facing
+  uphill — screen-left or skier's-left? Mirrored controls are the
+  classic switch-riding confusion; pick deliberately.
+- **The renderer needs a switch stance** — body facing uphill while
+  traveling downhill (look-over-the-shoulder?), and the directional
+  tip-over loses its fall-over triggers (chasm falls remain).
+- **Tests flip:** several currently assert the old behavior (air spins
+  faster than ground, standstill hop spins, over-rotated landings crash,
+  fall-over past FALL_HEADING costs a life) and get rewritten to assert
+  the new physics instead.
+
 ## (bedroom) Front door → slope select → that slope outside the window (director direction, 2026-07-22)
 
 From the interior-lighting playtest: **eventually, the bedroom gets a
@@ -39,7 +82,12 @@ lands (and they move onto the real furniture tops; positions are keyed
 to the gray-box tops in `addLamps`). The *light* itself passed playtest
 — only the fixture shapes change.
 
-## (slope) ~~Air spin round 2~~ — BUILT 2026-07-22, option (a)
+## (slope) ~~Air spin round 2~~ — BUILT 2026-07-22, option (a); REJECTED same day
+
+**(REJECTED at playtest 2026-07-22, same day it was built: the
+double-press to flip doesn't feel right. Superseded by the
+turning-round-3 redirect at the top of this file — the held/fresh
+mechanic comes back out, along with the fall itself.)**
 
 **(BUILT 2026-07-22, director picked option (a): a held key doesn't spin —
 a fresh press does.)** Keys down at takeoff keep carving-rate steering
