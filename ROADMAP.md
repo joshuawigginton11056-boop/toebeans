@@ -1687,10 +1687,23 @@ does it feel like a cheap shot? Does braking-by-turning feel like a real
 technique worth using alongside the down-key brake? And does needing to
 steer *back* make the slope more engaging or just more work?
 
-**Next:** remaining round-2 list by director's pick — jump anticipation,
-gear style + longer skis, always-on feet, angulation round 3 + the
-boot-containment fix, or the hair-roots + cat-tail fixes. Then music
-(still deliberately last), then the end-of-M2 tuning pass.
+**Playtest verdict (director, 2026-07-22): three issues** — recorded and
+parked in [IDEAS.md](IDEAS.md)'s top block with cause analysis:
+
+1. **Can't spin or change direction mid-air** — the heading freeze while
+   airborne (this session's deliberate mirror of the speed freeze) reads
+   as a limitation, not physics; jumps should allow spinning/re-aiming.
+2. **The fall animation doesn't match the direction you fell** — the
+   tip-over is one fixed sideways rotation whatever actually killed you.
+3. **The turn rate is too slow** — `TURN_RATE` is a one-line tune,
+   director-called, so it's sanctioned to change with the fixes above
+   rather than waiting for the end-of-M2 tuning pass.
+
+**Next:** turning round 2 (the three items above, sketched in IDEAS.md)
+unless the director redirects — then the remaining round-2 list (jump
+anticipation, gear style + longer skis, always-on feet, angulation round 3
++ the boot-containment fix, hair-roots + cat-tail), then music (still
+deliberately last), then the end-of-M2 tuning pass.
 
 ## Milestones
 
