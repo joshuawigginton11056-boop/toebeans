@@ -42,6 +42,14 @@ export interface SkiSceneHandle {
   readonly sun: THREE.DirectionalLight;
   readonly skyDome: THREE.Mesh;
   readonly sunBillboard: THREE.Sprite;
+  /**
+   * Last frame's lateral position and status, for deriving sideways speed —
+   * presentation-side memory, like the bedroom's walk heading; SkiState
+   * stays ignorant of it. `skiing` gates the derivation so a checkpoint
+   * respawn (which teleports lateral back to 0) can't read as one frame of
+   * violent swerving.
+   */
+  readonly steerMemory: { lateral: number; skiing: boolean };
 }
 
 const SLOPE_LENGTH = 100;
@@ -140,17 +148,18 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   player.add(skier.group);
 
   // The cat rides on your back (DESIGN.md's core fantasy) — the same rig as
-  // the bedroom cat, sitting, parented to the skier so it goes along for the
-  // ride including the crash tip-over.
+  // the bedroom cat, sitting, parented onto the skier's mount so it turns
+  // and banks with the body through every carve (and still goes along for
+  // the crash tip-over). The mount is the character's own frame: they face
+  // local +z, so the back is -z, and facing downhill means no extra turn.
   // Mounted on the upper back of the *crouched* pose (the old height was
   // tuned against the taller retired bodies and landed in the roster's
-  // hair), and turned to face downhill with the skier — the director's call;
-  // it used to face the camera so its scarf showed, and that read wrong.
+  // hair), facing downhill with the skier — the director's call; it used to
+  // face the camera so its scarf showed, and that read wrong.
   const cat = createCatRig();
   cat.setPose("sitting");
-  cat.group.position.set(0, 0.62, 0.3);
-  cat.group.rotation.y = Math.PI;
-  player.add(cat.group);
+  cat.group.position.set(0, 0.62, -0.3);
+  skier.mount.add(cat.group);
 
   scene.add(player);
 
@@ -171,6 +180,7 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     sun,
     skyDome,
     sunBillboard,
+    steerMemory: { lateral: 0, skiing: true },
   };
 }
 
@@ -186,7 +196,31 @@ export function syncSkiSceneToState(
   // beyond MAX_SPEED = deepest tuck) — so the speed control is finally
   // legible on the body. Airborne adds a bit of extra tuck for the jump.
   const tuck = (state.speed - MIN_SPEED) / (BOOST_SPEED - MIN_SPEED);
-  handle.skier.setTuck(tuck + (state.height > 0 ? 0.2 : 0));
+
+  // Steering, derived the way the bedroom derives its walk heading: compare
+  // this frame's lateral to last frame's. The angle the body should make
+  // with straight-downhill is atan2(sideways, downhill) — bigger at the
+  // same steer rate when you're braking, which is right (a slow skier
+  // pointing across the hill is what braking looks like). Only measured
+  // across two consecutive normally-skiing frames; anything else (crash,
+  // respawn teleport, the first frame) reads as straight ahead.
+  const skiing = state.status === "skiing";
+  let steer = 0;
+  if (skiing && handle.steerMemory.skiing && dt > 0) {
+    const sideways = (state.lateral - handle.steerMemory.lateral) / dt;
+    // Cap at just above the shared sim's steer rate — a save restored onto
+    // a different lateral would otherwise spike the derivative for a frame.
+    const cap = 6;
+    steer = Math.atan2(Math.max(-cap, Math.min(cap, sideways)), state.speed);
+  }
+  handle.steerMemory.lateral = state.lateral;
+  handle.steerMemory.skiing = skiing;
+
+  handle.skier.setSkiMotion({
+    tuck: tuck + (state.height > 0 ? 0.2 : 0),
+    steer,
+    airborne: state.height > 0,
+  });
 
   handle.cat.update(dt);
   handle.skier.update(dt);

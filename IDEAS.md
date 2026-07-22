@@ -9,21 +9,20 @@ The crouch/gear session landed its mechanics (cat faces forward ✓, real
 ski equipment exists ✓, no more mid-run customization ✓) but the look
 needs a round 2. Eight issues, with what each fix takes:
 
-- **Skier never turns.** Steering is a pure sideways slide — the character
-  faces dead ahead regardless of input. Presentation-only fix in
-  `skiRender.ts`/`skierModel.ts`: derive lateral velocity (compare
-  `state.lateral` between frames, like the bedroom heading does), and feed
-  it into a yaw toward the movement direction plus a carving *bank* (body
-  rolls into the turn). Eased like the tuck so it flows.
-- **Legs and arms aren't independent — the body is a rigid block.** Two
-  causes: the pose is perfectly symmetric (both legs identical, both arms
-  identical), and the base frame is frozen (the Idle sway was deliberately
-  frozen so the poles wouldn't wave — see the paused-clip gotcha in the
-  ROADMAP entry). Fixes: stagger the pose (lead foot slightly forward,
-  arms at different heights — real skiers are never symmetric), and add
-  *small procedural motion* — speed-driven bob, a little independent arm
-  float — instead of unfreezing Idle (which swings arms too much for a
-  pole-holder).
+- ~~**Skier never turns.**~~ **(RESOLVED 2026-07-22, motion & life
+  session):** a carve layer in the skier rig yaws the body toward the
+  movement direction (derived frame-to-frame like the bedroom heading) and
+  rolls it into a banking carve, eased like the tuck; the skis tilt onto
+  their edges with the body, and the cat's mount moved inside the carve
+  layer so it rides the turn too.
+- ~~**Legs and arms aren't independent — the body is a rigid block.**~~
+  **(RESOLVED 2026-07-22, motion & life session):** staggered stance (left
+  ski/boot/foot lead, asymmetric arm and leg bends, torso twist with neck
+  counter-turn) plus a procedural life layer — speed-scaled pelvis bob
+  (reads as knees pumping since the feet are pinned), independent arm
+  float at incommensurate frequencies, torso rock, head corrections, and
+  airborne-gated snow chatter. Idle stays frozen, per the paused-clip
+  gotcha. Whether the *amount* of life is right is a tuning-pass question.
 - **Ski equipment doesn't match the art style.** The gear is plain
   primitives (sharp boxes, thin cylinders) against chunky rounded
   characters. Wants a proportion-and-facet pass: chunkier boots, thicker

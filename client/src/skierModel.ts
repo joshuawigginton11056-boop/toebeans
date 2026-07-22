@@ -71,8 +71,11 @@ const MATERIAL_REGIONS: Record<string, CharacterRegion> = {
 //
 // Two keyed poses — BRAKING (weight back, nearly upright, snowplow-ish) and
 // FULL TUCK (deep crouch, torso folded, arms in) — blended by the lean
-// input via setTuck(0..1). That makes the up/down speed control legible on
-// the body, which was the director's playtest ask.
+// input via setSkiMotion's tuck (0..1). That makes the up/down speed control
+// legible on the body, which was the director's playtest ask. On top of the
+// blend sit the stagger, wobble, and bob layers (constants below) — the
+// round-2 "life" fixes — and around it the carve group steers and banks the
+// whole body into turns.
 //
 // The crouch works because of a quirk of this rig: Foot.L/Foot.R are
 // root-level bones, separate from the leg chains (the pack animates legs
@@ -88,24 +91,35 @@ type Xyz = readonly [number, number, number];
 // .glb arrives in the scene graph as "FootL". (The clips go through the
 // same loader, so their tracks match by construction.)
 
-/** Bone rotation deltas, radians about each bone's local axes. */
+/**
+ * Bone rotation deltas, radians about each bone's local axes.
+ *
+ * Deliberately asymmetric (playtest: "the body reads as one rigid block").
+ * The stance leads with the left foot — see SKI_STAGGER — so the left leg
+ * rides straighter and the right folds a touch deeper, the left arm carries
+ * higher and more bent than the right, and the torso twists slightly toward
+ * the lead side with the neck counter-turning so the face stays downhill.
+ * Real skiers are never symmetric; the numbers differ side-to-side by just
+ * enough to read as a person balancing rather than a mirrored mannequin.
+ */
 const SKI_POSE_ROTATIONS: Record<string, { brake: Xyz; tuck: Xyz }> = {
-  Abdomen: { brake: [0.14, 0, 0], tuck: [0.52, 0, 0] },
-  Torso: { brake: [0.1, 0, 0], tuck: [0.38, 0, 0] },
-  // Neck counter-bends so the face keeps looking downhill, not at the snow.
-  Neck: { brake: [-0.12, 0, 0], tuck: [-0.44, 0, 0] },
-  UpperLegL: { brake: [-0.18, 0, 0], tuck: [-0.72, 0, 0] },
-  UpperLegR: { brake: [-0.18, 0, 0], tuck: [-0.72, 0, 0] },
-  LowerLegL: { brake: [0.28, 0, 0], tuck: [0.95, 0, 0] },
-  LowerLegR: { brake: [0.28, 0, 0], tuck: [0.95, 0, 0] },
+  Abdomen: { brake: [0.14, 0.05, 0], tuck: [0.52, 0.07, 0] },
+  Torso: { brake: [0.1, 0.05, 0], tuck: [0.38, 0.07, 0] },
+  // Neck counter-bends so the face keeps looking downhill, not at the snow —
+  // and counter-twists against the shoulder twist above for the same reason.
+  Neck: { brake: [-0.12, -0.04, 0], tuck: [-0.44, -0.06, 0] },
+  UpperLegL: { brake: [-0.14, 0, 0], tuck: [-0.66, 0, 0] },
+  UpperLegR: { brake: [-0.22, 0, 0], tuck: [-0.78, 0, 0] },
+  LowerLegL: { brake: [0.24, 0, 0], tuck: [0.9, 0, 0] },
+  LowerLegR: { brake: [0.32, 0, 0], tuck: [1.0, 0, 0] },
   // Arms forward-and-in to hold the poles, hands tucking closer as the
   // crouch deepens. On this rig the swing that brings a hanging arm forward
   // is mostly local -Z (adduction), not X — solved numerically against the
   // live skeleton by placing the fist where a pole grip belongs.
-  UpperArmL: { brake: [0.1, -0.03, -0.48], tuck: [0.14, -0.04, -0.64] },
-  UpperArmR: { brake: [0.1, 0.03, 0.48], tuck: [0.14, 0.04, 0.64] },
-  LowerArmL: { brake: [0.62, 0, 0], tuck: [0.97, 0, 0] },
-  LowerArmR: { brake: [0.62, 0, 0], tuck: [0.97, 0, 0] },
+  UpperArmL: { brake: [0.16, -0.03, -0.5], tuck: [0.2, -0.04, -0.66] },
+  UpperArmR: { brake: [0.06, 0.03, 0.46], tuck: [0.1, 0.04, 0.62] },
+  LowerArmL: { brake: [0.68, 0, 0], tuck: [1.02, 0, 0] },
+  LowerArmR: { brake: [0.56, 0, 0], tuck: [0.9, 0, 0] },
 };
 
 /** How far the pelvis drops in the crouch, in game units. */
@@ -117,9 +131,60 @@ const SKI_BODY_BACK = { brake: 0, tuck: 0.05 };
 const SKI_STANCE = 0.13;
 /** Feet ride this far above the snow: on top of the skis, inside the boots. */
 const SKI_FOOT_LIFT = 0.055;
+/**
+ * Lead-foot stagger, in game units along the ski direction: the left ski
+ * (and its boot and foot) rides ahead, the right trails. Part of breaking
+ * the mirrored-mannequin symmetry; must match between the gear meshes and
+ * the foot pinning, or a boot slides off its ski.
+ */
+const SKI_STAGGER = { L: 0.06, R: -0.04 } as const;
 
 /** How fast the body eases between brake and tuck (per second). */
 const TUCK_EASE = 8;
+/** How fast the body eases into a turn (per second). */
+const STEER_EASE = 8;
+/**
+ * Carving bank: how much the body rolls into a turn, as a fraction of the
+ * eased steer yaw, and the cap that keeps an emergency swerve from tipping
+ * the character onto their ear.
+ */
+const BANK_GAIN = 0.45;
+const BANK_MAX = 0.32;
+
+/**
+ * Procedural micro-motion — the "life" layer (playtest: "symmetric and
+ * frozen"). Small sinusoidal offsets, per bone, on top of the brake↔tuck
+ * blend: the arms float independently (different frequencies and phases, so
+ * they never sync up into a march), the torso rocks as weight shifts, the
+ * head makes tiny corrections. Frequencies are in radians/second and
+ * deliberately incommensurate — the pattern never visibly repeats.
+ * Amplitudes scale up with speed (see applySkiPose): gentle balance drift
+ * at a braking crawl, busy working-body at a full tuck.
+ */
+const SKI_WOBBLE: Record<
+  string,
+  readonly { axis: 0 | 1 | 2; amp: number; freq: number; phase: number }[]
+> = {
+  UpperArmL: [{ axis: 0, amp: 0.05, freq: 2.3, phase: 0 }],
+  UpperArmR: [{ axis: 0, amp: 0.05, freq: 2.9, phase: 2.1 }],
+  LowerArmL: [{ axis: 0, amp: 0.045, freq: 3.4, phase: 0.7 }],
+  LowerArmR: [{ axis: 0, amp: 0.045, freq: 2.6, phase: 3.5 }],
+  Abdomen: [{ axis: 2, amp: 0.028, freq: 1.6, phase: 0.3 }],
+  Torso: [{ axis: 1, amp: 0.03, freq: 1.2, phase: 1.7 }],
+  Neck: [{ axis: 0, amp: 0.02, freq: 1.9, phase: 2.6 }],
+};
+
+/** Pelvis bob (game units) — knees pump as the skis run over the snow. */
+const BOB_AMP = { brake: 0.006, tuck: 0.016 };
+/** Bob rate (radians/second) — quickens with speed. */
+const BOB_FREQ = { brake: 5, tuck: 11 };
+/**
+ * High-frequency snow chatter at speed, added to the bob. Gated off while
+ * airborne — a body in the air has nothing to chatter against (the carve
+ * hiss in audio.ts goes silent on the same reasoning).
+ */
+const CHATTER_AMP = 0.005;
+const CHATTER_FREQ = 27;
 
 // ---------------------------------------------------------------------------
 // Ski gear: skis, boots, poles — built in code out of flat-shaded primitive
@@ -161,6 +226,10 @@ function createSkiGear(): SkiGear {
 
   for (const side of [-1, 1]) {
     const x = side * SKI_STANCE;
+    // side 1 is the character's left (feet pin at +x for L below) — the lead
+    // ski. Ski, tip, and boot all shift together so the boot stays centered
+    // on its own ski and the foot pinning lands inside the boot.
+    const stagger = side === 1 ? SKI_STAGGER.L : SKI_STAGGER.R;
 
     // The ski: a plank with an upturned tip, sized to the chunky big-headed
     // characters rather than to real skis — short and wide reads cuter.
@@ -168,16 +237,16 @@ function createSkiGear(): SkiGear {
       new THREE.BoxGeometry(0.1, 0.035, 1.15),
       skiMaterial,
     );
-    ski.position.set(x, 0.0175, 0.12); // more ski ahead than behind
+    ski.position.set(x, 0.0175, 0.12 + stagger); // more ski ahead than behind
     const tip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.03, 0.2), skiMaterial);
-    tip.position.set(x, 0.052, 0.76);
+    tip.position.set(x, 0.052, 0.76 + stagger);
     tip.rotation.x = -0.5; // front end curls up
 
     const boot = new THREE.Mesh(
       new THREE.BoxGeometry(0.15, 0.16, 0.26),
       bootMaterial,
     );
-    boot.position.set(x, 0.115, 0); // standing on the ski
+    boot.position.set(x, 0.115, stagger); // standing on the ski
 
     for (const mesh of [ski, tip, boot]) mesh.castShadow = true;
     group.add(ski, tip, boot);
@@ -213,9 +282,33 @@ function createPole(material: THREE.Material): THREE.Group {
 
 // ---------------------------------------------------------------------------
 
+export interface SkiMotion {
+  /**
+   * How deep the ski crouch is: 0 = braking (upright, weight back),
+   * 1 = full tuck.
+   */
+  readonly tuck: number;
+  /**
+   * Steering angle in radians — atan2(sideways speed, downhill speed),
+   * positive when moving toward the character's right. The rig yaws the
+   * body toward the movement direction and rolls it into a carving bank.
+   */
+  readonly steer: number;
+  /** Mid-air bodies don't chatter against the snow. */
+  readonly airborne: boolean;
+}
+
 export interface SkierRig {
   /** Parent this into a scene and position it — the model loads into it. */
   readonly group: THREE.Group;
+  /**
+   * Turns (and banks) with the character. Parent riders and props here —
+   * the cat mounts on the skier's back through this, so it comes along
+   * through every turn instead of hovering in place while the body yaws
+   * out from under it. Coordinates are the character's own frame: the
+   * character faces local +z, so "behind the back" is local -z.
+   */
+  readonly mount: THREE.Group;
   /** Switch clips. Cheap to call every frame; repeats are ignored. */
   setPose(pose: SkierPose): void;
   /**
@@ -225,11 +318,11 @@ export interface SkierRig {
    */
   setFacing(radians: number): void;
   /**
-   * How deep the ski crouch is: 0 = braking (upright, weight back),
-   * 1 = full tuck. Eased internally so pose changes roll through the body
-   * instead of snapping. Only visible in the "skiing" pose.
+   * Drive the skiing body: crouch depth, steering, airborne. Tuck and steer
+   * are eased internally so changes roll through the body instead of
+   * snapping. Only visible in the "skiing" pose.
    */
-  setTuck(tuck: number): void;
+  setSkiMotion(motion: SkiMotion): void;
   /** Swap character and/or recolor. Cheap to repeat. */
   setAppearance(appearance: Appearance): void;
   /** Advance the animation. No-op until the model has loaded. */
@@ -390,9 +483,23 @@ const scratchEuler = new THREE.Euler();
 const scratchQuaternion = new THREE.Quaternion();
 const scratchVector = new THREE.Vector3();
 
-/** Overlay the ski crouch on top of the frozen Idle base frame. */
-function applySkiPose(instance: Instance, tuck: number): void {
+/**
+ * Overlay the ski crouch on top of the frozen Idle base frame.
+ *
+ * `time` drives the micro-motion layer (SKI_WOBBLE + the pelvis bob) —
+ * a monotonically accumulating pose clock, not wall time.
+ */
+function applySkiPose(
+  instance: Instance,
+  tuck: number,
+  time: number,
+  airborne: boolean,
+): void {
   instance.skiRest ??= captureSkiRest(instance);
+
+  // Micro-motion grows with speed: quiet balance drift while braking,
+  // busy working-body at full tuck.
+  const wobbleScale = 0.35 + 0.65 * tuck;
 
   for (const [name, delta] of Object.entries(SKI_POSE_ROTATIONS)) {
     const bone = instance.bones.get(name);
@@ -403,26 +510,39 @@ function applySkiPose(instance: Instance, tuck: number): void {
       lerp(delta.brake[1], delta.tuck[1], tuck),
       lerp(delta.brake[2], delta.tuck[2], tuck),
     );
+    for (const wobble of SKI_WOBBLE[name] ?? []) {
+      const swing =
+        wobble.amp * wobbleScale * Math.sin(wobble.freq * time + wobble.phase);
+      if (wobble.axis === 0) scratchEuler.x += swing;
+      else if (wobble.axis === 1) scratchEuler.y += swing;
+      else scratchEuler.z += swing;
+    }
     bone.quaternion
       .copy(rest)
       .multiply(scratchQuaternion.setFromEuler(scratchEuler));
   }
 
   // The crouch itself: drop the pelvis. The feet are separate root-level
-  // bones, so this folds the knees while the boots stay on the skis.
+  // bones, so this folds the knees while the boots stay on the skis — which
+  // also means the bob below reads as knees pumping, not the body floating.
+  const bob =
+    lerp(BOB_AMP.brake, BOB_AMP.tuck, tuck) *
+      Math.sin(lerp(BOB_FREQ.brake, BOB_FREQ.tuck, tuck) * time) +
+    (airborne ? 0 : tuck * tuck * CHATTER_AMP * Math.sin(CHATTER_FREQ * time));
   if (instance.pelvis && instance.skiRest.pelvis) {
     instance.pelvis.position
       .copy(instance.skiRest.pelvis)
       .add(
         scratchVector.set(
           0,
-          -lerp(SKI_BODY_DROP.brake, SKI_BODY_DROP.tuck, tuck) / instance.scale,
+          (-lerp(SKI_BODY_DROP.brake, SKI_BODY_DROP.tuck, tuck) + bob) /
+            instance.scale,
           -lerp(SKI_BODY_BACK.brake, SKI_BODY_BACK.tuck, tuck) / instance.scale,
         ),
       );
   }
 
-  // Plant the feet: pinned to fixed spots on the skis.
+  // Plant the feet: pinned to fixed spots on the skis, left foot leading.
   for (const side of ["L", "R"] as const) {
     const foot = instance.bones.get(`Foot${side}`);
     const rest = instance.skiRest.feet.get(side);
@@ -430,7 +550,7 @@ function applySkiPose(instance: Instance, tuck: number): void {
     foot.position.set(
       ((side === "L" ? 1 : -1) * SKI_STANCE) / instance.scale,
       rest.p.y + SKI_FOOT_LIFT / instance.scale,
-      0,
+      SKI_STAGGER[side] / instance.scale,
     );
     foot.quaternion.copy(rest.q);
   }
@@ -457,19 +577,25 @@ function captureSkiRest(instance: Instance): NonNullable<Instance["skiRest"]> {
 }
 
 export function createSkierRig(): SkierRig {
-  // group → facing → model. The old intermediate "lean" group is gone: the
-  // ski lean is now part of the procedural crouch, applied in bone-local
-  // space, so it can't be flipped by the downhill half-turn the way the
-  // whole-group lean once was.
+  // group → facing → carve → model. The old intermediate "lean" group is
+  // gone: the ski lean is now part of the procedural crouch, applied in
+  // bone-local space, so it can't be flipped by the downhill half-turn the
+  // way the whole-group lean once was. The carve group is the steering
+  // layer: it yaws the character toward the movement direction and rolls
+  // them into the turn, underneath whatever facing the scene sets.
   const group = new THREE.Group();
   const facing = new THREE.Group();
   group.add(facing);
+  const carve = new THREE.Group();
+  facing.add(carve);
 
-  // Ski gear rides in the facing group so it turns with the character. Only
-  // visible in the skiing pose — the bedroom doesn't wear skis indoors.
+  // Ski gear rides in the carve group so it turns AND banks with the
+  // character — carving happens on the ski edges, so the skis tilting into
+  // the turn with the body is the point. Only visible in the skiing pose —
+  // the bedroom doesn't wear skis indoors.
   const gear = createSkiGear();
   gear.group.visible = false;
-  facing.add(gear.group);
+  carve.add(gear.group);
 
   const instances = new Map<string, Instance>();
   let active: Instance | null = null;
@@ -477,6 +603,11 @@ export function createSkierRig(): SkierRig {
   let colors: AppearanceColors | null = null;
   let tuckTarget = 0.5;
   let tuckCurrent = 0.5;
+  let steerTarget = 0;
+  let steerCurrent = 0;
+  let airborne = false;
+  /** The micro-motion clock — accumulates only while skiing. */
+  let poseTime = 0;
 
   function syncGearVisibility(): void {
     gear.group.visible = pose === "skiing" && active !== null;
@@ -515,8 +646,8 @@ export function createSkierRig(): SkierRig {
   function activate(id: string): void {
     const instance = instances.get(id);
     if (!instance || active === instance) return;
-    if (active) facing.remove(active.root);
-    facing.add(instance.root);
+    if (active) carve.remove(active.root);
+    carve.add(instance.root);
     active = instance;
     applyColors();
     applyPose();
@@ -554,12 +685,13 @@ export function createSkierRig(): SkierRig {
       }
       pole.visible = true;
       fist.getWorldPosition(scratchVector);
-      pole.position.copy(facing.worldToLocal(scratchVector));
+      pole.position.copy(carve.worldToLocal(scratchVector));
     }
   }
 
   return {
     group,
+    mount: carve,
     setPose(next: SkierPose): void {
       pose = next;
       applyPose();
@@ -567,8 +699,10 @@ export function createSkierRig(): SkierRig {
     setFacing(radians: number): void {
       facing.rotation.y = radians;
     },
-    setTuck(tuck: number): void {
-      tuckTarget = Math.min(1, Math.max(0, tuck));
+    setSkiMotion(motion: SkiMotion): void {
+      tuckTarget = Math.min(1, Math.max(0, motion.tuck));
+      steerTarget = motion.steer;
+      airborne = motion.airborne;
     },
     setAppearance(appearance: Appearance): void {
       colors = resolveAppearance(appearance);
@@ -579,9 +713,27 @@ export function createSkierRig(): SkierRig {
       if (active === null) return;
       active.mixer.update(dt);
       if (pose === "skiing") {
-        tuckCurrent += (tuckTarget - tuckCurrent) * (1 - Math.exp(-TUCK_EASE * dt));
-        applySkiPose(active, tuckCurrent);
+        poseTime += dt;
+        const ease = (rate: number): number => 1 - Math.exp(-rate * dt);
+        tuckCurrent += (tuckTarget - tuckCurrent) * ease(TUCK_EASE);
+        steerCurrent += (steerTarget - steerCurrent) * ease(STEER_EASE);
+        // Yaw toward the movement direction. The scene's facing is the
+        // downhill half-turn (y = π), which mirrors x — so a positive
+        // (rightward) steer needs a negative local yaw to come out turned
+        // right in the world.
+        carve.rotation.y = -steerCurrent;
+        // …and roll into the turn. Positive local z-roll tips the head
+        // toward local -x, which the facing mirror maps to the character's
+        // right — so bank carries steer's sign directly.
+        carve.rotation.z = Math.max(
+          -BANK_MAX,
+          Math.min(BANK_MAX, BANK_GAIN * steerCurrent),
+        );
+        applySkiPose(active, tuckCurrent, poseTime, airborne);
         updatePoles();
+      } else {
+        carve.rotation.y = 0;
+        carve.rotation.z = 0;
       }
     },
   };

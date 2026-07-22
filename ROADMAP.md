@@ -1103,6 +1103,75 @@ each fix would take.
 list (director's picks first), then music (still deliberately last), then
 the end-of-M2 tuning pass.
 
+## 2026-07-22 — M2: slope polish round 2 — motion & life (turning, banking, a body that balances)
+
+Director's pick from the round-2 list: the **motion & life** chunk — the
+two issues behind the "rigid block" headline. The character now turns and
+banks into every steer, and the body works and balances instead of holding
+one frozen shape. All rendering-side (`client/src/skierModel.ts` and
+`skiRender.ts`); no `/shared` changes, test count stays at 55.
+
+- **Steering finally turns the body.** A new carve layer in the skier rig
+  (facing → carve → model + gear) yaws the character toward where they're
+  actually going — derived the same way the bedroom derives its walk
+  heading, by comparing this frame's sideways position to last frame's —
+  and rolls them into a carving bank on top. The skis turn and tilt onto
+  their edges with the body, because carving *is* the skis tilting. Both
+  are eased like the tuck, so a swerve flows through the character instead
+  of snapping. Braking while steering points the body further across the
+  hill than steering at speed — which is just what slow-and-turning looks
+  like, and it comes straight out of the atan2.
+- **The cat rides the turn.** The cat's mount moved inside that carve
+  layer, so it swings and banks with the back it's sitting on — before
+  this, the body would have yawed out from under a cat hovering in place.
+  (The full hug-the-back mount redesign stays parked in IDEAS.md — this
+  just keeps the current mount attached to a body that now moves.)
+- **The stance is staggered.** Left ski, boot, and foot lead by a tenth of
+  a unit, the right trails; the left leg rides straighter while the right
+  folds deeper; the left arm carries higher and more bent; the torso
+  twists a touch toward the lead side with the neck counter-turning so the
+  face stays downhill. Real skiers are never symmetric — the mirrored
+  mannequin is gone.
+- **The body has a life layer.** Small procedural motion on top of the
+  brake↔tuck blend: the pelvis bobs (and because the feet are pinned to
+  the skis, a bobbing pelvis reads as knees pumping), the arms float
+  independently at deliberately incommensurate frequencies so they never
+  sync into a march, the torso rocks with shifting weight, the head makes
+  tiny corrections. It all scales with speed — quiet balance drift while
+  braking, busy working-body at full tuck — plus a high-frequency snow
+  chatter at speed that cuts out mid-air, on the same reasoning as the
+  carve hiss going silent in the audio. The Idle base frame stays frozen
+  (unfreezing it waves the poles around — last session's gotcha); life
+  comes from these tuned layers instead.
+- `npm run check` (55 tests) and `npm run build` pass. Verified in the
+  live page by driving the real modules (screenshots still time out —
+  fourteenth session): steering right swings the body's forward vector to
+  exactly the atan2 the movement implies (eased over ~½s), bank rolls
+  ±0.25 into the turn and caps before a swerve could tip the character
+  over, pushing against the lane's edge wall correctly straightens the
+  body back out, and a checkpoint-respawn teleport reads as zero swerve
+  (the guard works). The life layer measures: pelvis bob 0.024 units,
+  fists floating ~0.035 independently, feet welded to the skis with
+  *zero* drift through all of it, pole grips at 0.000 from the fists,
+  boots within 0.001 of the feet. Grounded frames carry ~50% more
+  high-frequency chatter than airborne ones. And an ASCII-silhouette
+  pixel read of a mid-carve frame visibly shows what the numbers say:
+  body tilted into the turn, skis sweeping a diagonal, cat leaning with
+  it.
+
+**What to playtest:** `npm run dev`, Enter to ski, and steer hard left and
+right: does the character finally *turn* — body banking into the carve,
+skis on edge — instead of sliding sideways? Watch the body at a steady
+cruise: does it read as a person balancing (knees pumping, arms floating)
+rather than a statue? Brake, then tuck: does the asymmetric stance hold up
+at both extremes? Jump mid-carve and land: anything jarring? And the taste
+question: is the amount of life right — too twitchy, too calm, or close
+enough to park for the end-of-M2 tuning pass?
+
+**Next:** the remaining round-2 chunks by director's pick — cat hug + hair
+physics (the big one), gear style + longer skis, always-on feet — then
+music (still deliberately last), then the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
