@@ -2395,6 +2395,86 @@ always-on feet, angulation round 3 + the boot-containment fix,
 hair-roots + cat-tail), then music (still deliberately last), then the
 end-of-M2 tuning pass.
 
+## (bedroom) 2026-07-22 — The bedroom is scrapped: a menu lobby replaces it
+
+Director call at the top of the session: **scrap the walkable bedroom and
+replace it with a more traditional lobby.** Clarified before building:
+menu-style (no walkable home space at all), the cat stays, and the
+earn-your-furniture progression question is **deliberately parked** —
+"decide later," recorded in [IDEAS.md](IDEAS.md)'s top entry with matching
+⚠ notes in [DESIGN.md](DESIGN.md#leveling--unlocks). The furniture models
+stay in `assets/bedroom/` as the future unlock pool.
+
+The game now opens on a real front-of-house: the **Toebeans title**, a
+**Hit the slopes** button, **Character / Skin / Hair / Sound** buttons —
+each with its keyboard shortcut printed on it — over a live vignette of
+your character and the cat on dawn snow. This is also the title-screen
+framing the game never had (the "dynamic title screen" parked idea: base
+landed, growing-showcase half stays live).
+
+- **Deleted:** `shared/src/bedroom.ts` + tests (walking, furniture
+  collision, the cat's route-finding brain — including the collision
+  resolver fixed earlier today; git history keeps it all),
+  `client/src/bedroomRender.ts` (room, window, lamps, follow camera).
+  Tests 83 → 73.
+- **New `client/src/lobbyRender.ts`:** the vignette. Character front and
+  center (idle, three-quarter to camera), the cat sitting at their heel —
+  with a little life cycle: every ~26s it gets up, pads a slow eased
+  half-circle behind the character, and settles back on the exact same
+  spot. Dawn lighting is the same palette-derived two-light rig as both
+  other scenes; a gradient dawn horizon, a visible sun-glow low over it,
+  close-pulled pink haze, and seven slope-pack trees/rocks framing the
+  shot (read-only reuse of `assets/slope/` — no slope code touched). No
+  shared state exists for the lobby at all — it's a diorama.
+- **New `client/src/lobbyUi.ts`:** the menu DOM. Palette-styled to the
+  middle-ground UI tone (soft rectangles, hairline borders); Play is birch
+  amber — signal red stays reserved. Buttons blur after click so Enter
+  can't re-fire a focused button instead of meaning "play". The lobby
+  doubles as the character-select mirror: cycling is instantly visible on
+  the vignette, and the character button shows the roster label.
+- **`SAVE_VERSION` 4 → 5** (sync-down done first, per PARALLEL.md's rule):
+  the save's bedroom block is gone and `"bedroom"` mode became `"lobby"`.
+  Old saves are discarded — the usual acceptable cost, a run in progress.
+- **Shared-territory edits, kept localized:** `main.ts` (lobby branch,
+  menu callbacks, Enter/C/K/H/M keep working; the bedroom's camera-drag/
+  wheel plumbing went with the room), `hud.ts` (`HudMode` "bedroom" →
+  "lobby", bedroom hint bar removed — the menu's printed keycaps do its
+  job, forfeit banner now says "back to the lobby"), `shared/save.ts` +
+  tests. `audio.ts` is slope territory and still types its quiet mode
+  `"bedroom"` — mapped at the call site in `main.ts`; **(slope)-tagged
+  IDEAS note** asks for the rename at leisure.
+- `npm run check` (73 tests) and `npm run build` pass. Verified against
+  the real served modules on this session's own dev server (5301 — free
+  this time; screenshots still time out, fourteenth session running):
+  menu DOM complete with Play at exactly `#E9A960F2`; Enter → slope swaps
+  canvases, hides the menu, writes a v5 `mode: "slope"` save with a fresh
+  9-life run; C is inert on the slope; Enter home restores the menu;
+  C/C/K cycles land on character "Casual 3" (label updates, save
+  persists); M persists mute and flips the Sound button. Rendered-frame
+  pixel reads (linear-space readback, converted): horizon **exactly**
+  dawn pink, sun-glow core **exactly** `#FFF4DA`, lit snow within ~2/255
+  of palette #1, cat pixels **exactly** cat-amber `#C69960` plus the
+  shaded signal-red scarf; all 7 trees loaded; the stroll leaves the seat,
+  swings to exactly the 0.75 radius, and resettles at exactly (0, 0.25)
+  facing 0.35. Zero console errors throughout. The lobby's rendered
+  *look* is the one thing only eyeballs can confirm — headline below.
+
+**What to playtest:** `npm run dev` — the game opens on the lobby. Does it
+read as *Toebeans* at a glance — title, your character, the cat, the dawn?
+Click through Character/Skin/Hair — is cycling on the live vignette
+satisfying as a character select? Watch the cat for half a minute: does the
+stroll read as cat-like or robotic? Then Hit the slopes, forfeit a run, and
+come back — does the lobby feel like the right place to land after a run?
+The big-picture question you're best placed to answer: with no walkable
+home, does the game still feel *cozy*, or does the lobby need more warmth
+(sound, a fireplace vignette, more life — candidates parked in IDEAS.md)?
+
+**Next:** director's pick — the parked progression question (where does
+earn-your-furniture live now?), lobby polish candidates (IDEAS.md), or the
+still-owed game-wide art-direction session (rundown/textured — the
+no-texture rule challenge stands and now applies to the lobby vignette
+too).
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -2449,27 +2529,31 @@ sounds like the real game.
 
 Includes the vertical-slice systems that weren't part of the M2 area:
 
-- [ ] The other area (bedroom or slope) brought to the same polish level
-      — for the bedroom that now means the complete room + follow camera
-      (director call, 2026-07-22 — replaced the rotating bird's-eye view;
-      *room + camera landed 2026-07-22; interior lighting (window, dawn
-      backdrop, lamps) landed 2026-07-22; real furniture + lamp fixtures
-      landed 2026-07-22 — no gray-box items left, but the 2026-07-22
-      playtest reopened the look: rundown + textured direction pending
-      (see IDEAS.md), and two collision bugs to fix first*
+- [x] ~~The other area (bedroom or slope) brought to the same polish
+      level~~ **superseded 2026-07-22: the bedroom was scrapped and
+      replaced by the menu lobby** (director call — see the lobby session
+      entry above). The room, follow camera, interior lighting, furniture,
+      and collision resolver all landed first and are preserved in git
+      history; the game's non-slope area is now the lobby, built polished
+      from day one.
 - [x] Fix the collision resolver (wall-trap + corner-warp bugs,
       2026-07-22 playtest) *(fixed 2026-07-22 — minimal-penetration
-      push-out, room-clamped)*
-- [ ] Bare rundown start: bedroom begins with a mattress at most;
-      this session's furniture becomes the unlock pool (director call,
-      2026-07-22)
-- [ ] Furniture placement system (place/move/store)
-- [ ] One timed-task item and one passive/AFK item working end to end
+      push-out, room-clamped; scrapped with the bedroom later that day,
+      preserved in git history)*
+- [ ] ~~Bare rundown start~~ *parked 2026-07-22 (bedroom scrapped): where
+      the earn-your-furniture loop lives is deliberately undecided — see
+      IDEAS.md's top entry. The furniture models remain the unlock pool.*
+- [ ] Furniture placement system (place/move/store) *— pending the parked
+      progression decision*
+- [ ] One timed-task item and one passive/AFK item working end to end *—
+      pending the parked progression decision*
 - [ ] XP and leveling wired to unlocks
 - [ ] Unlocks-by-level UI (furniture/decoration tree per level —
       director call, 2026-07-22)
-- [ ] All 3 v1.0 slopes built
-- [ ] Full 6–8 item furniture/appliance set
+- [ ] All 3 v1.0 slopes built *(slope select becomes a lobby menu item —
+      see the superseded front-door sketch in IDEAS.md)*
+- [ ] Full 6–8 item furniture/appliance set *— pending the parked
+      progression decision*
 - [ ] Character + cat customization options
 - [ ] All level-gated unlocks wired up
 - [ ] 24-hour offline XP catch-up implemented

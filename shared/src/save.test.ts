@@ -4,9 +4,7 @@ import {
   CHARACTERS,
   SKIN_TONES,
   createDefaultAppearance,
-  createInitialBedroomState,
   createInitialSkiState,
-  stepBedroom,
   stepSkiing,
 } from "./index";
 import {
@@ -17,7 +15,6 @@ import {
   restoreSave,
 } from "./save";
 
-const idleBedroomInput = { left: false, right: false, up: false, down: false };
 const idleSkiInput = {
   left: false,
   right: false,
@@ -27,36 +24,36 @@ const idleSkiInput = {
   boost: false,
 };
 
-// A mid-game snapshot with real history: some bedroom walking, a ski run
-// past the first checkpoint with one life already lost.
+// A mid-game snapshot with real history: a ski run past the first
+// checkpoint with one life already lost.
 function midGameSave() {
-  let bedroom = createInitialBedroomState();
-  for (let i = 0; i < 60; i++) {
-    bedroom = stepBedroom(bedroom, { ...idleBedroomInput, right: true }, 1 / 60);
-  }
   let ski = createInitialSkiState();
   for (let i = 0; i < 60 * 6; i++) {
     ski = stepSkiing(ski, idleSkiInput, 1 / 60);
   }
   const appearance = { ...createDefaultAppearance(), character: 3, skin: 5, hair: 4 };
-  return { bedroom, ski, appearance, save: createSave("slope", bedroom, ski, true, appearance) };
+  return { ski, appearance, save: createSave("slope", ski, true, appearance) };
 }
 
 describe("save/load", () => {
   it("round-trips a mid-game snapshot through encode → decode → restore", () => {
-    const { bedroom, ski, save } = midGameSave();
+    const { ski, save } = midGameSave();
     const decoded = decodeSave(encodeSave(save));
     expect(decoded).not.toBeNull();
     const restored = restoreSave(decoded!);
 
     expect(restored.mode).toBe("slope");
     expect(restored.muted).toBe(true);
-    expect(restored.bedroom.player).toEqual(bedroom.player);
-    expect(restored.bedroom.cat).toEqual(bedroom.cat);
     expect(restored.ski.distance).toBe(ski.distance);
     expect(restored.ski.lives).toBe(ski.lives);
     expect(restored.ski.status).toBe(ski.status);
     expect(restored.ski.lastCheckpoint).toBe(ski.lastCheckpoint);
+  });
+
+  it("accepts both scene modes — the lobby replaced the bedroom", () => {
+    const { save } = midGameSave();
+    const inLobby = { ...save, mode: "lobby" };
+    expect(decodeSave(JSON.stringify(inLobby))?.mode).toBe("lobby");
   });
 
   it("round-trips the character's appearance", () => {
@@ -98,15 +95,12 @@ describe("save/load", () => {
     const { save } = midGameSave();
     const restored = restoreSave(decodeSave(encodeSave(save))!);
     const fresh = createInitialSkiState();
-    const freshRoom = createInitialBedroomState();
 
-    // The save carries no layout at all — chasms, checkpoints, room size,
-    // and furniture must match today's createInitial* exactly.
+    // The save carries no layout at all — chasms and checkpoints must match
+    // today's createInitialSkiState exactly.
     expect(encodeSave(save)).not.toContain("chasm");
     expect(restored.ski.chasms).toEqual(fresh.chasms);
     expect(restored.ski.checkpoints).toEqual(fresh.checkpoints);
-    expect(restored.bedroom.obstacles).toEqual(freshRoom.obstacles);
-    expect(restored.bedroom.roomWidth).toBe(freshRoom.roomWidth);
   });
 
   it("a restored run keeps stepping exactly like the original", () => {
@@ -129,7 +123,7 @@ describe("save/load", () => {
 
     const { save } = midGameSave();
     // Drop each top-level piece in turn.
-    for (const key of ["mode", "muted", "bedroom", "ski", "appearance"] as const) {
+    for (const key of ["mode", "muted", "ski", "appearance"] as const) {
       const broken: Record<string, unknown> = { ...save };
       delete broken[key];
       expect(decodeSave(JSON.stringify(broken))).toBeNull();
@@ -146,8 +140,10 @@ describe("save/load", () => {
     const { save } = midGameSave();
     const cases: ReadonlyArray<Record<string, unknown>> = [
       { ...save, mode: "space-shuttle" },
+      // The scrapped scene: a v4 save's mode is one more thing that would
+      // reject a hand-migrated save (version alone already rejects real ones).
+      { ...save, mode: "bedroom" },
       { ...save, ski: { ...save.ski, status: "flying" } },
-      { ...save, bedroom: { ...save.bedroom, cat: { ...save.bedroom.cat, mood: "zoomies" } } },
       { ...save, ski: { ...save.ski, distance: "12" } },
       { ...save, ski: { ...save.ski, height: null } },
       { ...save, ski: { ...save.ski, lives: 4.5 } },
@@ -179,22 +175,13 @@ describe("save/load", () => {
     expect(restored.ski.lastCheckpoint).toBe(26);
   });
 
-  it("clamps out-of-range positions back into the room and slope", () => {
+  it("clamps out-of-range ski values back into today's legal ranges", () => {
     const { save } = midGameSave();
     const wild = {
       ...save,
-      bedroom: {
-        player: { x: 999, z: -999 },
-        cat: { ...save.bedroom.cat, x: -999, z: 999 },
-      },
       ski: { ...save.ski, lateral: 50, distance: -10, height: -5 },
     };
     const restored = restoreSave(decodeSave(JSON.stringify(wild))!);
-    const room = createInitialBedroomState();
-    expect(Math.abs(restored.bedroom.player.x)).toBeLessThan(room.roomWidth / 2);
-    expect(Math.abs(restored.bedroom.player.z)).toBeLessThan(room.roomDepth / 2);
-    expect(Math.abs(restored.bedroom.cat.x)).toBeLessThan(room.roomWidth / 2);
-    expect(Math.abs(restored.bedroom.cat.z)).toBeLessThan(room.roomDepth / 2);
     expect(restored.ski.lateral).toBe(4);
     expect(restored.ski.distance).toBe(0);
     expect(restored.ski.height).toBe(0);
@@ -240,13 +227,7 @@ describe("save/load", () => {
       ski = stepSkiing(ski, idleSkiInput, 1 / 60);
     }
     expect(ski.status).toBe("crashed");
-    const save = createSave(
-      "slope",
-      createInitialBedroomState(),
-      ski,
-      false,
-      createDefaultAppearance(),
-    );
+    const save = createSave("slope", ski, false, createDefaultAppearance());
     let restored = restoreSave(decodeSave(encodeSave(save))!).ski;
     // Let the pause run out: the restored run must respawn at the
     // checkpoint, exactly like an uninterrupted one.
