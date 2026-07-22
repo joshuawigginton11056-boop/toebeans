@@ -1787,6 +1787,80 @@ anticipation, gear style + longer skis, always-on feet, angulation round 3
 + the boot-containment fix, hair-roots + cat-tail), then music (still
 deliberately last), then the end-of-M2 tuning pass.
 
+## (bedroom) 2026-07-22 — Interior lighting: a window, the dawn outside, and warm lamps
+
+The room is no longer lit from nowhere in particular. It now has the same
+morning the slope does: a window in the north wall with the dawn sun
+pouring through it onto the floor, the slope's pink-and-blue sky visible
+outside, and three warm lamps pooling against the cool daylight. This was
+the "unblocked and urgent" item from the room rebuild — the ceiling had
+made the gray-box lights read near-black in places. All rendering
+(`bedroomRender.ts`); no `/shared` changes, test count stays at 67.
+
+- **The lighting math is the slope's, on purpose.** Same two-constraint
+  derivation from the bible's snow colors: the walls are painted sunlit
+  snow (a warm off-white), the ambient is derived so any surface the sun
+  can't reach renders *exactly* snow-shadow blue — "shadows are soft
+  blue, never black" by construction — and the sun color follows from
+  ambient + sun rendering full albedo. Same ×π physical-lights
+  convention too, which by itself closes the parked "room renders ~45%
+  too dark" issue from the cat-model session. The sun *direction* is
+  also the slope's exact vector — one world, one dawn, and it's what
+  makes the north wall the right wall for a window.
+- **Sunlight only enters through the window.** The north wall is built
+  from segments around a real opening (sill 1.0, head 2.4, in the clear
+  stretch between bed and dresser), everything casts shadows, and the
+  sun's shadow map does the rest: a bright warm patch on the wooden
+  floor, crossed by the shadow of the window frame's mullions. Stand in
+  it and you cast a shadow too.
+- **Out the window: the slope's world.** An unlit vertex-colored
+  backdrop beyond the wall — snow to a dawn-pink horizon melting into
+  sky blue, the same three palette colors the ski scene's fog and dome
+  use. It deliberately casts no shadow (it would block the very sun it
+  depicts). Look up from near the window and you get pure sky.
+- **Three warm lamps** (the vision's detail-touches want glowing lamps):
+  a pendant over the room's center — hung so its lowest point clears the
+  camera's ceiling clamp, so the boom can never clip it — plus small
+  lamps on the dresser and desk. Sun-glow bulbs under birch-bark shades,
+  warm point lights, no lamp shadows (a soft shadowless fill is what
+  lamp light feels like, and point-light shadow maps cost six faces
+  each). The lamps are cozy warmth *on top of* the daylight, not what
+  keeps the room visible.
+- **The floor went wood** (birch bark — the bible's pale-wood color);
+  walls and ceiling wear the albedo the math is derived against. The
+  gray-box furniture stays gray — it's placeholder, and the real
+  furniture session should decide its colors.
+- `npm run check` (67 tests) and `npm run build` pass. Verified in the
+  live page by driving the real modules on this session's own dev server
+  and reading pixels back (screenshots still frozen — nineteenth
+  session): an ambient-only wall renders the derivation's prediction
+  *exactly* (217,228,242 — snow-shadow blue plus the pendant's faint
+  warmth), the sun patch and shadowed floor match their oracles within
+  1/255, the backdrop's pink horizon and sky rows hit their palette
+  hexes exactly, the pendant bulb reads #FFF4DA exactly, the mullion
+  cross-shadow is measurable on the floor, the character standing in the
+  patch darkens it by a measured 30/255, and an 11-pose sweep (including
+  through-window views) found **zero** background-sentinel pixels — the
+  room is still sealed, now with a hole in the wall. Zero console errors
+  on a fresh boot. One verification wrinkle worth recording: the first
+  "character casts no shadow" result was a false alarm — a bare
+  `createSkierRig()` loads no character until `setAppearance` is called
+  (the game always calls it; the test harness hadn't).
+
+**What to playtest:** `npm run dev` — the room should finally feel like
+a bright morning indoors. Walk into the sun patch; watch your shadow.
+Look out the window from a few angles — does the outside read as *the
+slope's world*, and does looking up at the sky feel right? Are the lamps
+warm enough to register next to the daylight, or do they need to matter
+more? Does the blue-shadow-plus-warm-lamp mix read cozy or cold
+anywhere? And check the cat at home — it should finally be its real
+amber indoors, not mud.
+
+**Next (bedroom session):** real bedroom furniture assets (the last big
+gray-box item in the room), unless the director redirects. The lamp
+positions are keyed to the gray-box furniture tops and move with
+whatever the furniture session builds.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -1844,8 +1918,8 @@ Includes the vertical-slice systems that weren't part of the M2 area:
 - [ ] The other area (bedroom or slope) brought to the same polish level
       — for the bedroom that now means the complete room + follow camera
       (director call, 2026-07-22 — replaced the rotating bird's-eye view;
-      *room + camera landed 2026-07-22 — interior lighting and real
-      furniture still open*)
+      *room + camera landed 2026-07-22; interior lighting (window, dawn
+      backdrop, lamps) landed 2026-07-22 — real furniture still open*)
 - [ ] Furniture placement system (place/move/store)
 - [ ] One timed-task item and one passive/AFK item working end to end
 - [ ] XP and leveling wired to unlocks

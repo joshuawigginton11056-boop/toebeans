@@ -71,6 +71,46 @@ export interface BedroomCameraInput {
 const WALL_HEIGHT = 2.8;
 const WALL_THICKNESS = 0.3;
 
+// ---- Interior lighting ----------------------------------------------------
+//
+// The Art Style Bible palette entries the room uses. Duplicated from
+// skiRender.ts on purpose: that file is the slope session's territory
+// (PARALLEL.md), and these are bible constants, not slope code — if they
+// ever change, DESIGN.md's table is the source of truth for both.
+const PALETTE = {
+  sunlitSnow: 0xf8f5ef,
+  snowShadow: 0xd3dff0, // every unlit surface renders this — soft blue, never gray
+  skyBlue: 0xbfdcf5,
+  dawnPink: 0xf6d7ce,
+  sunGlow: 0xfff4da, // lamp bulbs — the brightest value in the room
+  birchBark: 0xe3dccd, // wooden floor, window frame, lamp shades
+} as const;
+
+/** Same world, same dawn: this is the slope's sun vector (direction from
+ * the scene toward the sun — north-west and ~25° up), so the light through
+ * the bedroom window agrees with the light you ski under. Duplicated from
+ * skiRender.ts for the same territorial reason as PALETTE. */
+const SUN_DIRECTION = new THREE.Vector3(-0.4, 0.5, -1).normalize();
+
+// The window lives in the north wall (z = -roomDepth/2) — the wall the
+// opening camera faces, in the clear stretch between the bed and the
+// dresser. The sun sits north of the room, so this is the wall it can
+// actually shine through.
+const WINDOW_CENTER_X = -1.0;
+const WINDOW_WIDTH = 2.2;
+const WINDOW_SILL = 1.0;
+const WINDOW_HEAD = 2.4;
+
+/** Cross-section of the window frame bars, and how far the frame pokes
+ * past the wall faces on both sides. */
+const FRAME_BAR = 0.07;
+const FRAME_DEPTH = WALL_THICKNESS + 0.06;
+
+/** How far beyond the north wall the outside backdrop hangs — far enough
+ * that its parallax through the window reads as "out there", close enough
+ * that it always fills the opening from any camera angle in the room. */
+const BACKDROP_DISTANCE = 2.6;
+
 // ---- The follow camera ----------------------------------------------------
 
 /** Where the boom looks at and pivots around: chest height on the 1.6-unit
@@ -153,7 +193,10 @@ export function createBedroomScene(
   state: BedroomState,
 ): BedroomSceneHandle {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xe8e4da);
+  // One red-channel step off the palette's sky blue: visually identical if
+  // it ever peeks through a seam, but pixel-distinguishable from every real
+  // scene color — which is how verification proves the room is sealed.
+  scene.background = new THREE.Color(0xbedcf5);
 
   // A follow camera inside the room. A touch wider than the slope's 50°
   // FOV — interiors feel cramped through a narrow lens. All positioning
@@ -167,29 +210,79 @@ export function createBedroomScene(
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
+  // Sunlight only enters the room where the walls don't block it — which
+  // is what shadow mapping computes. Soft edges the same way the slope
+  // does it (PCF + the sun's shadow.radius; PCFSoft was retired upstream).
+  renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
 
-  // Gray-box interior lighting: unchanged from the doll-house room. With a
-  // ceiling this reads as a dim room lit from nowhere in particular — the
-  // real interior lighting design (window, lamps) is its own queued
-  // session; see IDEAS.md.
-  const light = new THREE.DirectionalLight(0xffffff, 1);
-  light.position.set(4, 10, 6);
-  scene.add(light);
-  scene.add(new THREE.AmbientLight(0x909090));
+  // The interior lighting design (this session): the slope's palette-
+  // derived two-light rig, adapted to a room. The walls' albedo is the
+  // bible's sunlit snow (a warm off-white paint), and the ambient is
+  // derived so that any surface the sun can't reach renders *exactly*
+  // snow-shadow blue — the bible's "shadows are soft blue, never black",
+  // by construction. The sun color then follows from requiring that
+  // ambient + sun on a flat surface renders the albedo at full value.
+  // Same math as skiRender.ts, same reasoning, same result: a warm sun
+  // and a cool bright ambient. The physical-lights ×π convention fixes
+  // the "room renders ~45% too dark" gap the old rig had.
+  const albedo = new THREE.Color(PALETTE.sunlitSnow);
+  const shadowTarget = new THREE.Color(PALETTE.snowShadow);
+  const ambientColor = new THREE.Color(
+    Math.min(1, shadowTarget.r / albedo.r),
+    Math.min(1, shadowTarget.g / albedo.g),
+    Math.min(1, shadowTarget.b / albedo.b),
+  );
+  const groundNdotL = SUN_DIRECTION.y;
+  const sunColor = new THREE.Color(
+    Math.max(0, (1 - ambientColor.r) / groundNdotL),
+    Math.max(0, (1 - ambientColor.g) / groundNdotL),
+    Math.max(0, (1 - ambientColor.b) / groundNdotL),
+  );
 
+  // Math.PI because three.js physical lights fold 1/π into the material.
+  scene.add(new THREE.AmbientLight(ambientColor, Math.PI));
+
+  // The dawn sun, shining through the window: the walls and ceiling cast
+  // shadows, so the only sunlight that reaches the room is the patch the
+  // window lets through — frame shadows and all. The shadow camera is
+  // sized to the room once; nothing here moves.
+  const sun = new THREE.DirectionalLight(sunColor, Math.PI);
+  sun.position.copy(SUN_DIRECTION).multiplyScalar(20);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -9;
+  sun.shadow.camera.right = 9;
+  sun.shadow.camera.top = 9;
+  sun.shadow.camera.bottom = -9;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 45;
+  sun.shadow.normalBias = 0.05;
+  sun.shadow.radius = 2;
+  scene.add(sun, sun.target);
+
+  // A pale wooden floor (birch bark — the bible's "pale wooden props"
+  // color). Where the sun patch lands it renders at full albedo; under
+  // ambient alone it cools toward the blue shadow tint, which is exactly
+  // how morning light on a wood floor behaves.
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(state.roomWidth, state.roomDepth),
-    new THREE.MeshStandardMaterial({ color: 0xd8d3c8 }),
+    new THREE.MeshStandardMaterial({ color: PALETTE.birchBark }),
   );
   floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
   scene.add(floor);
 
-  // Four full-height walls just outside the walkable area…
-  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x9a9a9a });
+  // Walls painted the albedo the lighting math is derived against. The
+  // north wall (where the window lives) is built from segments around the
+  // opening; the other three are solid boxes. Everything casts — that's
+  // what keeps the sun outside — and receives, so the sun patch can climb
+  // onto a wall at dawn angles.
+  const wallMaterial = new THREE.MeshStandardMaterial({
+    color: PALETTE.sunlitSnow,
+  });
   const walls: Array<[number, number, number, number]> = [
-    // [centerX, centerZ, sizeX, sizeZ]
-    [0, -(state.roomDepth + WALL_THICKNESS) / 2, state.roomWidth + 2 * WALL_THICKNESS, WALL_THICKNESS],
+    // [centerX, centerZ, sizeX, sizeZ] — south, west, east
     [0, (state.roomDepth + WALL_THICKNESS) / 2, state.roomWidth + 2 * WALL_THICKNESS, WALL_THICKNESS],
     [-(state.roomWidth + WALL_THICKNESS) / 2, 0, WALL_THICKNESS, state.roomDepth],
     [(state.roomWidth + WALL_THICKNESS) / 2, 0, WALL_THICKNESS, state.roomDepth],
@@ -200,21 +293,32 @@ export function createBedroomScene(
       wallMaterial,
     );
     wall.position.set(x, WALL_HEIGHT / 2, z);
+    wall.castShadow = true;
+    wall.receiveShadow = true;
     scene.add(wall);
   }
+  addNorthWallWithWindow(scene, state, wallMaterial);
 
-  // …and a ceiling on top, closing the box. Slightly lighter than the
-  // walls so the two read as different surfaces under the flat ambient.
+  // A ceiling slab on top, closing the box. A box rather than a plane
+  // because it must cast shadow (a downward-facing plane is backface-
+  // culled from the sun's point of view, and the sun would shine straight
+  // through the roof). Its underside only ever sees ambient, so it renders
+  // the soft blue by construction.
   const ceiling = new THREE.Mesh(
-    new THREE.PlaneGeometry(
+    new THREE.BoxGeometry(
       state.roomWidth + 2 * WALL_THICKNESS,
+      0.2,
       state.roomDepth + 2 * WALL_THICKNESS,
     ),
-    new THREE.MeshStandardMaterial({ color: 0xb0aba1 }),
+    wallMaterial,
   );
-  ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.y = WALL_HEIGHT;
+  ceiling.position.y = WALL_HEIGHT + 0.1;
+  ceiling.castShadow = true;
+  ceiling.receiveShadow = true;
   scene.add(ceiling);
+
+  addOutsideBackdrop(scene, state);
+  addLamps(scene, state);
 
   for (const obstacle of state.obstacles) {
     const height = OBSTACLE_HEIGHTS[obstacle.id] ?? 0.8;
@@ -223,6 +327,8 @@ export function createBedroomScene(
       new THREE.MeshStandardMaterial({ color: 0xaaa49a }),
     );
     mesh.position.set(obstacle.x, height / 2, obstacle.z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     scene.add(mesh);
   }
 
@@ -255,6 +361,205 @@ export function createBedroomScene(
   };
   resetBedroomView(handle, state);
   return handle;
+}
+
+/**
+ * The north wall, built from four segments around the window opening: a
+ * solid stretch either side, a spandrel below the sill and a strip above
+ * the head. Same material and footprint as the other walls, so the only
+ * place sunlight can get in is the hole — plus a birch-bark frame with a
+ * cross mullion, whose shadow is what sells the sun patch as *window*
+ * light rather than a stage spotlight.
+ */
+function addNorthWallWithWindow(
+  scene: THREE.Scene,
+  state: BedroomState,
+  wallMaterial: THREE.MeshStandardMaterial,
+): void {
+  const wallZ = -(state.roomDepth + WALL_THICKNESS) / 2;
+  const halfSpan = state.roomWidth / 2 + WALL_THICKNESS;
+  const winLeft = WINDOW_CENTER_X - WINDOW_WIDTH / 2;
+  const winRight = WINDOW_CENTER_X + WINDOW_WIDTH / 2;
+
+  const segments: Array<[number, number, number, number]> = [
+    // [centerX, centerY, sizeX, sizeY]
+    [(-halfSpan + winLeft) / 2, WALL_HEIGHT / 2, winLeft + halfSpan, WALL_HEIGHT],
+    [(winRight + halfSpan) / 2, WALL_HEIGHT / 2, halfSpan - winRight, WALL_HEIGHT],
+    [WINDOW_CENTER_X, WINDOW_SILL / 2, WINDOW_WIDTH, WINDOW_SILL],
+    [
+      WINDOW_CENTER_X,
+      (WINDOW_HEAD + WALL_HEIGHT) / 2,
+      WINDOW_WIDTH,
+      WALL_HEIGHT - WINDOW_HEAD,
+    ],
+  ];
+  for (const [x, y, sizeX, sizeY] of segments) {
+    const segment = new THREE.Mesh(
+      new THREE.BoxGeometry(sizeX, sizeY, WALL_THICKNESS),
+      wallMaterial,
+    );
+    segment.position.set(x, y, wallZ);
+    segment.castShadow = true;
+    segment.receiveShadow = true;
+    scene.add(segment);
+  }
+
+  // The frame: bars centered on the opening's edges, poking slightly past
+  // both wall faces, plus a thinner cross mullion splitting the opening
+  // into four panes. All cast, so the floor patch carries the cross.
+  const frameMaterial = new THREE.MeshStandardMaterial({
+    color: PALETTE.birchBark,
+  });
+  const midY = (WINDOW_SILL + WINDOW_HEAD) / 2;
+  const bars: Array<[number, number, number, number]> = [
+    // [centerX, centerY, sizeX, sizeY]
+    [WINDOW_CENTER_X, WINDOW_SILL, WINDOW_WIDTH + 2 * FRAME_BAR, FRAME_BAR],
+    [WINDOW_CENTER_X, WINDOW_HEAD, WINDOW_WIDTH + 2 * FRAME_BAR, FRAME_BAR],
+    [winLeft, midY, FRAME_BAR, WINDOW_HEAD - WINDOW_SILL + 2 * FRAME_BAR],
+    [winRight, midY, FRAME_BAR, WINDOW_HEAD - WINDOW_SILL + 2 * FRAME_BAR],
+    [WINDOW_CENTER_X, midY, 0.05, WINDOW_HEAD - WINDOW_SILL],
+    [WINDOW_CENTER_X, midY, WINDOW_WIDTH, 0.05],
+  ];
+  for (const [x, y, sizeX, sizeY] of bars) {
+    const bar = new THREE.Mesh(
+      new THREE.BoxGeometry(sizeX, sizeY, FRAME_DEPTH),
+      frameMaterial,
+    );
+    bar.position.set(x, y, wallZ);
+    bar.castShadow = true;
+    bar.receiveShadow = true;
+    scene.add(bar);
+  }
+}
+
+/**
+ * What you see through the window: the slope's world. An unlit
+ * vertex-colored plane hung beyond the north wall — snow up to a dawn-pink
+ * horizon melting into sky blue, the same three palette colors the ski
+ * scene's fog and dome are built from. Unlit (MeshBasicMaterial) because
+ * it *is* the light out there; it must not cast shadows, or it would sit
+ * between the sun and the window and block the very light it depicts.
+ */
+function addOutsideBackdrop(scene: THREE.Scene, state: BedroomState): void {
+  const z = -(state.roomDepth / 2 + WALL_THICKNESS + BACKDROP_DISTANCE);
+  // Rows of the gradient, bottom to top: snow, horizon pink, blended-out
+  // sky, top of sky. Sized to fill the window frustum from every camera
+  // position the room allows, with room to spare.
+  const rows: Array<[number, number]> = [
+    [-1, PALETTE.sunlitSnow],
+    [1.5, PALETTE.dawnPink],
+    [4.5, PALETTE.skyBlue],
+    [13, PALETTE.skyBlue],
+  ];
+  const halfWidth = 13;
+  const positions: number[] = [];
+  const colors: number[] = [];
+  for (const [y, hex] of rows) {
+    const color = new THREE.Color(hex);
+    positions.push(WINDOW_CENTER_X - halfWidth, y, z);
+    positions.push(WINDOW_CENTER_X + halfWidth, y, z);
+    colors.push(color.r, color.g, color.b, color.r, color.g, color.b);
+  }
+  const indices: number[] = [];
+  for (let row = 0; row < rows.length - 1; row++) {
+    const bl = row * 2;
+    const br = bl + 1;
+    const tl = bl + 2;
+    const tr = bl + 3;
+    indices.push(bl, br, tr, bl, tr, tl);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(positions, 3),
+  );
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  const backdrop = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({ vertexColors: true }),
+  );
+  scene.add(backdrop);
+}
+
+/**
+ * The warm lamps (the vision's detail-touches want glowing lamps): a
+ * pendant over the room's center plus small lamps on the dresser and desk.
+ * Each is a sun-glow bulb (unlit, so it visibly glows) under a birch-bark
+ * shade, with a warm point light pooling on top of the cool ambient —
+ * cozy warmth against the blue, rather than the thing keeping the room
+ * visible. No lamp shadows: point-light shadow maps cost six faces each,
+ * and a soft shadowless fill is exactly what lamp light should feel like.
+ */
+function addLamps(scene: THREE.Scene, state: BedroomState): void {
+  const shadeMaterial = new THREE.MeshStandardMaterial({
+    color: PALETTE.birchBark,
+    side: THREE.DoubleSide, // the cones are open — their insides show
+  });
+  const metalMaterial = new THREE.MeshStandardMaterial({ color: 0x66738c });
+  const bulbMaterial = new THREE.MeshBasicMaterial({ color: PALETTE.sunGlow });
+  // Warmer than the bulbs' sun-glow surface: lamp light drops more blue
+  // than a low sun does, which is what makes the pools read as *lamp*
+  // against the sun patch.
+  const lampLight = new THREE.Color(1.0, 0.84, 0.6);
+
+  const addTableLamp = (x: number, topY: number, z: number): void => {
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.055, 0.065, 0.03, 10),
+      metalMaterial,
+    );
+    base.position.set(x, topY + 0.015, z);
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.015, 0.015, 0.16, 8),
+      metalMaterial,
+    );
+    stem.position.set(x, topY + 0.11, z);
+    const shade = new THREE.Mesh(
+      new THREE.ConeGeometry(0.1, 0.12, 10, 1, true),
+      shadeMaterial,
+    );
+    shade.position.set(x, topY + 0.25, z);
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.035, 12, 8),
+      bulbMaterial,
+    );
+    bulb.position.set(x, topY + 0.2, z);
+    const light = new THREE.PointLight(lampLight, 2);
+    light.position.set(x, topY + 0.18, z);
+    scene.add(base, stem, shade, bulb, light);
+  };
+
+  // Pendant: hung so its lowest point sits just above the camera's
+  // ceiling clamp (WALL_HEIGHT − CAMERA_MARGIN = 2.55) — the camera can
+  // slide along the ceiling right through the room's center, and a shade
+  // clipping the near plane there would flash the frame.
+  const cord = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.012, 0.012, 0.1, 6),
+    metalMaterial,
+  );
+  cord.position.set(0, WALL_HEIGHT - 0.05, 0);
+  const shade = new THREE.Mesh(
+    new THREE.ConeGeometry(0.16, 0.14, 10, 1, true),
+    shadeMaterial,
+  );
+  shade.position.set(0, 2.63, 0);
+  const bulb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.045, 12, 8),
+    bulbMaterial,
+  );
+  bulb.position.set(0, 2.6, 0);
+  const pendantLight = new THREE.PointLight(lampLight, 7);
+  pendantLight.position.set(0, 2.5, 0);
+  scene.add(cord, shade, bulb, pendantLight);
+
+  // On the furniture: the dresser lamp sits in the opening view next to
+  // the window; the desk lamp warms the room's south-east end, the far
+  // corner from the sun. Positions keyed to the gray-box tops — when real
+  // furniture lands, these move with it.
+  const dresser = state.obstacles.find((o) => o.id === "dresser");
+  const desk = state.obstacles.find((o) => o.id === "desk");
+  if (dresser) addTableLamp(dresser.x, OBSTACLE_HEIGHTS["dresser"]!, dresser.z);
+  if (desk) addTableLamp(desk.x + 0.3, OBSTACLE_HEIGHTS["desk"]!, desk.z + 0.7);
 }
 
 /**

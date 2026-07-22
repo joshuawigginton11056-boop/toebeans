@@ -49,10 +49,12 @@ with auto-follow + drag/key orbit + wall/ceiling clamping, walk remap
 retargeted, deterministic reset on coming home. Still live from this
 sketch:
 
-- **Interior lighting design** — now *unblocked* and more urgent: the
-  ceiling makes the already-dark room darker (ceiling and far wall render
-  near-black under the old gray-box lights). A window and/or warm lamps,
-  its own session.
+- ~~**Interior lighting design**~~ — **BUILT 2026-07-22 (bedroom
+  session):** window in the north wall with the slope's dawn sun shining
+  through (shadow-mapped, so light only enters at the opening), backdrop
+  of the slope world outside, palette-derived ambient (unlit surfaces
+  render exactly snow-shadow blue, the slope's own constraint trick), and
+  three warm lamps (pendant + dresser + desk). See ROADMAP.md.
 - **The cat rides behind you** — now permanently off-screen while
   walking. Playtest question first; if confirmed, a small `/shared`
   change (flank or lead instead of trail).
@@ -364,17 +366,15 @@ already-planned ski-pose session; two are independent.
   instrumental question for the slope. **Music is deliberately last in
   M2** (director call, same day): build save/load and the rest first,
   music comes at the end.
-- **The bedroom's lighting predates the physical-lights fix** (noticed
-  2026-07-21, cat-model session): the ski scene's lighting pass multiplies
-  light intensity by `Math.PI` (Three.js folds 1/π into materials), which
-  is why snow there renders at the exact palette hex. The bedroom never got
-  that treatment, so *everything* in it renders roughly 45% too dark — the
-  floor, the walls, and now the cat, which measures `#93734E` in the
-  bedroom versus its correct amber on the slope. Not a bug in any asset;
-  it's the gray-box lighting the room has always had. Fixing it properly is
-  the M3 "bedroom to the same polish level" item, and it's more than a
-  constant — the room wants its own lighting design. Flagged so the cat
-  isn't blamed for looking muddy at home.
+- ~~**The bedroom's lighting predates the physical-lights fix**~~ —
+  **RESOLVED 2026-07-22 (bedroom session, interior lighting):** the room
+  now uses the same ×π physical-lights convention and palette-derived
+  light colors as the slope; wall/floor/patch colors pixel-verified
+  against the derivation. The cat should no longer look muddy at home —
+  worth an eyeball at playtest. (Original note, for the record: the ski
+  scene multiplies light intensity by `Math.PI` — Three.js folds 1/π into
+  materials — and the bedroom never got that treatment, so everything in
+  it rendered roughly 45% too dark, including the cat at `#93734E`.)
 - **Wildlife on the slopes: foxes, deer, wolves** (director direction,
   2026-07-21, cat-model session): the
   [Ultimate Animated Animals Pack](https://quaternius.com/packs/ultimateanimatedanimals.html)
