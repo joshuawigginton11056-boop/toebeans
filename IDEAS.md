@@ -3,6 +3,42 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (bedroom) Front door → slope select → that slope outside the window (director direction, 2026-07-22)
+
+From the interior-lighting playtest: **eventually, the bedroom gets a
+front door.** Exiting through it takes you to *choosing which slope to
+race* (instead of today's Enter-anywhere teleport), and when you come
+home, the slope you picked is the one visible outside the window. Ties
+the home↔slope loop together spatially: the window stops being generic
+scenery and becomes *your* mountain. Not a now-item — the director said
+"eventually" — but worth sketching because pieces of it should be built
+door-shaped when their sessions come up anyway:
+
+- **A door** in a wall (geometry + an opening in the wall segments, like
+  the window) and a walk-up-to-it exit trigger — replaces/augments the
+  Enter scene switch in `main.ts` (shared territory).
+- **Slope select** — needs more than one slope to select (M3's "all 3
+  v1.0 slopes" item); until then the door could lead straight to the one
+  slope. The selection UI is its own piece (hud.ts or a real screen).
+- **The chosen slope drives the window backdrop** — the backdrop in
+  `bedroomRender.ts` is currently one generic dawn scene; it would take
+  a per-slope variant (different silhouette/props outside). Cheap if the
+  backdrop builder takes a slope id.
+- **`/shared` + save:** a selected-slope id in state, persisted (save
+  shape change → SAVE_VERSION bump when it lands).
+- Both sessions touch this seam (scene switching is shared territory) —
+  coordinate via ROADMAP entries when it starts.
+
+## (bedroom) Lamp shapes need a restyle (director, 2026-07-22)
+
+Interior-lighting playtest: the code-built primitive lamps (cone shade,
+cylinder stem) read wrong. Director call: fine to fix when the room gets
+real assets — folded into the **furniture-assets session**, where the
+lamps should be re-sourced/rebuilt to match whatever furniture style
+lands (and they move onto the real furniture tops; positions are keyed
+to the gray-box tops in `addLamps`). The *light* itself passed playtest
+— only the fixture shapes change.
+
 ## (slope) Air spin round 2 — held steer accidentally does a 360 (director, 2026-07-22)
 
 Playtest verdict on turning round 2: **the air spin rate is way faster
