@@ -3,7 +3,22 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (slope) Turning round 3 — no falls, backwards skiing, one turn rate (director redirect, 2026-07-22)
+## (slope) ~~Turning round 3~~ — BUILT 2026-07-22 (no falls, backwards skiing, one turn rate)
+
+**(BUILT 2026-07-22 — see ROADMAP. The design questions below were settled
+in the build session: signed speed along the ski axis with the lean target
+projected by cos(heading) — continuous through sideways, so carving past
+90° pivots you into switch with no mirror seam, and holding sideways
+bleeds to a genuine stop (a hockey stop; steer authority floors at 40% at
+a standstill so a stop can't softlock). Steering while switch needed no
+special-casing — the signed math self-mirrors, screen-left stays
+screen-left in both stances. Flight is ballistic: travel direction frozen
+at takeoff, spinning turns the body not the path, and landing compares
+tips vs travel to pick the stance. Renderer: body yaws to the full
+heading, bank runs off a stance-relative carve angle, and the head/torso
+twist over the lead shoulder while riding switch. No SAVE_VERSION bump.
+One consequence to ratify at playtest: at the uniform rate a full 360 no
+longer fits inside a single jump's airtime.)**
 
 Director verdict on air-spin round 2: **the double-press to flip doesn't
 feel right — rejected.** New direction, superseding both the held/fresh

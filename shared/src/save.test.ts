@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  BOOST_SPEED,
   CHARACTERS,
-  FALL_HEADING,
   SKIN_TONES,
   createDefaultAppearance,
   createInitialBedroomState,
@@ -200,13 +200,28 @@ describe("save/load", () => {
     expect(restored.ski.height).toBe(0);
   });
 
-  it("clamps a fallen-over heading back into the standing range", () => {
+  it("keeps a past-sideways heading — with no fall, every angle is legal", () => {
     const { save } = midGameSave();
-    // A heading past FALL_HEADING would fall over on the first frame after
-    // loading — heal it to the edge of standing instead, like positions.
-    const tipped = { ...save, ski: { ...save.ski, heading: 9 } };
-    const restored = restoreSave(decodeSave(JSON.stringify(tipped))!);
-    expect(restored.ski.heading).toBe(FALL_HEADING);
+    // heading 9 carries a whole turn; collapsed it's ~2.72 — past sideways,
+    // which is riding-switch territory now (turning round 3), not a crash
+    // waiting to happen on frame 1. No clamp, just the collapse.
+    const turned = { ...save, ski: { ...save.ski, heading: 9 } };
+    const restored = restoreSave(decodeSave(JSON.stringify(turned))!);
+    expect(restored.ski.heading).toBeCloseTo(9 - 2 * Math.PI, 10);
+  });
+
+  it("restores a switch save: the speed's sign survives, its magnitude clamps", () => {
+    const { save } = midGameSave();
+    // Negative speed = riding switch — a legal stance, so a wild magnitude
+    // clamps to the boost cap without losing the sign, and the unsaved
+    // flight direction re-derives as tails-leading (heading + π).
+    const riding = {
+      ...save,
+      ski: { ...save.ski, heading: Math.PI - 0.1, speed: -99 },
+    };
+    const restored = restoreSave(decodeSave(JSON.stringify(riding))!);
+    expect(restored.ski.speed).toBe(-BOOST_SPEED);
+    expect(restored.ski.flightHeading).toBeCloseTo(-0.1, 10);
   });
 
   it("collapses a mid-spin heading to its downhill-equivalent", () => {

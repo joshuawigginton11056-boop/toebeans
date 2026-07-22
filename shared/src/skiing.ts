@@ -24,23 +24,25 @@ export interface SkiState {
   // Which way the skis point, in radians. 0 = straight downhill, positive =
   // turned right, negative = turned left. Steering turns this and it STAYS
   // turned when the key is released (like real skiing — you steer back
-  // yourself); movement follows it. Turn past FALL_HEADING on the snow and
-  // you fall over. Mid-air it can accumulate whole spins; landing collapses
-  // it to the nearest downhill-equivalent (see downhillHeading).
+  // yourself). There is no "turned too far" (turning round 3, director
+  // redirect): carve past sideways and the downhill pull goes negative —
+  // you pivot into riding switch, tails-first down the hill, instead of
+  // falling over. On the snow the heading lives in (-π, π]; mid-air it can
+  // accumulate whole spins, and landing collapses it (see downhillHeading).
   readonly heading: number;
-  // Which steer keys have been held continuously since the skis left the
-  // snow. A key already down at takeoff was carving a line, not calling a
-  // trick — mid-air it keeps steering at the carving rate; only a key
-  // pressed FRESH in the air spins at AIR_TURN_RATE (air-spin round 2,
-  // director call 2026-07-22 — fixes jump-while-turning whipping into an
-  // accidental 360). While grounded these simply track the keys, so the
-  // takeoff frame captures exactly what was held as the snow fell away;
-  // airborne they can only decay — releasing a key makes its next press
-  // fresh.
-  readonly leftHeldSinceTakeoff: boolean;
-  readonly rightHeldSinceTakeoff: boolean;
+  // The direction of travel while airborne, frozen on the takeoff frame —
+  // flight is ballistic (nothing to carve against), so spinning mid-air
+  // turns the body, not the path. While grounded it just tracks the current
+  // travel direction, which is what makes the takeoff freeze automatic.
+  // Transient air state, deliberately not saved: a restore re-derives it
+  // from heading + stance the way the next grounded frame would.
+  readonly flightHeading: number;
   readonly height: number;
   readonly verticalVelocity: number;
+  // Signed speed along the ski axis: positive = traveling toward the ski
+  // tips, negative = tails-first, riding switch (turning round 3 — landing
+  // backwards is a stance, not a crash). Magnitude is how fast; sign is
+  // which end of the skis leads.
   readonly speed: number;
   readonly status: RunStatus;
   readonly lives: number;
@@ -51,11 +53,11 @@ export interface SkiState {
 }
 
 // Exported for the client: audio scales wind/carve loudness off these
-// (speed / BOOST_SPEED, and "is this a boost" = speed > MAX_SPEED), the
-// ski pose maps speed across [MIN_SPEED, BOOST_SPEED] onto the crouch depth,
-// and the pole push-off cycle fades out as speed approaches BASE_SPEED —
-// speed encodes where the run is at, so the body can read it back from
-// state alone.
+// (|speed| / BOOST_SPEED, and "is this a boost" = |speed| > MAX_SPEED), the
+// ski pose maps |speed| across [MIN_SPEED, BOOST_SPEED] onto the crouch
+// depth, and the pole push-off cycle fades out as speed approaches
+// BASE_SPEED — speed encodes where the run is at, so the body can read it
+// back from state alone.
 export const BASE_SPEED = 8;
 export const MIN_SPEED = 4;
 export const MAX_SPEED = 12;
@@ -63,8 +65,8 @@ const LEAN_SHIFT = 6;
 export const BOOST_SPEED = 16;
 // Momentum (M2): speed is inertial. The lean/boost inputs set a *target*
 // and the actual speed eases toward it — runs start from a standstill with
-// a pole push-off instead of teleporting to cruise speed. Getting up to
-// speed is slower than losing it (braking bites, gravity builds), and a
+// a pole push-off instead of teleporting to cruise speed. Growing the speed
+// magnitude is slower than losing it (braking bites, gravity builds), and a
 // released boost coasts down through drag rather than snapping back.
 const SKI_ACCEL = 4;
 const BOOST_ACCEL = 8;
@@ -72,23 +74,16 @@ const COAST_DRAG = 4;
 const BRAKE_DECEL = 10;
 // Steering is a real turn (M2 heading session): holding left/right keeps
 // rotating the skis, up to fully sideways and beyond — there's no built-in
-// stop. TURN_RATE is how fast the skis rotate at full authority; past
-// FALL_HEADING (a bit beyond perpendicular-to-the-hill) the skier has turned
-// too far to hold the edge and falls over — a normal crash: one life, the
-// tip-over pause, respawn at the checkpoint. FALL_HEADING is exported for
-// save.ts (restored headings clamp into the standing-up range).
-// Turning round 2: TURN_RATE 1.2 → 1.8 (director call — too slow) with
-// FALL_HEADING retuned alongside it (2.0 → 2.2) so the margin-of-error
-// window past sideways stays ~0.35s, same as before the speedup.
+// stop, and no fall either (turning round 3): past sideways you pivot into
+// riding switch. TURN_RATE is how fast the skis rotate at full authority —
+// ONE rate everywhere, grounded or airborne (director call, 2026-07-22:
+// the 9 rad/s air-trick rate and the held/fresh key split are gone).
 const TURN_RATE = 1.8;
-export const FALL_HEADING = 2.2;
-// In the air there's no ski bite to resist a rotation, so spinning is much
-// faster than carving — fast enough to fit a full 360 inside a jump's
-// airtime (~0.78s at JUMP_VELOCITY/GRAVITY below), which makes jumps a
-// place for style, not just a way over chasms. Only a key pressed fresh
-// mid-air gets this rate — a key held since takeoff stays at TURN_RATE
-// (see leftHeldSinceTakeoff on SkiState).
-const AIR_TURN_RATE = 9;
+// Steering authority builds with speed (carving comes from the skis
+// biting), but never drops to zero: a stopped skier can still pivot their
+// skis in place. Without the floor, braking-by-turning down to a full
+// sideways stop would leave you unable to steer back — a softlock.
+const STANDSTILL_AUTHORITY = 0.4;
 // Exported for save.ts: restoring a save clamps lateral position into range.
 export const LATERAL_LIMIT = 4;
 const JUMP_VELOCITY = 7;
@@ -99,9 +94,9 @@ export const RESPAWN_DELAY = 1.5;
 
 // The heading a spin lands on: the nearest downhill-equivalent angle, in
 // (-π, π]. A completed 360 collapses back to ~0 and lands clean; a half
-// spin collapses to ~±π — well past FALL_HEADING — and lands crashed.
-// Exported for save.ts (healing a mid-spin heading) and the renderer
-// (telling a fall-over from a chasm crash during the tip-over).
+// spin collapses to ~±π — landed tails-first, riding switch. Exported for
+// save.ts (healing a mid-spin heading) and the renderer (stance-relative
+// carve angles).
 export function downhillHeading(heading: number): number {
   return heading - 2 * Math.PI * Math.round(heading / (2 * Math.PI));
 }
@@ -111,8 +106,7 @@ export function createInitialSkiState(): SkiState {
     distance: 0,
     lateral: 0,
     heading: 0,
-    leftHeldSinceTakeoff: false,
-    rightHeldSinceTakeoff: false,
+    flightHeading: 0,
     height: 0,
     verticalVelocity: 0,
     // Runs start from a standstill — the push-off to cruise speed is part
@@ -151,11 +145,10 @@ function respawnAtCheckpoint(state: SkiState): SkiState {
     ...state,
     distance: state.lastCheckpoint,
     lateral: 0,
-    // Respawn pointing straight downhill — whatever turn you fell over in
-    // (or crashed carrying) doesn't follow you back to the checkpoint.
+    // Respawn pointing straight downhill — whatever turn you crashed
+    // carrying doesn't follow you back to the checkpoint.
     heading: 0,
-    leftHeldSinceTakeoff: false,
-    rightHeldSinceTakeoff: false,
+    flightHeading: 0,
     height: 0,
     verticalVelocity: 0,
     // A crash scrubs all your speed — you push off again from the
@@ -183,8 +176,10 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
 
   const grounded = state.height <= 0;
 
-  // The inputs pick a target; momentum decides how fast you get there.
-  const targetSpeed = input.boost
+  // The inputs pick a target *magnitude*; the heading decides how much of
+  // it the hill actually gives you (below); momentum decides how fast you
+  // get there.
+  const targetMagnitude = input.boost
     ? BOOST_SPEED
     : Math.max(
         MIN_SPEED,
@@ -193,76 +188,81 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
           BASE_SPEED + (input.up ? LEAN_SHIFT : 0) - (input.down ? LEAN_SHIFT : 0),
         ),
       );
+
+  // Steering rotates the skis and the heading stays where you put it —
+  // steering back is on you. One turn rate everywhere (turning round 3);
+  // authority builds with speed but floors at the standstill pivot.
+  const steerAuthority = Math.max(
+    STANDSTILL_AUTHORITY,
+    Math.min(1, Math.abs(state.speed) / MIN_SPEED),
+  );
+  let heading = state.heading;
+  if (grounded) {
+    // On the snow the heading lives in (-π, π] — whole turns only ever
+    // accumulate mid-air.
+    heading = downhillHeading(heading);
+  }
+  if (input.left) heading -= TURN_RATE * steerAuthority * dt;
+  if (input.right) heading += TURN_RATE * steerAuthority * dt;
+
+  // Speed is signed along the ski axis; the target is the input magnitude
+  // projected onto the downhill direction. Pointed downhill that's the full
+  // target; sideways it's ~0 — turning IS braking, all the way down to a
+  // hockey stop; pointed uphill it's negative — gravity pulls you
+  // tails-first into riding switch. The cosine makes the whole range
+  // continuous: no mirror seam at sideways, speed just eases through zero.
   // Speed only changes on the snow — airborne there's nothing to push
   // against or brake with, so you land carrying your takeoff speed.
   let speed = state.speed;
+  let flightHeading = state.flightHeading;
   if (grounded) {
-    speed =
-      speed < targetSpeed
-        ? Math.min(
-            targetSpeed,
-            speed + (input.boost ? BOOST_ACCEL : SKI_ACCEL) * dt,
-          )
-        : Math.max(
-            targetSpeed,
-            speed - (input.down ? BRAKE_DECEL : COAST_DRAG) * dt,
-          );
+    const target = targetMagnitude * Math.cos(heading);
+    const stepUp = target > speed;
+    // Pick the easing rate by what this step does to the speed *magnitude*:
+    // growing = something pulling you along (gravity down the axis, or the
+    // boost); shrinking = drag or the brake scrubbing it off.
+    const gainingMagnitude = (stepUp ? speed : -speed) >= 0;
+    const rate = gainingMagnitude
+      ? input.boost
+        ? BOOST_ACCEL
+        : SKI_ACCEL
+      : input.down
+        ? BRAKE_DECEL
+        : COAST_DRAG;
+    speed = stepUp
+      ? Math.min(target, speed + rate * dt)
+      : Math.max(target, speed - rate * dt);
+    // Track the travel direction while grounded, so the takeoff frame
+    // freezes exactly the direction you left the snow moving in.
+    flightHeading = downhillHeading(heading + (speed < 0 ? Math.PI : 0));
   }
-  // Steering rotates the skis and the heading stays where you put it —
-  // steering back is on you. On the snow, authority builds with speed
-  // (carving comes from the skis biting, so a standstill can't spin on the
-  // spot; full authority from MIN_SPEED up). In the air the skis have
-  // nothing to bite — so spinning is *faster*, at full authority whatever
-  // your speed (turning round 2, director call: jumps allow spinning and
-  // re-aiming; the old airborne freeze read as a limitation, not physics).
-  const steerAuthority = Math.min(1, speed / MIN_SPEED);
-  let heading = state.heading;
-  if (grounded) {
-    // A landed spin collapses to the direction the skis actually point —
-    // heading only accumulates whole turns while airborne.
-    heading = downhillHeading(heading);
-    if (input.left) heading -= TURN_RATE * steerAuthority * dt;
-    if (input.right) heading += TURN_RATE * steerAuthority * dt;
-  } else {
-    // A key held since takeoff keeps carving-rate line adjustment (speed is
-    // frozen airborne, so its authority is whatever takeoff had); a fresh
-    // press is the trick spin, full authority even from a standstill hop.
-    if (input.left) {
-      heading -= state.leftHeldSinceTakeoff
-        ? TURN_RATE * steerAuthority * dt
-        : AIR_TURN_RATE * dt;
-    }
-    if (input.right) {
-      heading += state.rightHeldSinceTakeoff
-        ? TURN_RATE * steerAuthority * dt
-        : AIR_TURN_RATE * dt;
-    }
-  }
-  // Grounded: track the keys, so the takeoff frame captures what was held.
-  // Airborne: only decay — a key released mid-air presses fresh next time.
-  const leftHeldSinceTakeoff = grounded
-    ? input.left
-    : state.leftHeldSinceTakeoff && input.left;
-  const rightHeldSinceTakeoff = grounded
-    ? input.right
-    : state.rightHeldSinceTakeoff && input.right;
 
-  // Movement follows the heading: turned sideways, all your speed is going
-  // across the hill and none of it down. The lane edges still clamp.
-  const distance = state.distance + speed * Math.cos(heading) * dt;
-  let lateral = state.lateral + speed * Math.sin(heading) * dt;
+  // Movement: on the snow it follows the skis (the signed speed makes
+  // switch come out right); in the air it's ballistic along the frozen
+  // takeoff direction — spinning turns the body, not the path.
+  const travelHeading = grounded ? heading : flightHeading;
+  const travelSpeed = grounded ? speed : Math.abs(speed);
+  const distance = state.distance + travelSpeed * Math.cos(travelHeading) * dt;
+  let lateral = state.lateral + travelSpeed * Math.sin(travelHeading) * dt;
   lateral = Math.max(-LATERAL_LIMIT, Math.min(LATERAL_LIMIT, lateral));
-
-  // Turned too far past sideways to hold the edge — the skier falls over.
-  // Same crash flow as a chasm: costs a life, tips over, back to the
-  // checkpoint. Only checked on the snow: mid-air any rotation is legal,
-  // and an over-rotated landing crashes on the first grounded frame —
-  // a botched landing IS a fall (director default, ratify at playtest).
-  const fellOver = grounded && Math.abs(heading) > FALL_HEADING;
 
   const verticalVelocity =
     grounded && input.jump ? JUMP_VELOCITY : state.verticalVelocity + GRAVITY * dt;
   const height = Math.max(0, state.height + verticalVelocity * dt);
+
+  // The landing frame: the accumulated spin collapses to where the skis
+  // actually point, and the flight direction picks the stance — tips
+  // roughly along the travel is a regular landing; tips against it means
+  // you touched down tails-first, riding switch. Any landing angle is
+  // legal (turning round 3 — this retired the over-rotation crash).
+  if (!grounded && height <= 0) {
+    heading = downhillHeading(heading);
+    const magnitude = Math.abs(speed);
+    speed =
+      magnitude > 0 && Math.cos(heading - flightHeading) < 0
+        ? -magnitude
+        : magnitude;
+  }
 
   let lastCheckpoint = state.lastCheckpoint;
   for (const checkpoint of state.checkpoints) {
@@ -271,14 +271,14 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     }
   }
 
-  const crashed = fellOver || fellIntoAChasm(state.chasms, distance, height);
+  // Chasms are the game's only crash now (turning round 3).
+  const crashed = fellIntoAChasm(state.chasms, distance, height);
 
   return {
     distance,
     lateral,
     heading,
-    leftHeldSinceTakeoff,
-    rightHeldSinceTakeoff,
+    flightHeading,
     height,
     verticalVelocity: height <= 0 ? 0 : verticalVelocity,
     speed,

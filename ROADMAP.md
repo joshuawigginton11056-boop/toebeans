@@ -2122,6 +2122,104 @@ IDEAS.md: the front-door direction (slope select), or dressing the room
 further with houseplants/carpet/curtains from the same interior pack.
 Director's call.
 
+## (slope) 2026-07-22 — M2: turning round 3 — the fall is gone, backwards is a stance
+
+The director's redirect from air-spin round 2, built whole: one turn rate
+everywhere, no fall-over crash, and landing backwards means *riding
+switch* — a stance, not a mistake. Chasms are now the game's only crash.
+
+- **Speed is signed now** (`shared/src/skiing.ts`): positive = traveling
+  toward the ski tips, negative = tails-first, riding switch. The
+  lean/boost target gets projected onto the downhill direction by
+  `cos(heading)`: pointed downhill it's the full target, sideways it's
+  ~zero, pointed uphill it's *negative* — gravity pulls you tails-first
+  down the hill. The cosine makes the whole range continuous: there's no
+  mirror seam at 90°, speed just eases through zero as you carve past
+  sideways and out the other side into switch. Two things fall out free:
+  **braking-by-turning became a full hockey stop** (holding sideways
+  bleeds you to an actual standstill, where the old sim rode across the
+  hill at speed 8 forever), and **carving past sideways pivots you into
+  switch** instead of falling over. `FALL_HEADING`, the 9 rad/s
+  `AIR_TURN_RATE`, and the rejected held/fresh booleans are all gone.
+- **One turn rate (1.8 rad/s) everywhere**, per the director call — with
+  a new floor: steer authority never drops below 40%, so a stopped skier
+  can still pivot their skis in place. Without it, a hockey stop would
+  softlock (no speed → no steering → no way to point downhill again).
+- **Flight is ballistic.** A new `flightHeading` freezes the travel
+  direction on the takeoff frame — spinning mid-air turns the *body*, not
+  the path (the old sim curled your flight path as you spun, which gets
+  properly weird once backwards landings are legal). Landing compares the
+  ski tips against the flight direction: roughly aligned lands regular,
+  opposed lands switch, and *any* angle is legal — this retires the two
+  never-ratified turning-round-2 defaults along with the fall itself.
+- **Steering while switch needed no code at all.** The signed-speed math
+  self-mirrors: both the speed sign and the geometry flip together, so
+  the left key drifts you screen-left in either stance — verified
+  numerically, not assumed.
+- **Save shape unchanged — no SAVE_VERSION bump.** Old v4 saves are
+  trivially valid under the new physics. The heading heal simplifies to
+  the whole-turn collapse (no more standing-range clamp), the speed clamp
+  widens to ±BOOST_SPEED keeping the sign, and `flightHeading` is
+  transient air state that deliberately isn't saved (a restore re-derives
+  it from heading + stance).
+- **The renderer knows about stance** (`skiRender.ts`/`skierModel.ts`):
+  the body yaws to the full heading — riding switch genuinely faces back
+  up the hill — while the bank/angulation/ski-edge roll run off a new
+  *stance-relative* carve angle, so a clean switch run skis straight
+  instead of holding a maxed-out "180° turn" bank forever (it also scales
+  to zero toward a standstill: a stopped pivot stands upright). Riding
+  switch, the head and torso twist to watch the hill over the lead
+  shoulder. The directional tip-over lost its fall triggers — a crash is
+  always the forward chasm drop now — and the crouch, pole push-off, and
+  audio loudness all read the speed *magnitude*, so a fast switch run
+  tucks and sounds like the speed it is.
+- Tests 74 → 77, with the old assertions flipped: same air/ground rate,
+  standstill pivot works (was: no authority at standstill), a half-spin
+  lands switch and keeps descending (was: crashes on the first grounded
+  frame), carving past sideways never crashes (was: costs a life), plus
+  new hockey-stop, pivot-back-out, ballistic-flight, frozen-takeoff, and
+  screen-consistent-switch-steering tests. `npm run check` (77) and
+  `npm run build` pass.
+- Verified against the real served modules in the live page (this
+  session's port 5302 was again held by an older chat's server for the
+  same folder, so verification ran through it — same live source;
+  screenshots still frozen, thirteenth session running): ground and air
+  turn rates measure exactly 1.8; holding a turn from cruise pivots into
+  switch at 2.32s with zero crashes and all 9 lives; sideways bleeds to
+  4.9e-16 speed and pivots back out to 7.87 in 1.2s; a half-spin landing
+  reads status skiing / speed −8 / 9 lives and keeps descending
+  (+0.392/frame); flightHeading freezes at exactly the takeoff heading
+  and holds while the heading keeps turning; the save heal maps heading 9
+  → 2.7168 (collapse only) and speed −99 → −16 (sign kept, flight
+  re-derived); the rig settles at yaw −π with bank 0 on a clean switch
+  run, neck twist 0.5501 (the 0.55 spec), carve bank ±0.248 mirrored, no
+  NaNs; and in the live page Enter persists `mode: slope` immediately
+  with zero console errors. What switch riding *looks and feels* like is
+  the eyeballs item below.
+
+**One consequence to ratify:** at the uniform rate, a full 360 no longer
+fits inside a single jump (~1.4 rad of turn per jump's airtime). That's
+implicit in "one turn rate everywhere," but it does mean spins stopped
+being a *trick* and became a way to land switch — say if that loss
+matters, because getting 360s back would need longer airtime (bigger
+jumps) rather than a faster rate.
+
+**What to playtest:** `npm run dev`, Enter to ski. Hold a turn through
+sideways: you should slow to a genuine stop — keep holding and you pivot
+past it, gravity takes the tails, and you're riding switch, watching the
+hill over your shoulder. Steer while switch: left should still feel like
+left. Jump mid-carve: no surprise 360 (same rate everywhere now). Then a
+deliberate half-spin off a jump: land backwards, ride it out, pivot back.
+The feel questions: does the pivot-through-sideways feel continuous or
+mushy? Is the 40% standstill pivot too slow? Does the over-shoulder look
+sell the stance? Is the hockey stop satisfying? And the 360 question
+above.
+
+**Next:** the remaining round-2 list (jump anticipation, gear style +
+longer skis, always-on feet, angulation round 3 + the boot-containment
+fix, hair-roots + cat-tail), then music (still deliberately last), then
+the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
