@@ -3,6 +3,35 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope) Air spin round 2 — held steer accidentally does a 360 (director, 2026-07-22)
+
+Playtest verdict on turning round 2: **the air spin rate is way faster
+than the ground rate, so jumping while already steering left whips you
+into an accidental 360.** The 9 rad/s air rate was sized so a full spin
+*fits* inside a jump's ~0.78s — but it applies to the same held key that
+was gently carving a moment before takeoff, so a routine jump-while-
+turning becomes an unwanted trick (and usually a crash: the spin rarely
+completes back to a clean equivalent). Options for the fix, director
+picks:
+
+1. **A held key doesn't spin — a fresh press does.** Keys already down at
+   takeoff keep steering at the ground rate (intentional line adjustment);
+   pressing a steer key *after* leaving the snow spins at the fast rate.
+   Classic trick-game solution; needs the sim's input to distinguish
+   "held since takeoff" (one boolean carried in state, set on the jump
+   frame). Probably the recommended shape.
+2. **Ramp the air rate in** — air steering starts at the ground rate and
+   accelerates the longer the key is held airborne, so a carried-over hold
+   drifts a little but a deliberate full-jump hold still spins. No input
+   changes, but the 360 gets harder to time.
+3. **Dedicated trick input** — steer keys always re-aim at ~ground rate in
+   the air; a separate key (or double-tap) does the spin. Most explicit,
+   costs a control and a keycap hint.
+
+Whichever wins, the two un-ratified defaults from the build session below
+(spins-are-legal via downhill-equivalence, crash-on-first-grounded-frame)
+still stand until the director calls them.
+
 ## (slope) ~~Turning round 2~~ — BUILT 2026-07-22, two design defaults to ratify
 
 **(BUILT 2026-07-22, turning-round-2 session.)** All three landed: air

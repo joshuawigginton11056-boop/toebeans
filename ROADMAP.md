@@ -1857,9 +1857,20 @@ or still too slow? And the two defaults to ratify: should full 360s stay a
 legal trick, and should an over-rotated landing crash instantly (or get a
 brief grace window to steer back)?
 
-**Next:** remaining round-2 list by director's pick — jump anticipation,
-gear style + longer skis, always-on feet, angulation round 3 + the
-boot-containment fix, or the hair-roots + cat-tail fixes. Then music
+**Playtest verdict (director, 2026-07-22): one problem** — the air spin
+rate is way faster than the ground rate, so jumping while already holding
+a steer key whips you into an accidental 360. The rate was sized so a
+full spin fits inside a jump, but it applies to the same held key that
+was gently carving at takeoff — a routine jump-while-turning becomes an
+unwanted trick. Parked in [IDEAS.md](IDEAS.md)'s top block with three fix
+options (held-key-doesn't-spin / ramp the air rate in / dedicated trick
+input). The two un-ratified design defaults (spins legal via downhill-
+equivalence, crash-on-first-grounded-frame) stand until called.
+
+**Next:** air spin round 2 (the held-steer fix above, director's pick of
+option) unless the director redirects — then the remaining round-2 list
+(jump anticipation, gear style + longer skis, always-on feet, angulation
+round 3 + the boot-containment fix, hair-roots + cat-tail), then music
 (still deliberately last), then the end-of-M2 tuning pass.
 
 ## Milestones
