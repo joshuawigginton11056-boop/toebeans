@@ -181,6 +181,121 @@ describe("stepBedroom", () => {
     expect(state.cat.mood).toBe("sitting");
   });
 
+  // ---- Collision resolver regressions (playtest bugs, 2026-07-22) ----
+
+  // The two invariants the old resolver broke: everyone stays inside the
+  // walls, and nobody ends a frame inside furniture. Exact face contact
+  // is legal (sliding rests on the boundary); anything deeper than the
+  // epsilon is real penetration.
+  function expectValidPositions(state: BedroomState): void {
+    const e = 1e-9;
+    for (const [p, radius] of [
+      [state.player, PLAYER_RADIUS],
+      [state.cat, 0.2],
+    ] as const) {
+      expect(Math.abs(p.x)).toBeLessThanOrEqual(state.roomWidth / 2 - radius + e);
+      expect(Math.abs(p.z)).toBeLessThanOrEqual(state.roomDepth / 2 - radius + e);
+      for (const o of state.obstacles) {
+        const inside =
+          p.x > o.x - o.width / 2 - radius + e &&
+          p.x < o.x + o.width / 2 + radius - e &&
+          p.z > o.z - o.depth / 2 - radius + e &&
+          p.z < o.z + o.depth / 2 + radius - e;
+        expect(inside).toBe(false);
+      }
+    }
+  }
+
+  it("wall-flush furniture never ejects the player through the wall", () => {
+    // The playtest trap: sliding along the north wall into the nightstand
+    // ejected the player to z = -5.295 — 0.6 inside the wall, permanently
+    // (the wall clamp and the far-side push fought forever). Approach from
+    // the east and hold up+left into it.
+    let state: BedroomState = {
+      ...createInitialBedroomState(),
+      player: { x: -1.0, z: -4.5 },
+    };
+    for (let i = 0; i < 200; i++) {
+      state = stepBedroom(state, { ...noInput, up: true, left: true }, 0.02);
+      expectValidPositions(state);
+    }
+
+    // Pinned against the nightstand's east face, still on the wall —
+    // blocked, not trapped. Nightstand x = -3.16, half width 0.335.
+    expect(state.player.x).toBeCloseTo(-3.16 + 0.335 + PLAYER_RADIUS, 5);
+    // And walking away still works — the old trap was permanent.
+    const freed = walk(state, { ...noInput, down: true }, 60);
+    expect(freed.player.z).toBeGreaterThan(state.player.z + 2);
+  });
+
+  it("corner approaches slide instead of warping", () => {
+    // The playtest glitch: a NW diagonal into the desk/chair cluster
+    // face-snapped the player 0.46 units backward through the desk. A
+    // frame's displacement is now bounded by what it actually moved (one
+    // step, plus at most one flush-neighbor push of the same size).
+    const maxFrameTravel = 2 * 3.5 * 0.02 + 1e-6;
+    let state: BedroomState = {
+      ...createInitialBedroomState(),
+      player: { x: 4.2, z: -0.6 },
+    };
+    for (let i = 0; i < 300; i++) {
+      const before = state.player;
+      state = stepBedroom(state, { ...noInput, right: true, down: true }, 0.02);
+      expect(
+        Math.hypot(state.player.x - before.x, state.player.z - before.z),
+      ).toBeLessThanOrEqual(maxFrameTravel);
+      expectValidPositions(state);
+    }
+    // Settled in the desk/chair inner pocket: against the desk's west
+    // face (x = 5.57 - 0.425 - radius), not slipped between the pieces.
+    expect(state.player.x).toBeCloseTo(5.57 - 0.425 - PLAYER_RADIUS, 5);
+  });
+
+  it("heals a position inside furniture instead of trapping there", () => {
+    // A stale save can land inside furniture (layout isn't saved). One
+    // step must eject cleanly through the nearest in-room face — not
+    // oscillate, not tunnel out through the east wall the desk is flush
+    // against.
+    let state: BedroomState = {
+      ...createInitialBedroomState(),
+      player: { x: 5.0, z: 0.0 },
+    };
+    state = stepBedroom(state, { ...noInput, left: true }, 0.02);
+
+    expectValidPositions(state);
+    expect(state.player.x).toBeCloseTo(5.57 - 0.425 - PLAYER_RADIUS, 5);
+    expect(state.player.z).toBeCloseTo(0.0, 5);
+  });
+
+  it("stays valid pressing along every wall and furniture cluster", () => {
+    // A perimeter-and-pockets sweep: hold a diagonal into each wall run
+    // and flush furniture piece, and require the invariants every frame.
+    // Each start is a legal standing spot; 300 steps ≈ 6 s of pressing.
+    const scenarios: ReadonlyArray<{
+      start: { x: number; z: number };
+      input: Partial<BedroomInput>;
+    }> = [
+      { start: { x: -1.0, z: -4.5 }, input: { up: true, right: true } }, // north wall → dresser
+      { start: { x: 4.5, z: -4.5 }, input: { up: true, right: true } }, // NE corner
+      { start: { x: 5.5, z: -3.0 }, input: { down: true, right: true } }, // east wall → desk north
+      { start: { x: 5.5, z: 4.5 }, input: { up: true, right: true } }, // east wall → desk south
+      { start: { x: -5.5, z: 3.0 }, input: { up: true, left: true } }, // west wall → bed foot
+      { start: { x: 0.0, z: 4.5 }, input: { down: true, left: true } }, // south wall
+      { start: { x: 3.0, z: 0.0 }, input: { up: true, right: true } }, // open floor → dresser/desk gap
+    ];
+
+    for (const { start, input } of scenarios) {
+      let state: BedroomState = {
+        ...createInitialBedroomState(),
+        player: start,
+      };
+      for (let i = 0; i < 300; i++) {
+        state = stepBedroom(state, { ...noInput, ...input }, 0.02);
+        expectValidPositions(state);
+      }
+    }
+  });
+
   it("never mutates the input state", () => {
     const initial = createInitialBedroomState();
     const snapshot = JSON.parse(JSON.stringify(initial));

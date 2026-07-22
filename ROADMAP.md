@@ -2259,6 +2259,61 @@ longer skis, always-on feet, angulation round 3 + the boot-containment
 fix, hair-roots + cat-tail), then music (still deliberately last), then
 the end-of-M2 tuning pass.
 
+## (bedroom) 2026-07-22 — Collision fix: minimal-penetration resolver
+
+Both playtest collision bugs are fixed in one resolver session, per the
+diagnosis parked in IDEAS.md: the nightstand wall-trap (ejected through
+the north wall to z = −5.295, permanently) and the desk-corner warp
+(a 0.46-unit face-snap teleport, plus slipping between the flush
+desk/chair pieces).
+
+- `/shared` `bedroom.ts`: the per-axis `resolveAxis` — which clamped to
+  the walls *first*, then face-snapped out of obstacles by which side you
+  came from, with no re-clamp — is replaced by one 2-D `resolvePosition`:
+  clamp to the room, then push out of any overlapped furniture by the
+  **smallest displacement whose destination is inside the room**.
+  Out-of-room faces (the far side of wall-flush furniture — the trap)
+  are simply never candidates, and the push is never bigger than the
+  frame's own movement (steps are tiny against furniture, so overlaps are
+  always shallow — no more warps). Sliding falls out for free: pushing
+  out along one axis leaves the frame's movement on the other intact.
+- Pushing out of one piece can land inside a flush neighbor (the chair
+  tucked at the desk), so the resolver re-runs until nothing overlaps
+  (settles in 2–3 passes; a capped loop is the safety net, falling back
+  to "don't move" — the previous position was always valid). Overlap
+  tests are strict, so exact face contact counts as clear: two flush
+  pieces share a boundary the player can stand on but never slip between.
+- Both the player and the cat use the new resolver (the cat had the same
+  latent bugs). The cat's routing/visibility graph is untouched.
+- No `/shared` state-shape changes, **no SAVE_VERSION bump** — and a
+  stale save that lands *inside* furniture (layout isn't saved) now heals
+  on the first step: minimal-penetration ejects cleanly through the
+  nearest in-room face instead of fighting the wall clamp.
+- Tests 77 → 81: the nightstand trap repro (pinned at the face, still on
+  the wall, walks free after), the desk-corner approach (per-frame travel
+  bounded — no warp — and settles in the desk/chair pocket without
+  slipping between), the inside-furniture heal, and an invariant-checked
+  sweep (7 diagonal pushes along every wall run and furniture cluster,
+  player and cat checked every frame for in-room + no-penetration).
+- `npm run check` (81 tests) and `npm run build` pass. Verified against
+  the real served modules in the live page on this session's own dev
+  server (5301): the trap scenario's z never leaves −4.7 (old code:
+  −5.295), pinned at exactly the nightstand face −2.525 and freed by
+  walking away; the corner scenario's max per-frame travel measures
+  exactly one step, 0.0700 (the warp was 0.46), settling at the desk's
+  west face 4.845; a start inside the desk ejects to 4.845 in one step;
+  and an 8-scenario, 2,400-frame sweep logs zero wall or furniture
+  violations for player and cat. Zero console errors.
+
+**What to playtest:** `npm run dev` — go bully the furniture. Walk into
+the nightstand from every side (the old trap), grind along the north
+wall through it, and approach the desk/chair corner diagonally from the
+north-west (the old warp). Everything should feel like quiet, solid
+sliding — no teleports, no wall burials. One feel note worth a check:
+pressing straight into a piece very near its corner now rounds you
+*around* the corner (the smallest push wins) — does that feel helpful or
+slippery?
+
 ## (slope) 2026-07-22 — M2: turning round 4 — W means "downhill"
 
 The clunky recovery from switch is fixed. Director's pick from the three
@@ -2472,8 +2527,9 @@ Includes the vertical-slice systems that weren't part of the M2 area:
       landed 2026-07-22 — no gray-box items left, but the 2026-07-22
       playtest reopened the look: rundown + textured direction pending
       (see IDEAS.md), and two collision bugs to fix first*
-- [ ] Fix the collision resolver (wall-trap + corner-warp bugs,
-      2026-07-22 playtest — diagnosis in IDEAS.md)
+- [x] Fix the collision resolver (wall-trap + corner-warp bugs,
+      2026-07-22 playtest) *(fixed 2026-07-22 — minimal-penetration
+      push-out, room-clamped)*
 - [ ] Bare rundown start: bedroom begins with a mattress at most;
       this session's furniture becomes the unlock pool (director call,
       2026-07-22)
