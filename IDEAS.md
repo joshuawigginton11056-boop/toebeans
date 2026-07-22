@@ -92,45 +92,6 @@ and whether the heading collapse toward 0 also un-twists the renderer's
 over-shoulder look smoothly (it should — the look keys off the speed
 sign, which flips through the same continuous pivot).
 
-## (bedroom) BUG: collision push-out can trap the player inside a wall (playtest, 2026-07-22)
-
-Walking into the nightstand got the director stuck in the wall.
-**Reproduced and diagnosed** (live sim, this session): slide along the
-north wall (z clamped at −4.7) into the nightstand's x range and
-`resolveAxis` ejects you to **z = −5.295** — 0.6 *inside* the wall — and
-it's a permanent trap: each frame the wall clamp pulls the target back to
-−4.7, which is still inside the nightstand's inflated box, whose far-side
-push throws you back out through the wall.
-
-**Root cause:** `resolveAxis` (shared/src/bedroom.ts) clamps to the room
-walls *first*, then the obstacle push-out picks a face by which side you
-came from — with no re-clamp, and no awareness that the far face of
-wall-flush furniture lies *outside* the room. Latent since the room
-rebuild put furniture flush against walls (the dresser could do it too);
-the nightstand just created an easy pocket to walk into.
-
-**Fix sketch:** pick the push-out side that keeps the player inside the
-room (or re-clamp after push and let the other axis slide resolve it) —
-and add a regression test that walks the full wall perimeter.
-
-## (bedroom) BUG: desk/chair corner is glitchy — face-snap warps (playtest, 2026-07-22)
-
-Walking to the desk corner is glitchy. **Reproduced** (live sim): walking
-diagonally into the desk/chair cluster from the north-west warps the
-player from z ≈ +0.25 to **z = −0.21 through the desk** — a 0.46-unit
-backward teleport — then leaves them free against the east wall.
-
-**Root cause, two parts:** (1) the resolver snaps to an obstacle's *face*
-along one axis; at a corner, the overlap that admitted you came from the
-other axis, so the snap distance can be large — a visible warp instead of
-a slide. (2) The desk and chair boxes nearly touch, and the resolver's
-`>=` boundary test treats exact contact as clear, letting the player slip
-between two flush pieces into states the face-snap then resolves
-violently. **Fix sketch:** minimal-penetration push-out (push along the
-axis of least overlap, room-clamped) instead of came-from face snapping;
-strict inequalities at shared boundaries. Same code as the wall-trap bug
-— fix them as one collision session.
-
 ## (bedroom) Earn-your-furniture: bare rundown start, XP unlocks, unlock-tree UI (director, 2026-07-22)
 
 Director redirect at the furniture playtest — three connected calls, now

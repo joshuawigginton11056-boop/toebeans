@@ -78,36 +78,71 @@ export function createInitialBedroomState(): BedroomState {
   };
 }
 
-// Resolve movement along one axis: clamp to the room walls, then push back
-// out of any obstacle overlapped at the new position. Solving x and z
-// separately lets the player slide along a wall or furniture edge instead
-// of sticking to it.
-function resolveAxis(
-  target: number,
-  crossCoord: number,
-  movingX: boolean,
-  from: number,
+// A push out of one piece can land inside a flush neighbor (the chair
+// tucked at the desk), so the resolver re-runs until nothing overlaps.
+// Five obstacles settle in 2–3 passes; the cap is a safety net, not a
+// budget that gets spent.
+const MAX_PUSH_PASSES = 8;
+
+// Resolve a movement to its target position: clamp to the room walls,
+// then push out of any overlapped furniture by the *smallest*
+// displacement that stays inside the room. Replaces the old per-axis
+// came-from face snap, which had two playtest-reproduced failure modes
+// (2026-07-22): wall-flush furniture could eject the player through a
+// wall into a permanent trap (the push-out never re-checked the walls),
+// and corner approaches could snap a large distance to a face the player
+// only grazed (a visible warp instead of a slide).
+//
+// Minimal penetration fixes both by construction: the push is never
+// bigger than how far the player clipped in this frame (steps are far
+// smaller than any furniture piece, so overlaps are always shallow), and
+// out-of-room faces are simply never candidates. Sliding falls out too —
+// pushing out along one axis leaves the frame's movement along the other
+// axis intact. Overlap tests are strict, so exact face contact counts as
+// clear: two flush pieces share a boundary line the player can stand on
+// but never slip between.
+function resolvePosition(
+  targetX: number,
+  targetZ: number,
+  from: Point,
   state: BedroomState,
   radius: number,
-): number {
-  const halfRoom = (movingX ? state.roomWidth : state.roomDepth) / 2 - radius;
-  let pos = Math.max(-halfRoom, Math.min(halfRoom, target));
+): Point {
+  const halfW = state.roomWidth / 2 - radius;
+  const halfD = state.roomDepth / 2 - radius;
+  let x = Math.max(-halfW, Math.min(halfW, targetX));
+  let z = Math.max(-halfD, Math.min(halfD, targetZ));
 
-  for (const obstacle of state.obstacles) {
-    const halfAlong =
-      (movingX ? obstacle.width : obstacle.depth) / 2 + radius;
-    const halfAcross =
-      (movingX ? obstacle.depth : obstacle.width) / 2 + radius;
-    const centerAlong = movingX ? obstacle.x : obstacle.z;
-    const centerAcross = movingX ? obstacle.z : obstacle.x;
-
-    if (Math.abs(crossCoord - centerAcross) >= halfAcross) continue;
-    if (Math.abs(pos - centerAlong) >= halfAlong) continue;
-
-    pos = from <= centerAlong ? centerAlong - halfAlong : centerAlong + halfAlong;
+  const boxes = state.obstacles.map((o) => inflatedBox(o, radius));
+  for (let pass = 0; pass < MAX_PUSH_PASSES; pass++) {
+    let pushed = false;
+    for (const box of boxes) {
+      if (x <= box.minX || x >= box.maxX || z <= box.minZ || z >= box.maxZ) {
+        continue;
+      }
+      // The four face pushes, minus any that would leave the room — the
+      // far face of wall-flush furniture lies outside the walls (the
+      // nightstand trap), so it can never win.
+      const candidates = [
+        { x: box.minX, z, d: x - box.minX },
+        { x: box.maxX, z, d: box.maxX - x },
+        { x, z: box.minZ, d: z - box.minZ },
+        { x, z: box.maxZ, d: box.maxZ - z },
+      ].filter((c) => Math.abs(c.x) <= halfW && Math.abs(c.z) <= halfD);
+      if (candidates.length === 0) continue; // box swallows the room: unreachable
+      let best = candidates[0]!;
+      for (const c of candidates) {
+        if (c.d < best.d) best = c;
+      }
+      x = best.x;
+      z = best.z;
+      pushed = true;
+    }
+    if (!pushed) return { x, z };
   }
-
-  return pos;
+  // Couldn't settle (pathological pocket): stay where we were — the
+  // previous position was valid, so refusing the move is always safe.
+  return { x: from.x, z: from.z };
 }
 
 // How far outside a furniture piece's collision edge the cat aims when
@@ -292,19 +327,10 @@ function stepCat(
   }
 
   const step = Math.min(CAT_SPEED * dt, distance);
-  const x = resolveAxis(
+  const { x, z } = resolvePosition(
     cat.x + (dx / distance) * step,
-    cat.z,
-    true,
-    cat.x,
-    state,
-    CAT_RADIUS,
-  );
-  const z = resolveAxis(
     cat.z + (dz / distance) * step,
-    x,
-    false,
-    cat.z,
+    cat,
     state,
     CAT_RADIUS,
   );
@@ -328,15 +354,13 @@ export function stepBedroom(
   if (dx !== 0 || dz !== 0) {
     // Normalize so diagonal walking isn't faster than walking straight.
     const step = (WALK_SPEED * dt) / Math.hypot(dx, dz);
-    const x = resolveAxis(
+    const { x, z } = resolvePosition(
       player.x + dx * step,
-      player.z,
-      true,
-      player.x,
+      player.z + dz * step,
+      player,
       state,
       PLAYER_RADIUS,
     );
-    const z = resolveAxis(player.z + dz * step, x, false, player.z, state, PLAYER_RADIUS);
     player = { x, z };
   }
 
