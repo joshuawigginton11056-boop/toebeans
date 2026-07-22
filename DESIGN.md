@@ -139,18 +139,25 @@ interact with your space for more XP → repeat.
 
 ## Art Style Bible
 
-> **⚠ Under review (director playtest, 2026-07-22):** after seeing the
-> furnished bedroom, the director's verdict challenges two of the bible's
-> foundations: **"I don't like the flat graphics. And there's no
-> texture."** The no-textures / flat-shaded rule below is what produced
-> that look — and the director's new interior direction (a **rundown**
-> house: shaggy *stained* carpet, *peeling* wallpaper) is inherently a
-> texture-and-grime ask that flat vertex colors can't deliver. This
-> touches both scenes and most existing assets, so it needs its own
-> direction session (options sketched in [IDEAS.md](IDEAS.md)) before
-> any rewrite here. Until that session lands, the bible below still
-> governs — but don't invest in new flat-shaded assets without checking
-> the IDEAS entry first.
+> **⚠ In transition (direction session, 2026-07-22):** the no-texture
+> rule is **amended by director call**. The standing verdict ("I don't
+> like the flat graphics. And there's no texture") got its direction
+> session: the *Omno* references stay the target for mood, lighting,
+> haze, and palette — but surfaces stop being flat. The approved
+> approach is **both** of: (a) **stylized painted textures** on the
+> existing low-poly geometry (visible bark, dappled foliage, snow
+> grain — hand-painted feel, never photoreal), and (b) **procedural
+> surface detail** (shader grain/sparkle, carved ski trails, baked
+> lighting variation). Palette discipline stands: texture colors must
+> stay inside a palette color's family (value/saturation shifts of it),
+> exactly like the existing value-shift allowance. Signal red stays
+> reserved. The first build slice is a **side-by-side test on the real
+> slope** (retextured trees + a snow patch next to the current flat
+> versions) — the bible's shape-language and asset-sourcing sections
+> get their full rewrite once the director approves a test look, since
+> the test decides the texel density, sourcing, and tooling rules worth
+> writing down. Until then: don't invest in new *flat-shaded* assets;
+> everything else below still governs.
 
 The binding reference for all art in the game. Written 2026-07-21 from the
 director's five *Omno* reference images and their notes on each. When

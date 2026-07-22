@@ -9,18 +9,25 @@
       "port": 5173
     },
     {
-      "name": "toebeans-bedroom",
+      "name": "toebeans-lobby",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "--port", "5301", "--strictPort"],
-      "cwd": "C:\\Users\\joshu\\Toebeans-bedroom\\client",
+      "cwd": "C:\\Users\\joshu\\Toebeans-lobby\\client",
       "port": 5301
     },
     {
-      "name": "toebeans-slope",
+      "name": "toebeans-slope-mechanics",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "--port", "5302", "--strictPort"],
-      "cwd": "C:\\Users\\joshu\\Toebeans-slope\\client",
+      "cwd": "C:\\Users\\joshu\\Toebeans-slope-mechanics\\client",
       "port": 5302
+    },
+    {
+      "name": "toebeans-slope-visuals",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5303", "--strictPort"],
+      "cwd": "C:\\Users\\joshu\\Toebeans-slope-visuals\\client",
+      "port": 5303
     }
   ]
 }
