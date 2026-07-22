@@ -3,6 +3,43 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope) Turning round 2 — playtest verdict on real turning (director, 2026-07-22)
+
+Three issues from the real-turning session's playtest, likely the next
+slope session's work:
+
+1. **Can't spin or change direction mid-air.** Deliberate this session —
+   the heading freezes airborne, mirroring how speed freezes ("nothing to
+   carve against") — and the director doesn't like it: jumps should allow
+   spinning/re-aiming in the air. Fix sketch (`shared/src/skiing.ts`):
+   allow turn input while airborne, plausibly at a *faster* spin rate than
+   on snow (air has no ski-bite resistance — and it makes jumps a place
+   for style). Two design questions to settle in-session: (a) landing
+   past the fall threshold — currently the fall check is grounded-only,
+   so an over-rotated landing crashes on the first grounded frame, which
+   is arguably exactly right (botched landing = fall); confirm that's the
+   wanted rule. (b) If full 360° spins should be a legal trick, the fall
+   check needs to compare against the nearest downhill-equivalent angle
+   (a completed spin lands clean, a half-spin lands crashed) instead of
+   the raw accumulated heading.
+2. **The fall animation ignores the direction you fell in.** The crash
+   tip-over is a fixed sideways rotation (`player.rotation.z = π/2` in
+   `skiRender.ts`) — same world direction every time, whether you
+   over-rotated left, right, or skied into a chasm. The state still holds
+   the fatal heading during the whole crash pause (it only resets on
+   respawn), so the renderer has everything it needs: tip *along the
+   fall* — over-turning left tips you left, over-turning right tips
+   right, and a chasm crash could read as a forward drop instead of a
+   sideways flop. Renderer-only fix; note the renderer currently zeroes
+   the body's steer the moment status ≠ "skiing", which is also why the
+   body unwinds while tipping — pass the heading through the crash pause
+   as part of the same fix.
+3. **Turn rate is too slow.** `TURN_RATE` (1.2 rad/s, one line in
+   `shared/src/skiing.ts`). Director-called, so this one is sanctioned to
+   tune alongside the fixes above rather than waiting for the end-of-M2
+   tuning pass. Raising it shortens the margin-of-error window past
+   sideways (~0.3s at 1.2) — retune `FALL_HEADING` together with it.
+
 ## (bedroom) ~~Follow camera + complete room~~ — BUILT 2026-07-22, two follow-ups remain
 
 **(BUILT 2026-07-22 in one chunk — the room and camera interlocked too

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CHARACTERS,
+  FALL_HEADING,
   SKIN_TONES,
   createDefaultAppearance,
   createInitialBedroomState,
@@ -197,6 +198,15 @@ describe("save/load", () => {
     expect(restored.ski.lateral).toBe(4);
     expect(restored.ski.distance).toBe(0);
     expect(restored.ski.height).toBe(0);
+  });
+
+  it("clamps a fallen-over heading back into the standing range", () => {
+    const { save } = midGameSave();
+    // A heading past FALL_HEADING would fall over on the first frame after
+    // loading — heal it to the edge of standing instead, like positions.
+    const tipped = { ...save, ski: { ...save.ski, heading: 9 } };
+    const restored = restoreSave(decodeSave(JSON.stringify(tipped))!);
+    expect(restored.ski.heading).toBe(FALL_HEADING);
   });
 
   it("restores a crashed run mid-pause so the respawn still happens", () => {

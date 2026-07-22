@@ -21,6 +21,11 @@ export type RunStatus = "skiing" | "crashed" | "forfeited";
 export interface SkiState {
   readonly distance: number;
   readonly lateral: number;
+  // Which way the skis point, in radians. 0 = straight downhill, positive =
+  // turned right, negative = turned left. Steering turns this and it STAYS
+  // turned when the key is released (like real skiing — you steer back
+  // yourself); movement follows it. Turn past FALL_HEADING and you fall over.
+  readonly heading: number;
   readonly height: number;
   readonly verticalVelocity: number;
   readonly speed: number;
@@ -52,7 +57,15 @@ const SKI_ACCEL = 4;
 const BOOST_ACCEL = 8;
 const COAST_DRAG = 4;
 const BRAKE_DECEL = 10;
-const STEER_SPEED = 5;
+// Steering is a real turn (M2 heading session): holding left/right keeps
+// rotating the skis, up to fully sideways and beyond — there's no built-in
+// stop. TURN_RATE is how fast the skis rotate at full authority; past
+// FALL_HEADING (a bit beyond perpendicular-to-the-hill) the skier has turned
+// too far to hold the edge and falls over — a normal crash: one life, the
+// tip-over pause, respawn at the checkpoint. FALL_HEADING is exported for
+// save.ts (restored headings clamp into the standing-up range).
+const TURN_RATE = 1.2;
+export const FALL_HEADING = 2.0;
 // Exported for save.ts: restoring a save clamps lateral position into range.
 export const LATERAL_LIMIT = 4;
 const JUMP_VELOCITY = 7;
@@ -65,6 +78,7 @@ export function createInitialSkiState(): SkiState {
   return {
     distance: 0,
     lateral: 0,
+    heading: 0,
     height: 0,
     verticalVelocity: 0,
     // Runs start from a standstill — the push-off to cruise speed is part
@@ -103,6 +117,9 @@ function respawnAtCheckpoint(state: SkiState): SkiState {
     ...state,
     distance: state.lastCheckpoint,
     lateral: 0,
+    // Respawn pointing straight downhill — whatever turn you fell over in
+    // (or crashed carrying) doesn't follow you back to the checkpoint.
+    heading: 0,
     height: 0,
     verticalVelocity: 0,
     // A crash scrubs all your speed — you push off again from the
@@ -155,17 +172,28 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
             speed - (input.down ? BRAKE_DECEL : COAST_DRAG) * dt,
           );
   }
-  const distance = state.distance + speed * dt;
+  // Steering rotates the skis and the heading stays where you put it —
+  // steering back is on you. Authority still builds with speed (carving
+  // comes from the skis biting the snow, so a standstill can't spin on the
+  // spot; full authority from MIN_SPEED up), and like speed, the heading is
+  // frozen mid-air: no snow under the skis, nothing to carve against.
+  const steerAuthority = Math.min(1, speed / MIN_SPEED);
+  let heading = state.heading;
+  if (grounded) {
+    if (input.left) heading -= TURN_RATE * steerAuthority * dt;
+    if (input.right) heading += TURN_RATE * steerAuthority * dt;
+  }
 
-  // Steering authority builds with speed — carving comes from the skis
-  // biting the snow, so a standstill can't slide sideways (which would
-  // also swing the renderer's carve angle, atan2(sideways, downhill), to
-  // a right angle during the push-off). Full authority from MIN_SPEED up.
-  const steerSpeed = STEER_SPEED * Math.min(1, speed / MIN_SPEED);
-  let lateral = state.lateral;
-  if (input.left) lateral -= steerSpeed * dt;
-  if (input.right) lateral += steerSpeed * dt;
+  // Movement follows the heading: turned sideways, all your speed is going
+  // across the hill and none of it down. The lane edges still clamp.
+  const distance = state.distance + speed * Math.cos(heading) * dt;
+  let lateral = state.lateral + speed * Math.sin(heading) * dt;
   lateral = Math.max(-LATERAL_LIMIT, Math.min(LATERAL_LIMIT, lateral));
+
+  // Turned too far past sideways to hold the edge — the skier falls over.
+  // Same crash flow as a chasm: costs a life, tips over, back to the
+  // checkpoint. Only possible on the snow (mid-air the heading is frozen).
+  const fellOver = grounded && Math.abs(heading) > FALL_HEADING;
 
   const verticalVelocity =
     grounded && input.jump ? JUMP_VELOCITY : state.verticalVelocity + GRAVITY * dt;
@@ -178,11 +206,12 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     }
   }
 
-  const crashed = fellIntoAChasm(state.chasms, distance, height);
+  const crashed = fellOver || fellIntoAChasm(state.chasms, distance, height);
 
   return {
     distance,
     lateral,
+    heading,
     height,
     verticalVelocity: height <= 0 ? 0 : verticalVelocity,
     speed,

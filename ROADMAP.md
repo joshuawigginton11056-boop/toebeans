@@ -1702,6 +1702,85 @@ bedroom furniture assets. Playtest verdicts on the camera feel numbers
 (follow rate, cooldown, zoom range) fold into the end-of-M2-style tuning
 pass for the bedroom.
 
+## (slope) 2026-07-22 — M2: real turning — the skis point where you steer them, and you can overdo it
+
+Director's pick this session (a new item, not from the parked list): steering
+is no longer a sideways slide with a built-in stop. The skis now genuinely
+*turn*: holding left/right keeps rotating them — through diagonal, all the
+way to fully sideways-across-the-hill, and past it — and nothing straightens
+them for you (director call: keep the direction, like real skiing). Turn too
+far past sideways and the skier can't hold the edge: they fall over, which
+is a normal crash (director call: costs a life, tip-over pause, respawn at
+the checkpoint pointing straight downhill).
+
+- `/shared` `skiing.ts`: the run gains a **heading** — which way the skis
+  point (0 = downhill, out past sideways). Movement follows it: turned
+  halfway, you're carving a diagonal; fully sideways, all your speed goes
+  across the hill and none of it down (which also makes hard turning a real
+  way to kill your descent — braking by turning now works like it does on
+  real snow). Steering authority still builds with speed, and the heading —
+  like speed — freezes mid-air: no snow under the skis, nothing to carve
+  against. The fall threshold and turn rate are single tunable numbers for
+  the end-of-M2 pass.
+- **The renderer got simpler.** The visible turn used to be *derived* by
+  frame-diffing lateral position, and topped out at 45° of visible body
+  turn; now the sim knows the true heading and the body just turns to it —
+  the model's existing easing, bank, and angulation all run off the real
+  angle. The fall-over reuses the whole crash kit for free: tip-over,
+  banner, cat-face fade, crash thump, respawn pluck.
+- `shared/src/save.ts`: the heading rides in the save; **SAVE_VERSION
+  3 → 4** (bumped after syncing down master, per the parallel-session
+  rule), so existing saves are discarded on first load — costs a position
+  and a run in progress, same acceptable price as the last two bumps. A
+  restored heading past the fall threshold is healed by clamping, so a save
+  can never fall over on frame 1.
+- Tests 59 → 67: turning keeps accumulating while held; the heading stays
+  put when released (and movement keeps following it); mid-air freeze;
+  sideways = zero descent; falling over past the threshold costs a life;
+  respawning from a fall points you back downhill; riding at exactly
+  sideways forever is legal; and a wild saved heading heals to the edge of
+  standing.
+- `npm run check` (67 tests) and `npm run build` pass. Verified in the live
+  page by driving the real served modules on this session's own dev server
+  (5302): heading accumulates at exactly the design turn rate and falls
+  over at exactly the threshold (9 → 8 lives, 1.5s pause), holds bit-exact
+  when the key is released and while airborne, respawns at the checkpoint
+  pointing downhill at speed 0, and the save round-trips a mid-turn heading
+  while healing a tipped-over one. On the renderer, with the character
+  actually loaded: the body settles at *exactly* the sim's heading (−1.2
+  local yaw at a 1.2 heading — the old derivation would have shown ~0.45),
+  banks 0.46 into it, and eases back upright during the crash tip-over.
+  Fresh page load: the old v3 save is discarded, a clean v4 save is
+  written, zero console errors.
+
+**What to playtest:** `npm run dev`, Enter to ski. Hold a steer key and
+*keep holding it*: the skis should swing through diagonal to fully sideways
+— watch your downhill speed die as they do — and then tip you over if you
+push past it. Release mid-turn: you should keep going the way you pointed
+until you steer back. The feel questions: is the turn rate right (too
+twitchy, too slow)? Is the margin past sideways before falling fair, or
+does it feel like a cheap shot? Does braking-by-turning feel like a real
+technique worth using alongside the down-key brake? And does needing to
+steer *back* make the slope more engaging or just more work?
+
+**Playtest verdict (director, 2026-07-22): three issues** — recorded and
+parked in [IDEAS.md](IDEAS.md)'s top block with cause analysis:
+
+1. **Can't spin or change direction mid-air** — the heading freeze while
+   airborne (this session's deliberate mirror of the speed freeze) reads
+   as a limitation, not physics; jumps should allow spinning/re-aiming.
+2. **The fall animation doesn't match the direction you fell** — the
+   tip-over is one fixed sideways rotation whatever actually killed you.
+3. **The turn rate is too slow** — `TURN_RATE` is a one-line tune,
+   director-called, so it's sanctioned to change with the fixes above
+   rather than waiting for the end-of-M2 tuning pass.
+
+**Next:** turning round 2 (the three items above, sketched in IDEAS.md)
+unless the director redirects — then the remaining round-2 list (jump
+anticipation, gear style + longer skis, always-on feet, angulation round 3
++ the boot-containment fix, hair-roots + cat-tail), then music (still
+deliberately last), then the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

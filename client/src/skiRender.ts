@@ -43,13 +43,12 @@ export interface SkiSceneHandle {
   readonly skyDome: THREE.Mesh;
   readonly sunBillboard: THREE.Sprite;
   /**
-   * Last frame's lateral position and status, for deriving sideways speed —
-   * presentation-side memory, like the bedroom's walk heading; SkiState
-   * stays ignorant of it. `skiing` gates the derivation so a checkpoint
-   * respawn (which teleports lateral back to 0) can't read as one frame of
-   * violent swerving.
+   * Last frame's status and speed, for the pole push-off's "actually
+   * gaining" frame-diff — presentation-side memory; SkiState stays ignorant
+   * of it. (The steer angle used to be frame-diffed from lateral too; now
+   * the sim carries a real heading and the renderer just reads it.)
    */
-  readonly steerMemory: { lateral: number; skiing: boolean; speed: number };
+  readonly steerMemory: { skiing: boolean; speed: number };
 }
 
 const SLOPE_LENGTH = 100;
@@ -186,7 +185,7 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     sun,
     skyDome,
     sunBillboard,
-    steerMemory: { lateral: 0, skiing: true, speed: 0 },
+    steerMemory: { skiing: true, speed: 0 },
   };
 }
 
@@ -203,22 +202,13 @@ export function syncSkiSceneToState(
   // legible on the body. Airborne adds a bit of extra tuck for the jump.
   const tuck = (state.speed - MIN_SPEED) / (BOOST_SPEED - MIN_SPEED);
 
-  // Steering, derived the way the bedroom derives its walk heading: compare
-  // this frame's lateral to last frame's. The angle the body should make
-  // with straight-downhill is atan2(sideways, downhill) — bigger at the
-  // same steer rate when you're braking, which is right (a slow skier
-  // pointing across the hill is what braking looks like). Only measured
-  // across two consecutive normally-skiing frames; anything else (crash,
-  // respawn teleport, the first frame) reads as straight ahead.
+  // Steering: the sim carries a real heading now (0 = straight downhill,
+  // out to fully sideways and past it), so the body just turns to it — no
+  // more frame-diffing lateral, which topped out at 45° of visible turn and
+  // couldn't tell "skiing sideways" from "drifting". The model eases toward
+  // it internally, so a respawn's snap back to 0 rolls out smoothly.
   const skiing = state.status === "skiing";
-  let steer = 0;
-  if (skiing && handle.steerMemory.skiing && dt > 0) {
-    const sideways = (state.lateral - handle.steerMemory.lateral) / dt;
-    // Cap at just above the shared sim's steer rate — a save restored onto
-    // a different lateral would otherwise spike the derivative for a frame.
-    const cap = 6;
-    steer = Math.atan2(Math.max(-cap, Math.min(cap, sideways)), state.speed);
-  }
+  const steer = skiing ? state.heading : 0;
   // The pole push-off: poles drive while the run is on the snow, below
   // cruise speed, and actually gaining — detected the same frame-diff way
   // as the steer above, so braking down to MIN_SPEED (speed falling or
@@ -231,7 +221,6 @@ export function syncSkiSceneToState(
     grounded && gaining
       ? Math.max(0, Math.min(1, 1 - state.speed / (0.85 * BASE_SPEED)))
       : 0;
-  handle.steerMemory.lateral = state.lateral;
   handle.steerMemory.skiing = skiing;
   handle.steerMemory.speed = state.speed;
 
