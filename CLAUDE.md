@@ -30,19 +30,26 @@ it's explained.
 /assets   Art, audio, and other static assets (not code). Vite serves
           this directory as-is, so assets/slope/X.glb is /slope/X.glb
           in the game. Every asset needs a row in assets/CREDITS.md.
-          Subfolders: slope/ (scenery), characters/ (the cat, and
-          eventually the skier).
-/tools    Build-time scripts (not shipped). Two converters bring
-          downloaded models in line with the Art Style Bible in
-          DESIGN.md, depending on how the source colors itself:
+          Subfolders: slope/ (scenery), characters/ (the cat + the
+          11-character playable roster and shared clips), bedroom/
+          (furniture — the walkable bedroom was scrapped 2026-07-22;
+          these are kept as the future unlock pool).
+/tools    Build-time scripts (not shipped). Converters bring downloaded
+          models in line with the Art Style Bible in DESIGN.md,
+          depending on how the source colors itself:
             obj2glb_palette.py — for OBJ sources with one material per
               part (the Quaternius Nature Pack). Remaps materials.
+            obj2glb_bedroom.py — thin wrapper on the above with the
+              furniture packs' material table.
             glb_palette.py — for .glb sources that color themselves with
               a shared texture atlas (Quaternius characters/animals).
               Bakes each vertex's atlas swatch into palette vertex colors
               and strips the texture, since the bible bans textures. The
               baked regions (e.g. the cat's body/belly/eyes/nose) are
               what customization recolors later.
+            gltf_character.py — for the textureless named-material
+              character pack: recolors materials, strips per-character
+              clips (one shared CharacterClips.glb serves the roster).
 ```
 
 ## The core rule: state and rendering are separate
@@ -57,8 +64,9 @@ All game logic lives in `/shared` as **pure functions** operating on a
   `GameState` and return a **new** `GameState`. They never mutate their
   input.
 - **Rendering never mutates `GameState`.** Code in `/client` (see
-  `client/src/render.ts`) only *reads* `GameState` to sync a Three.js scene
-  graph. It's fine for rendering code to mutate Three.js objects
+  `client/src/skiRender.ts`) only *reads* game state to sync a Three.js
+  scene graph. (The lobby, `lobbyRender.ts`, has no game state at all — a
+  pure menu-backdrop diorama.) It's fine for rendering code to mutate Three.js objects
   (meshes, the renderer, the scene) — just never the game state itself.
 
 This keeps game logic testable without a renderer, and keeps `/server` able
