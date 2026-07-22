@@ -1947,6 +1947,63 @@ option) unless the director redirects — then the remaining round-2 list
 round 3 + the boot-containment fix, hair-roots + cat-tail), then music
 (still deliberately last), then the end-of-M2 tuning pass.
 
+## (slope) 2026-07-22 — M2: air spin round 2 — a held key carves, a fresh press spins
+
+The accidental 360 is fixed. Director's pick from the three parked options:
+**(a) a held key doesn't spin — a fresh press does.** Steer keys already
+down when the skis leave the snow keep adjusting your line at the normal
+carving rate (1.8 rad/s), exactly as they were a frame earlier; only a key
+pressed *fresh* in the air gets the 9 rad/s trick spin. Jumping mid-carve
+is routine again, and a spin is always something you asked for.
+
+- `/shared` `skiing.ts`: the ski state gains two booleans — which steer
+  keys have been held continuously since takeoff. While grounded they
+  simply track the keys, so the takeoff frame captures exactly what was
+  held as the snow fell away; airborne they can only decay, so releasing
+  a key mid-air makes its next press fresh (release-and-re-press *is* the
+  trick input — you can carve into a jump, let go, and then call a spin
+  in the same airtime). A held key's air steering uses the same
+  speed-scaled authority as the ground, so it's continuous through
+  takeoff; a fresh press spins at full authority even from a standstill
+  hop, as before. Crash respawns clear both flags.
+- **No SAVE_VERSION bump.** The new fields are transient air-only state
+  and deliberately not saved — `restoreSave` spreads them in as `false`,
+  which is semantically right: reloading drops the physical keyboard
+  state anyway, so any key after a restore *is* a fresh press.
+- The two design defaults from turning round 2 (full 360s legal via
+  downhill-equivalence, over-rotated landings crash on the first grounded
+  frame) are untouched and still await ratify-or-change.
+- Tests 71 → 74: identical airborne skiers differing only in the flag
+  steer at 2×-different rates; the exact playtest scenario (carve right,
+  jump, hold through the whole jump) gains only a modest line adjustment
+  and lands clean with all 9 lives; and a mid-air release-then-re-press
+  spins at the fast rate.
+- `npm run check` (74 tests) and `npm run build` pass. Verified against
+  the real served modules in the live page (this session's port 5302 was
+  held by an older chat's server for the same folder, so verification ran
+  through it — same live source): ground carve measures exactly 1.8
+  rad/s, held-since-takeoff air steering exactly 1.8, fresh press exactly
+  9; the jump-while-carving case captures the flag on the takeoff frame,
+  gains 1.404 rad over its 0.78s of air (= 1.8 × 0.78, nowhere near 2π),
+  and lands clean at 9 lives; release mid-air clears the flag and the
+  re-press measures exactly 9 rad/s. Fresh page load: zero console
+  errors.
+
+**What to playtest:** `npm run dev`, Enter to ski. Jump while already
+holding a steer key — the thing that used to whip you around: you should
+drift your line a little and land clean, no surprise 360. Then do a
+deliberate trick: jump, *release*, and press a steer key fresh mid-air —
+the fast spin should still be all there (360s land clean, half-spins
+still crash). Does the distinction feel natural, or do you find yourself
+wanting to spin off a held key sometimes? And the two standing defaults
+to ratify whenever: 360s as a legal trick, and over-rotated landings
+crashing instantly vs a brief grace window.
+
+**Next:** the remaining round-2 list (jump anticipation, gear style +
+longer skis, always-on feet, angulation round 3 + the boot-containment
+fix, hair-roots + cat-tail) unless the director redirects — then music
+(still deliberately last), then the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

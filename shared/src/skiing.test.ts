@@ -27,6 +27,8 @@ const nearChasm: SkiState = {
   distance: 19,
   lateral: 0,
   heading: 0,
+  leftHeldSinceTakeoff: false,
+  rightHeldSinceTakeoff: false,
   height: 0,
   verticalVelocity: 0,
   speed: 8,
@@ -223,6 +225,60 @@ describe("stepSkiing", () => {
     const state = stepSkiing(hopping, { ...noInput, left: true }, 0.1);
 
     expect(state.heading).toBeLessThan(0);
+  });
+
+  it("keeps a key held since takeoff at the carving rate, not the spin rate", () => {
+    // Two identical airborne skiers holding right; only the flag differs.
+    const airborne: SkiState = { ...cruising, height: 1, verticalVelocity: 2 };
+
+    const carried = stepSkiing(
+      { ...airborne, rightHeldSinceTakeoff: true },
+      { ...noInput, right: true },
+      0.1,
+    );
+    const fresh = stepSkiing(airborne, { ...noInput, right: true }, 0.1);
+
+    // Held since takeoff: still adjusting the line — but nowhere near a spin.
+    expect(carried.heading).toBeGreaterThan(0);
+    expect(fresh.heading).toBeGreaterThan(carried.heading * 2);
+  });
+
+  it("does not whip into a spin when jumping while already steering", () => {
+    // The accidental-360 case from the turning-round-2 playtest: carve
+    // right, jump, keep holding right through the whole jump.
+    let state = cruising;
+    for (let i = 0; i < 5; i++) {
+      state = stepSkiing(state, { ...noInput, right: true }, 0.02);
+    }
+    state = stepSkiing(state, { ...noInput, right: true, jump: true }, 0.02);
+    expect(state.height).toBeGreaterThan(0);
+    const atTakeoff = state.heading;
+
+    while (state.height > 0) {
+      state = stepSkiing(state, { ...noInput, right: true }, 0.02);
+    }
+    state = stepSkiing(state, noInput, 0.02); // first grounded frame
+
+    // A whole jump of held steer adds a modest line adjustment that lands
+    // clean — the old air rate racked up ~2π and usually a crash.
+    expect(state.heading - atTakeoff).toBeGreaterThan(0);
+    expect(state.heading - atTakeoff).toBeLessThan(FALL_HEADING);
+    expect(state.status).toBe("skiing");
+    expect(state.lives).toBe(STARTING_LIVES);
+  });
+
+  it("spins when a steer key is released and pressed fresh mid-air", () => {
+    // Take off holding right, let go in the air, then press again — the
+    // re-press is a deliberate trick call and gets the fast rate.
+    let state = stepSkiing(cruising, { ...noInput, right: true, jump: true }, 0.02);
+    state = stepSkiing(state, { ...noInput, right: true }, 0.02); // held: carving rate
+    state = stepSkiing(state, noInput, 0.02); // released mid-air
+    const beforeRepress = state.heading;
+
+    state = stepSkiing(state, { ...noInput, right: true }, 0.1);
+
+    // 9 rad/s of spin, not 1.8 of carving (which would be 0.18 here).
+    expect(state.heading - beforeRepress).toBeGreaterThan(0.5);
   });
 
   it("lands a completed spin clean, collapsed to its downhill-equivalent", () => {

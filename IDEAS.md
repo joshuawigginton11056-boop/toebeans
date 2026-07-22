@@ -3,7 +3,16 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (slope) Air spin round 2 — held steer accidentally does a 360 (director, 2026-07-22)
+## (slope) ~~Air spin round 2~~ — BUILT 2026-07-22, option (a)
+
+**(BUILT 2026-07-22, director picked option (a): a held key doesn't spin —
+a fresh press does.)** Keys down at takeoff keep carving-rate steering
+through the air; a key pressed fresh mid-air (including release-then-
+re-press) spins at 9 rad/s. Two booleans in `SkiState` track
+held-since-takeoff; not saved (no SAVE_VERSION bump — a restore drops the
+keyboard state anyway, so post-restore presses are genuinely fresh). The
+two un-ratified defaults below still stand. Original entry kept for the
+reasoning:
 
 Playtest verdict on turning round 2: **the air spin rate is way faster
 than the ground rate, so jumping while already steering left whips you

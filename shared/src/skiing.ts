@@ -28,6 +28,17 @@ export interface SkiState {
   // you fall over. Mid-air it can accumulate whole spins; landing collapses
   // it to the nearest downhill-equivalent (see downhillHeading).
   readonly heading: number;
+  // Which steer keys have been held continuously since the skis left the
+  // snow. A key already down at takeoff was carving a line, not calling a
+  // trick — mid-air it keeps steering at the carving rate; only a key
+  // pressed FRESH in the air spins at AIR_TURN_RATE (air-spin round 2,
+  // director call 2026-07-22 — fixes jump-while-turning whipping into an
+  // accidental 360). While grounded these simply track the keys, so the
+  // takeoff frame captures exactly what was held as the snow fell away;
+  // airborne they can only decay — releasing a key makes its next press
+  // fresh.
+  readonly leftHeldSinceTakeoff: boolean;
+  readonly rightHeldSinceTakeoff: boolean;
   readonly height: number;
   readonly verticalVelocity: number;
   readonly speed: number;
@@ -74,7 +85,9 @@ export const FALL_HEADING = 2.2;
 // In the air there's no ski bite to resist a rotation, so spinning is much
 // faster than carving — fast enough to fit a full 360 inside a jump's
 // airtime (~0.78s at JUMP_VELOCITY/GRAVITY below), which makes jumps a
-// place for style, not just a way over chasms.
+// place for style, not just a way over chasms. Only a key pressed fresh
+// mid-air gets this rate — a key held since takeoff stays at TURN_RATE
+// (see leftHeldSinceTakeoff on SkiState).
 const AIR_TURN_RATE = 9;
 // Exported for save.ts: restoring a save clamps lateral position into range.
 export const LATERAL_LIMIT = 4;
@@ -98,6 +111,8 @@ export function createInitialSkiState(): SkiState {
     distance: 0,
     lateral: 0,
     heading: 0,
+    leftHeldSinceTakeoff: false,
+    rightHeldSinceTakeoff: false,
     height: 0,
     verticalVelocity: 0,
     // Runs start from a standstill — the push-off to cruise speed is part
@@ -139,6 +154,8 @@ function respawnAtCheckpoint(state: SkiState): SkiState {
     // Respawn pointing straight downhill — whatever turn you fell over in
     // (or crashed carrying) doesn't follow you back to the checkpoint.
     heading: 0,
+    leftHeldSinceTakeoff: false,
+    rightHeldSinceTakeoff: false,
     height: 0,
     verticalVelocity: 0,
     // A crash scrubs all your speed — you push off again from the
@@ -207,9 +224,28 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     if (input.left) heading -= TURN_RATE * steerAuthority * dt;
     if (input.right) heading += TURN_RATE * steerAuthority * dt;
   } else {
-    if (input.left) heading -= AIR_TURN_RATE * dt;
-    if (input.right) heading += AIR_TURN_RATE * dt;
+    // A key held since takeoff keeps carving-rate line adjustment (speed is
+    // frozen airborne, so its authority is whatever takeoff had); a fresh
+    // press is the trick spin, full authority even from a standstill hop.
+    if (input.left) {
+      heading -= state.leftHeldSinceTakeoff
+        ? TURN_RATE * steerAuthority * dt
+        : AIR_TURN_RATE * dt;
+    }
+    if (input.right) {
+      heading += state.rightHeldSinceTakeoff
+        ? TURN_RATE * steerAuthority * dt
+        : AIR_TURN_RATE * dt;
+    }
   }
+  // Grounded: track the keys, so the takeoff frame captures what was held.
+  // Airborne: only decay — a key released mid-air presses fresh next time.
+  const leftHeldSinceTakeoff = grounded
+    ? input.left
+    : state.leftHeldSinceTakeoff && input.left;
+  const rightHeldSinceTakeoff = grounded
+    ? input.right
+    : state.rightHeldSinceTakeoff && input.right;
 
   // Movement follows the heading: turned sideways, all your speed is going
   // across the hill and none of it down. The lane edges still clamp.
@@ -241,6 +277,8 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     distance,
     lateral,
     heading,
+    leftHeldSinceTakeoff,
+    rightHeldSinceTakeoff,
     height,
     verticalVelocity: height <= 0 ? 0 : verticalVelocity,
     speed,
