@@ -2636,6 +2636,87 @@ picks from the sketched options), then the rest of the round-2 list
 boot-containment fix, hair-roots + cat-tail), then music (still
 deliberately last), then the end-of-M2 tuning pass.
 
+## (slope) 2026-07-22 — M2: turning round 5 — the stance flip; boost commits harder
+
+The boost × turnaround bug is dead. Director's picks from the parked
+sketch: **option 1 (flip the stance at the sideways crossing) and option
+2 (boost turns faster)**, together. Turn backward while holding Shift and
+you now keep barreling downhill, riding switch at boost speed — never
+tips-first uphill toward the camera — and Shift itself commits 1.4×
+harder into every direction change.
+
+- **The stance flip** (`shared/src/skiing.ts`): grounded travel follows
+  the ski axis, so a pivot at speed used to rotate the momentum with the
+  skis — past sideways, that pointed it up the hill (3.46s of uphill
+  travel at up to 9.4 u/s in the boosted repro). Now, when a grounded
+  pivot carries the heading across ±π/2 at meaningful speed (≥ 1 u/s),
+  the speed *sign* flips instead: the downhill component of travel never
+  turns uphill, and the run carries its magnitude into a switch slide.
+  Below the epsilon, the old easing-through-zero stands untouched —
+  hockey stops and standstill pivots behave exactly as before. The
+  crossing is detected by the cosine of the heading changing sign across
+  the frame's steering, so it catches manual steering and the W-seek
+  alike, and never falses across the straight-ahead or straight-back
+  boundaries.
+- **Boost turns faster**: a 1.4× turn-rate multiplier while boost is
+  held, applied where `maxTurn` is computed — so it covers manual
+  steering and W's fall-line seek as one steering system (the sketch's
+  open question, answered yes). It also applies mid-air, since the
+  multiplier keys off the input, keeping the round-3 "one turn rate
+  everywhere" parity: air and ground still match under boost. That means
+  Shift now buys 1.4× spin in the air too — **a call made by default;
+  flag if unwanted.** The two fixes compose: W+Shift from switch pivots
+  home faster *and* arrives carrying its momentum.
+- **No SAVE_VERSION bump** — no state-shape change; only how speed
+  responds to a crossing changed.
+- **The renderer needed zero changes**, as the sketch predicted: the
+  stance-relative carve bank and the over-shoulder switch look both snap
+  their *targets* at the flip, and the rig's existing exponential easing
+  rolls the body through — the pose swings to the new edge instead of
+  popping.
+- **One honest note for the playtest:** the *path* genuinely kinks at
+  the crossing — lateral drift measured +13.6 → −13.5 u/s in one frame.
+  That's inherent to the fix, not a bug in it: with travel constrained
+  to the ski axis, keeping the downhill component from turning uphill
+  means the sideways component mirrors when the stance flips. It should
+  read as the skis biting the new edge mid-pivot; whether it does is the
+  headline feel question below.
+- Tests 77 → 82: the director's bar end to end (boosted turnaround —
+  every frame descends, ends riding switch below −MAX_SPEED), the flip
+  carrying its magnitude at the crossing, the below-epsilon crawl still
+  easing through zero, 1.4× on manual steering, and 1.4× on the W-seek.
+  One existing test ("steers laterally") had its coarse 1-second step
+  shortened to 0.5s — at cruise that full second carved past sideways,
+  which the test was never about.
+- `npm run check` (82 tests) and `npm run build` pass. Verified against
+  the real served modules in the live page (port 5302 again held by an
+  older chat's server for the same folder — same live source, driven
+  through a plain browser tab): the boosted-turnaround repro measures
+  **0.00s uphill** (was 3.46s) with every frame descending; the flip
+  fires at 0.62s carrying 13.60 → −13.52 (one frame of drag); the pivot
+  ends riding switch at −15.19; boosted/plain heading ratio is exactly
+  1.400 on both manual and W-seek; W+Shift recovery from boosted switch
+  lands home at 1.24s carrying 14.6 u/s (was 1.72s arriving at 11.4);
+  the below-epsilon crawl crosses sideways unflipped (0.42, still
+  positive); a hockey stop still bleeds to ~0 (5e-16); zero console
+  errors. What the flip *feels* like is the eyeballs item below.
+
+**What to playtest:** `npm run dev`, Enter to ski, and hold Shift. Carve
+hard past sideways at boost speed — you should keep barreling downhill,
+now riding switch, with no phase of sliding up toward the camera. The
+feel questions: at the moment you cross sideways your drift flips to the
+other side (the new edge bites) — does that read as deliberate edge
+work or as a snap? Is 1.4× the right amount of extra turn authority
+under Shift — does boosting now feel like committing? Try W+Shift from
+switch: the recovery should be brisk *and* keep your speed. And spin
+mid-air with Shift held — the 1.4× applies there too; intentional-feeling
+or unwanted?
+
+**Next:** the remaining round-2 list (gear style + longer skis,
+always-on feet, angulation round 3 + the boot-containment fix,
+hair-roots + cat-tail), then music (still deliberately last), then the
+end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

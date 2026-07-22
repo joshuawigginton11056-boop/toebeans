@@ -3,61 +3,6 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (slope) Turning round 5: boost × turnaround — skiing uphill toward the camera (playtest, 2026-07-22)
-
-**The bug (director report):** turn backward while holding Shift and the
-character starts speeding *toward the camera* — up the hill — when it
-should keep speeding downhill. And the companion ask: **Shift should also
-speed up direction changing**, not make turnarounds worse.
-
-**Reproduced and measured** (live modules, 2026-07-22): boost to 16, hold
-a turn with Shift held — the skier travels uphill for **3.46s of an 8s
-window, peaking at 9.4 u/s toward the camera**. Without boost the same
-pivot barely blips uphill (~1s, small), which is why the turning rounds
-1–4 never surfaced it.
-
-**Cause** (`shared/src/skiing.ts`): grounded travel follows the ski axis,
-so rotating the skis rotates the *velocity vector* with them — a pivot at
-speed whips tips-first momentum through 180° until it points up the hill.
-The speed sign (tips vs tails) is preserved through the pivot, and the
-easing from +16 toward the projected negative target runs at `COAST_DRAG`
-(4 u/s²; `BOOST_ACCEL` 8 only applies when *gaining* magnitude) — so a
-boosted pivot buys seconds of tips-first uphill travel before the sign
-crosses zero and gravity finally takes the tails. The physical outcome of
-pivoting past sideways at speed should be *you keep sliding downhill
-while the skis rotate under you* — i.e. you're instantly riding switch —
-not a free 180° redirect of the momentum.
-
-**The bar:** turn backward while holding Shift → you keep barreling
-downhill, now riding switch, at boost speed. Never tips-first uphill.
-
-**Fix options for the build session (director picks):**
-
-1. **Flip the stance at the sideways crossing** *(probably recommended)*:
-   when a grounded pivot carries the heading across ±π/2 at meaningful
-   speed, flip the speed sign — the momentum stays pointed down the hill
-   and the run becomes a switch slide carrying its magnitude. Travel is
-   *continuous* at the crossing (cos ≈ 0 from both sides), so nothing
-   snaps in the world — and from there the existing signed-speed easing
-   already seeks the correct switch boost target (−16). A small speed
-   epsilon keeps slow deliberate pivots (hockey stop, standstill pivot)
-   exactly as they are today. One renderer note: the stance-relative
-   carve bank flips sign at the crossing — the rig's existing easing
-   probably absorbs it, but check the sideways moment for a visual pop.
-2. **Boost turns faster** (the literal first ask): a `TURN_RATE`
-   multiplier while boost is held (~1.3–1.5×), so Shift commits harder
-   into direction changes. Composes with option 1; also worth deciding
-   whether W's fall-line seek gets the same multiplier under boost.
-3. **Asymmetric drag** (smaller patch, if 1 feels too aggressive):
-   uphill tips-first travel bleeds at `BRAKE_DECEL` (10) or harder
-   instead of `COAST_DRAG` (4). Shrinks the uphill window (~3.5s → ~1.4s
-   measured) but doesn't eliminate it — the model stays wrong, just
-   briefer.
-
-Tests to flip if 1 lands: none assert the uphill phase exists, but the
-carve-past-sideways and hockey-stop tests pin the boundary behavior the
-epsilon must preserve.
-
 ## (bedroom) Where does the progression loop live now? (parked by director call, 2026-07-22)
 
 The walkable bedroom is scrapped — the game opens on a **menu-style lobby**

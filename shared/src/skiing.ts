@@ -25,10 +25,13 @@ export interface SkiState {
   // turned right, negative = turned left. Steering turns this and it STAYS
   // turned when the key is released (like real skiing — you steer back
   // yourself). There is no "turned too far" (turning round 3, director
-  // redirect): carve past sideways and the downhill pull goes negative —
-  // you pivot into riding switch, tails-first down the hill, instead of
-  // falling over. On the snow the heading lives in (-π, π]; mid-air it can
-  // accumulate whole spins, and landing collapses it (see downhillHeading).
+  // redirect): carve past sideways and you pivot into riding switch,
+  // tails-first down the hill, instead of falling over — at speed the
+  // stance flips right at the crossing so the momentum never turns uphill
+  // (turning round 5), and below the flip epsilon the downhill pull just
+  // eases negative as before. On the snow the heading lives in (-π, π];
+  // mid-air it can accumulate whole spins, and landing collapses it (see
+  // downhillHeading).
   readonly heading: number;
   // The direction of travel while airborne, frozen on the takeoff frame —
   // flight is ballistic (nothing to carve against), so spinning mid-air
@@ -90,6 +93,23 @@ const TURN_RATE = 1.8;
 // skis in place. Without the floor, braking-by-turning down to a full
 // sideways stop would leave you unable to steer back — a softlock.
 const STANDSTILL_AUTHORITY = 0.4;
+// Boost commits harder into direction changes (turning round 5, director
+// call 2026-07-22: "Shift should speed up direction changing"). Holding
+// boost multiplies the turn rate — everywhere steering runs, manual and
+// W-seek alike, so it stays one steering system.
+const BOOST_TURN_MULTIPLIER = 1.4;
+// The stance flip (turning round 5): grounded travel follows the ski axis,
+// so a pivot at speed would rotate the momentum with the skis — carry it
+// past sideways and you'd be redirected tips-first up the hill (the boost ×
+// turnaround bug: 3.5s of uphill travel at 9+ u/s). Physically, pivoting
+// past sideways at speed means the skis rotate under you while you keep
+// sliding downhill — you're instantly riding switch. So when a grounded
+// pivot carries the heading across ±π/2 at meaningful speed, the speed
+// sign flips: the downhill component of travel never turns uphill, and the
+// run carries its magnitude into the switch slide. Below this epsilon the
+// old easing-through-zero stands, so slow deliberate pivots (hockey stop,
+// standstill pivot) behave exactly as before.
+const PIVOT_FLIP_MIN_SPEED = 1;
 // W means "downhill" (turning round 4, director call 2026-07-22). On top of
 // its speed-up meaning, holding W steers the skis home: the heading eases
 // toward straight-downhill at the normal turn rate, so you can carve into
@@ -229,7 +249,14 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     // accumulate mid-air.
     heading = downhillHeading(heading);
   }
-  const maxTurn = TURN_RATE * steerAuthority * dt;
+  // Where the skis pointed before this frame's steering — the stance flip
+  // below compares against it to spot a sideways crossing.
+  const headingBefore = heading;
+  const maxTurn =
+    TURN_RATE *
+    (input.boost ? BOOST_TURN_MULTIPLIER : 1) *
+    steerAuthority *
+    dt;
   if (input.up) {
     // W seeks the fall line: ease toward pointing downhill (or a carve
     // diagonal, with a steer key). Easing the nearest-equivalent offset
@@ -257,6 +284,16 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   let speed = state.speed;
   let flightHeading = state.flightHeading;
   if (grounded) {
+    // The stance flip (turning round 5): this frame's steering carried the
+    // skis across sideways at speed — momentum stays pointed down the hill
+    // and the stance flips instead, carrying the magnitude into a switch
+    // slide (or back out of one). See PIVOT_FLIP_MIN_SPEED.
+    if (
+      Math.abs(speed) >= PIVOT_FLIP_MIN_SPEED &&
+      Math.cos(headingBefore) * Math.cos(heading) < 0
+    ) {
+      speed = -speed;
+    }
     const target = targetMagnitude * Math.cos(heading);
     const stepUp = target > speed;
     // Pick the easing rate by what this step does to the speed *magnitude*:

@@ -3,9 +3,11 @@ import {
   BASE_SPEED,
   BOOST_SPEED,
   createInitialSkiState,
+  downhillHeading,
   JUMP_CHARGE_TIME,
   LATERAL_LIMIT,
   MAX_JUMP_VELOCITY,
+  MAX_SPEED,
   MIN_JUMP_VELOCITY,
   MIN_SPEED,
   RESPAWN_DELAY,
@@ -81,7 +83,10 @@ describe("stepSkiing", () => {
   });
 
   it("steers laterally within the slope limits", () => {
-    const state = stepSkiing(cruising, { ...noInput, right: true }, 1);
+    // Half a second of steering — enough to drift, short of carving past
+    // sideways (which would flip the stance and reverse the drift; the
+    // turning-round-5 tests below cover that crossing on purpose).
+    const state = stepSkiing(cruising, { ...noInput, right: true }, 0.5);
 
     expect(state.lateral).toBeGreaterThan(0);
     expect(state.lateral).toBeLessThanOrEqual(LATERAL_LIMIT);
@@ -444,6 +449,85 @@ describe("stepSkiing", () => {
     expect(sawSwitch).toBe(true);
     expect(state.lives).toBe(STARTING_LIVES);
     expect(Math.abs(state.heading)).toBeGreaterThan(Math.PI / 2);
+  });
+
+  it("never travels uphill through a boosted turnaround — the round-5 bar", () => {
+    // The boost × turnaround bug: turn backward while holding Shift and
+    // the old model whipped the momentum through 180° — 3.5s of tips-first
+    // uphill travel at boost speed. The bar: you keep barreling downhill,
+    // now riding switch, at boost speed. Never uphill.
+    let state: SkiState = { ...cruising, speed: BOOST_SPEED };
+    let sawSwitch = false;
+    for (let i = 0; i < 200; i++) {
+      // Steer hard until pointing backwards-ish, then just hold boost.
+      const steering = Math.abs(downhillHeading(state.heading)) < 2.8;
+      const next = stepSkiing(
+        state,
+        { ...noInput, right: steering, boost: true },
+        0.02,
+      );
+      // The whole journey descends — no frame ever moves back up the hill.
+      expect(next.distance).toBeGreaterThanOrEqual(state.distance - 1e-12);
+      expect(next.status).toBe("skiing");
+      if (next.speed < 0) sawSwitch = true;
+      state = next;
+    }
+
+    expect(sawSwitch).toBe(true);
+    expect(Math.abs(downhillHeading(state.heading))).toBeGreaterThan(Math.PI / 2);
+    // Riding switch at boost speed — the magnitude survived the pivot.
+    expect(state.speed).toBeLessThan(-MAX_SPEED);
+  });
+
+  it("carries its magnitude through the stance flip at the crossing", () => {
+    // One steer step across sideways at speed: the sign flips on the spot
+    // and the magnitude rides through (minus one frame of drag) — the
+    // pivot converts the run into a switch slide instead of scrubbing it.
+    const carving: SkiState = { ...cruising, heading: Math.PI / 2 - 0.01, speed: 10 };
+
+    const state = stepSkiing(carving, { ...noInput, right: true }, 0.02);
+
+    expect(Math.abs(downhillHeading(state.heading))).toBeGreaterThan(Math.PI / 2);
+    expect(state.speed).toBeLessThan(-9.5);
+    expect(state.speed).toBeGreaterThan(-10);
+  });
+
+  it("keeps the slow easing through zero below the flip epsilon", () => {
+    // A crawl across sideways (hockey-stop territory) doesn't flip — the
+    // speed just eases through zero the way rounds 3 and 4 built it.
+    const crawling: SkiState = { ...cruising, heading: Math.PI / 2 - 0.01, speed: 0.5 };
+
+    const state = stepSkiing(crawling, { ...noInput, right: true }, 0.02);
+
+    expect(Math.abs(downhillHeading(state.heading))).toBeGreaterThan(Math.PI / 2);
+    expect(state.speed).toBeGreaterThan(0);
+  });
+
+  it("turns faster while boosting", () => {
+    // Shift commits harder into direction changes (round 5's second half):
+    // the same held steer covers 1.4× the angle with boost held.
+    const plain = stepSkiing(cruising, { ...noInput, right: true }, 0.1);
+    const boosted = stepSkiing(
+      cruising,
+      { ...noInput, right: true, boost: true },
+      0.1,
+    );
+
+    expect(boosted.heading / plain.heading).toBeCloseTo(1.4, 5);
+  });
+
+  it("boosts the W-seek home too — one steering system, one multiplier", () => {
+    const ridingSwitch: SkiState = { ...cruising, heading: 3.0, speed: -BASE_SPEED };
+
+    const plain = stepSkiing(ridingSwitch, { ...noInput, up: true }, 0.1);
+    const boosted = stepSkiing(
+      ridingSwitch,
+      { ...noInput, up: true, boost: true },
+      0.1,
+    );
+
+    expect(boosted.heading).toBeLessThan(plain.heading);
+    expect((3.0 - boosted.heading) / (3.0 - plain.heading)).toBeCloseTo(1.4, 5);
   });
 
   it("bleeds to a stop held fully sideways — braking-by-turning is a hockey stop", () => {
