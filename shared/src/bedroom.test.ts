@@ -67,8 +67,8 @@ describe("stepBedroom", () => {
     };
     const state = walk(start, { ...noInput, left: true }, 500);
 
-    // Bed center x is -4.8, half width 1.2, plus the player's radius.
-    expect(state.player.x).toBeCloseTo(-4.8 + 1.2 + PLAYER_RADIUS, 5);
+    // Bed center x is -4.78, half width 1.225, plus the player's radius.
+    expect(state.player.x).toBeCloseTo(-4.78 + 1.225 + PLAYER_RADIUS, 5);
   });
 
   it("slides along furniture instead of sticking to it", () => {
@@ -83,7 +83,7 @@ describe("stepBedroom", () => {
     const state = walk(start, { ...noInput, left: true, down: true }, 20);
 
     // Blocked on x by the bed, but still moving on z the whole time.
-    expect(state.player.x).toBeCloseTo(-4.8 + 1.2 + PLAYER_RADIUS, 5);
+    expect(state.player.x).toBeCloseTo(-4.78 + 1.225 + PLAYER_RADIUS, 5);
     expect(state.player.z).toBeGreaterThan(-2.6);
   });
 
@@ -139,8 +139,11 @@ describe("stepBedroom", () => {
 
   it("cat walks around furniture instead of getting stuck on it", () => {
     // Cat north of the desk, player south of it — the straight line goes
-    // through the desk, so the cat has to round its open (west) corners
-    // (the desk sits flush against the east wall).
+    // through both the desk *and* the chair tucked at it, so the cat has
+    // to round the whole cluster on its open (west) side. This is the
+    // tucked-cluster case the multi-box route graph exists for: a route
+    // around just the desk would walk straight through the chair and pin
+    // the cat against it.
     const start: BedroomState = {
       ...createInitialBedroomState(),
       player: { x: 5.2, z: 3.8 },
@@ -148,9 +151,9 @@ describe("stepBedroom", () => {
     };
 
     // Step manually so every intermediate position can be checked: the
-    // cat must never overlap the desk on the way around it.
-    // Desk collision bounds inflated by the cat's radius: x ≥ 4.2,
-    // -0.5 ≤ z ≤ 2.5.
+    // cat must never overlap the desk or the chair on the way around.
+    // Collision bounds inflated by the cat's radius: desk x ≥ 4.945,
+    // -0.11 ≤ z ≤ 2.11; chair 4.385 ≤ x ≤ 5.415, 0.545 ≤ z ≤ 1.455.
     let state = start;
     for (let i = 0; i < 500; i++) {
       state = stepBedroom(state, noInput, 0.02);
@@ -158,8 +161,16 @@ describe("stepBedroom", () => {
       // anything past it means real penetration.
       const e = 1e-6;
       const insideDesk =
-        state.cat.x > 4.2 + e && state.cat.z > -0.5 + e && state.cat.z < 2.5 - e;
+        state.cat.x > 4.945 + e &&
+        state.cat.z > -0.11 + e &&
+        state.cat.z < 2.11 - e;
+      const insideChair =
+        state.cat.x > 4.385 + e &&
+        state.cat.x < 5.415 - e &&
+        state.cat.z > 0.545 + e &&
+        state.cat.z < 1.455 - e;
       expect(insideDesk).toBe(false);
+      expect(insideChair).toBe(false);
     }
 
     const distance = Math.hypot(

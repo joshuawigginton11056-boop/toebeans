@@ -2036,6 +2036,92 @@ backwards skiing, uniform turn rate) — then the remaining round-2 list
 round 3 + the boot-containment fix, hair-roots + cat-tail), then music
 (still deliberately last), then the end-of-M2 tuning pass.
 
+## (bedroom) 2026-07-22 — Real bedroom furniture: the gray boxes are gone
+
+The last gray-box item in the room is done. The bed, dresser, and desk are
+real Quaternius models now — plus a nightstand by the bed's head and a
+chair tucked at the desk, both new pieces with real collision — and the
+code-built cone lamps became real fixtures (the restyle the director
+called at the interior-lighting playtest). Everything CC0, same artist as
+the cat, the characters, and the slope's trees, so it all matches by
+construction.
+
+- **Sourced from two Quaternius packs** (both CC0, confirmed by each
+  pack's own License.txt; every file has a
+  [CREDITS.md](assets/CREDITS.md) row): the **Ultimate House Interior
+  Pack** (bed, drawer-dresser, nightstand, the lamp fixtures) and the
+  2019 **Furniture Pack** (desk + chair — the interior pack has no desk).
+  Neither pack is on the itch.io mirror, so both came from the packs'
+  Google Drive folders, OBJ format.
+- **New tool: `tools/obj2glb_bedroom.py`** — a thin wrapper that reuses
+  the slope's OBJ→GLB converter with a furniture material table (the
+  packs reuse names like White/Wood/Black with different meanings, so the
+  bedroom gets its own map instead of growing the nature one). Notable
+  mapping calls: the bed's Red/DarkRed duvet is **dawn pink** (+ a deep
+  value shift) — signal red stays reserved, and the pink duvet ties the
+  room to the haze outside the window; woods land on the birch-amber
+  family, deeper than the birch-bark floor; lamp metals are slate, what
+  the code-built lamps already wore.
+- **One budget exception, recorded honestly:** `Desk.glb` is 2,640 tris —
+  over the bible's ~2k prop budget, taken under its ~5k
+  large-one-off-set-piece allowance. It's one of three set pieces in the
+  room and no other CC0 Quaternius desk exists. Everything else is
+  172–736 tris; all 7 GLBs total ~200 KB.
+- **Collision follows the visuals.** Each model's measured footprint
+  became its obstacle box in `/shared` (bed 2.45×3.16, dresser 1.81×0.73,
+  desk 0.85×1.82 — rotated against the east wall, drawers toward the
+  sitter), and the nightstand and chair are new obstacles. Static layout
+  isn't saved, so **old saves survive — no SAVE_VERSION bump**.
+- **The tucked chair broke the cat's routing assumption.** The route
+  search assumed "well-separated furniture — only ever route around one
+  box"; a chair tucked at the desk makes the way around one piece run
+  through its neighbor, and the old route would have pinned the cat
+  against the chair (the original stuck-cat bug in a new coat). The
+  route graph now covers every obstacle's open corners, drops corners
+  buried inside a neighboring piece, and only keeps edges that clear
+  *all* furniture. The walk-around test now stages exactly this cluster
+  and asserts the cat penetrates neither piece.
+- **Renderer:** models load in the background (the slope's pattern) with
+  gray placeholder boxes standing in until each arrives; every mesh
+  casts and receives shadow. The pendant hangs flush under the ceiling,
+  scaled so its lowest point (2.584) clears the camera's ceiling clamp
+  (2.55). The pendant's bulb faces glow via its "Light" material;
+  `Light_Desk` has no bulb material, so the table lamps keep a small
+  unlit sun-glow bulb tucked under the head — the glow the old lamps
+  had. The lamp *light* (colors, intensities, pools) is untouched, per
+  its playtest pass.
+- `npm run check` (74 tests — layout numbers and the cluster-routing
+  test updated, no count change) and `npm run build` pass. Verified in
+  the live page by driving the real served modules on this session's own
+  dev server (5301): all 7 GLBs serve 200 with zero console errors on a
+  fresh boot; all five pieces land at exactly their obstacle positions,
+  rotations, and scales with zero placeholder boxes left; three glowing
+  bulbs at their designed spots; pixel reads show the dresser and desk
+  in lit/ambient amber, the duvet in dawn-pink-under-blue-ambient, the
+  chair cushion in sunlit dawn pink; an 8-yaw sweep from the room center
+  found zero background-sentinel pixels (the room is still sealed); and
+  the cat, staged against the desk+chair cluster, routes around it live
+  with zero penetrations and sits 1.08 from the player. The rendered
+  *look* of the furniture is the one thing only eyeballs can confirm —
+  headline playtest item below.
+
+**What to playtest:** `npm run dev` — the room is fully furnished. Walk
+the whole room: bump the bed, nightstand, dresser, desk, and chair — do
+the collision edges match what you see? Look at each piece: does the
+furniture read as one cozy set (the beds/drawers and the desk/chair come
+from packs a year apart)? Is the dawn-pink duvet right, or does the bed
+want another color from the palette? Do the new lamp fixtures fix what
+felt wrong about the cone lamps? Trap the cat behind the desk chair —
+does it round the cluster convincingly? And the scale question: does the
+furniture feel right-sized against the character and the cat?
+
+**Next (bedroom session):** the room's big build items are done. Still
+open from earlier playtests: the cat riding permanently off-screen
+behind you while walking (parked at the room rebuild). Candidates in
+IDEAS.md: the front-door direction (slope select), or dressing the room
+further with houseplants/carpet/curtains from the same interior pack.
+Director's call.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -2094,7 +2180,8 @@ Includes the vertical-slice systems that weren't part of the M2 area:
       — for the bedroom that now means the complete room + follow camera
       (director call, 2026-07-22 — replaced the rotating bird's-eye view;
       *room + camera landed 2026-07-22; interior lighting (window, dawn
-      backdrop, lamps) landed 2026-07-22 — real furniture still open*)
+      backdrop, lamps) landed 2026-07-22; real furniture + lamp fixtures
+      landed 2026-07-22 — the room has no gray-box items left*)
 - [ ] Furniture placement system (place/move/store)
 - [ ] One timed-task item and one passive/AFK item working end to end
 - [ ] XP and leveling wired to unlocks
