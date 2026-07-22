@@ -3,7 +3,16 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (slope) Open up the skiable area (director directive, 2026-07-22)
+## (slope) ~~Open up the skiable area~~ — BUILT 2026-07-22
+
+**(BUILT 2026-07-22 — see ROADMAP. `LATERAL_LIMIT` 4 → 12 (a 24-unit
+skiable width, 3× the old lane). Edge behavior: director call, keep the
+hard clamp — the treeline hugging the new edge is the visible cue; the
+berm and impassable-treeline options were offered and passed on. The
+visual lane, chasm/checkpoint spans, and decor scatter now all derive
+from `LATERAL_LIMIT` instead of a parallel hardcoded width; snowfield
+plane and shadow frustum widened to cover. No SAVE_VERSION bump — the
+position heal just clamps wider, as the sketch predicted.)**
 
 Round-4 playtest: turning passes ("looks good"), and the follow-on call
 is that **the lane is too narrow to really test it** — real turning

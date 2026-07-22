@@ -2340,6 +2340,76 @@ always-on feet, angulation round 3 + the boot-containment fix,
 hair-roots + cat-tail), then music (still deliberately last), then the
 end-of-M2 tuning pass.
 
+## (slope) 2026-07-22 — M2: the skiable area opens up — 3× wider
+
+The director's directive from the round-4 playtest, built: the lane was
+too narrow to really use the turning, and now there's room. The skiable
+width went from 8 units to 24 (`LATERAL_LIMIT` 4 → 12) — real carving
+lines, hockey stops, and switch riding all have space to happen.
+
+- **Edge behavior: director call this session — keep the hard clamp.**
+  The soft-berm and impassable-treeline options from the sketch were
+  offered and passed on. The invisible wall stays, just 3× further out;
+  the near treeline hugs the new edge (first trunks ~0.8 past the visual
+  lane), so the boundary is readable the same way it was before — and at
+  the edge the trees' long morning shadows reach into the lane, which
+  reads as "the woods start here" from a distance.
+- **The visuals now derive from the sim's clamp.** The renderer kept a
+  separate hardcoded lane width (10) alongside the sim's limit (4); one
+  number changing without the other would have quietly lied. Now
+  `SLOPE_WIDTH = LATERAL_LIMIT * 2 + 2` — the same one-unit visual
+  margin per side the old pair encoded, kept so the skier never visibly
+  overlaps the treeline while pinned at the limit. Chasm slabs and
+  checkpoint stripes span the new lane automatically (26 wide).
+- **Chasms are full-width by design and stayed that way** — a wider lane
+  makes them *longer* walls side to side, and that's the point: they're
+  gates you jump, not obstacles you route around. Whether that still
+  reads fair now that there's room to swerve is a real playtest
+  question (below).
+- **Scatter re-tuned to the new edge** (`skiRender.ts`): the near
+  treeline band starts just past the lane edge (13.8–22.8 from center,
+  was 5.8–14.8), the sparse oversized far silhouettes moved out to
+  24–40 (was 16–32), and both are now keyed off `LANE_EDGE` so a future
+  width change carries the decor along. Same seed, same 87 pieces, zero
+  in the lane.
+- **Coverage widened to match:** the snowfield plane 80 → 120 across,
+  and the sun's shadow frustum ±45 → ±55 so both treelines keep crisp
+  shadows with the skier anywhere in the lane.
+- **No SAVE_VERSION bump** — the sketch called it: the position heal
+  just clamps into the wider range, and old saves' positions are all
+  legal in a bigger lane.
+- Tests 83 (no count change — the two that hardcoded the old limit now
+  assert against `LATERAL_LIMIT` itself, so the next width change won't
+  touch them). `npm run check` and `npm run build` pass. Verified
+  against the real served modules on this session's own dev server
+  (5302, fresh start — first time in many sessions the port was free):
+  the sim pins at exactly ±12 and W-recovery pulls off the wall; a
+  wild save lateral (±50) heals to exactly ±12; all 87 decor pieces
+  placed with zero inside the lane (near band 14.06–22.72, far
+  24.27–39.66); chasm and checkpoint meshes measure exactly 26 wide;
+  plane 120, frustum ±55; and pixel reads at lateral 0, ±12, and far
+  downslope all land on palette snow (±2/255) with snow-shadow blue
+  tree shadows arriving exactly at the edges — no background sentinel
+  anywhere, so the widened plane covers everything the camera sees.
+  Zero console errors on a fresh boot. What the open slope *feels* like
+  is the eyeballs item below.
+
+**What to playtest:** `npm run dev`, Enter to ski — and use the room.
+Carve long S-turns, hockey-stop, ride switch across the whole width,
+ski along the treeline. The questions: does the slope now feel *open*
+or just *empty* — is the lane width right, or does 24 units want decor
+islands / rollers / something mid-lane to break it up? Do the chasms
+still read fair now that they're long walls you can't route around?
+Does the treeline read clearly as the boundary, or do you hit the
+invisible wall before you expect it (the clamp is ~1 unit shy of the
+first trunks)? And does the camera frame the wider slope well enough,
+or does it want to sit higher/further back?
+
+**Next:** the remaining round-2 list (jump anticipation, gear style +
+longer skis, always-on feet, angulation round 3 + the boot-containment
+fix, hair-roots + cat-tail), then music (still deliberately last), then
+the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

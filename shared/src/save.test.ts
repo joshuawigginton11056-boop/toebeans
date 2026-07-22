@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BOOST_SPEED,
   CHARACTERS,
+  LATERAL_LIMIT,
   SKIN_TONES,
   createDefaultAppearance,
   createInitialBedroomState,
@@ -195,7 +196,7 @@ describe("save/load", () => {
     expect(Math.abs(restored.bedroom.player.z)).toBeLessThan(room.roomDepth / 2);
     expect(Math.abs(restored.bedroom.cat.x)).toBeLessThan(room.roomWidth / 2);
     expect(Math.abs(restored.bedroom.cat.z)).toBeLessThan(room.roomDepth / 2);
-    expect(restored.ski.lateral).toBe(4);
+    expect(restored.ski.lateral).toBe(LATERAL_LIMIT);
     expect(restored.ski.distance).toBe(0);
     expect(restored.ski.height).toBe(0);
   });
