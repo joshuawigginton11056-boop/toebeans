@@ -3,7 +3,63 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (bedroom) Where does the progression loop live now? (parked by director call, 2026-07-22)
+## (slope-vis) Realistic snow — the follow-up test (director verdict, 2026-07-22)
+
+The texture test's split verdict: trees promoted, but **"I'm going for
+realism snow"** — the painted dapple patch is out. What the realism test
+needs to settle, sketched for the build session:
+
+- **The snowfield plane HAS proper UVs** (planes always do), so real
+  image textures work there — the no-UV constraint only bites on the
+  converted GLB models. Two routes, can compose:
+  1. **CC0 photo-based snow** (ambientCG / Polyhaven have snow sets with
+     albedo + normal + roughness): most literal "realism," needs a
+     download (Josh's ask first, per the download rule), a CREDITS.md
+     row, and a check against the M4 15 MB load budget (a 1K set is
+     usually ~1–3 MB compressed; 2K can blow past it fast).
+  2. **Procedural realistic**: generated normal-map micro-relief +
+     roughness-noise sparkle (glints that shift as the camera moves —
+     real snow's signature), no files, no credits. Less literal but
+     composes with the dawn lighting for free.
+- **Palette constraint carried over:** believable white that still
+  averages to sunlit-snow #F8F5EF, shadows still going to snow-shadow
+  blue — realism in *surface*, not in *color grading*.
+- **Tint trap from the lighting pass:** the scene's lights were solved so
+  a #F8F5EF albedo renders exactly right; a photo texture's own color
+  cast will fight that. Neutralize the albedo (desaturate/normalize to
+  the palette family) before it goes in.
+- **Snow-cap question:** the trees' snow caps are on no-UV meshes, so
+  they can't wear the image texture — either the triplanar grain (kept
+  from the approved tree look) reads close enough beside realistic
+  ground snow, or the caps need a matching-family treatment. Judge in
+  the test.
+- **"Snow remembers" composes here:** carved ski trails / spray (the
+  bible's standing rule, still unbuilt) will sit ON this surface —
+  normal-map-based relief makes trail carving cheaper later (draw into
+  the same maps) than a painted-color approach would have.
+- Replace the painted patch in `skiScene.ts` with the realism patch,
+  same side-by-side placement, and re-run the director verdict.
+
+## (lobby) Texture showcase in the lobby background (director ask, 2026-07-22)
+
+The director wants the lobby vignette to **feature the new textures** for
+a close-up look — the lobby camera sits much nearer its trees than the
+slope camera ever gets, so it's the natural inspection stage.
+
+- The vignette already frames seven slope-pack trees/rocks (read-only use
+  of `assets/slope/`). Applying the painted detail to them needs
+  `applyPaintedDetail(...)`, which lives in `client/src/skiScene.ts`
+  (slope-visuals territory) and is currently **not exported** — the
+  smallest hand-off is slope-visuals exporting it (plus
+  `getPaintedTextures` if the ground wants the snow maps), then
+  `lobbyRender.ts` calling it on its decor. Per PARALLEL.md seam rules
+  that export is a one-line additive change either session may make —
+  tag it in the ROADMAP entry when it happens.
+- Ground plane: swap to the **realistic snow** surface once that test
+  lands (it's a plane, UVs fine) — until then the painted trees alone
+  are already worth showing.
+- Keep the dawn-vignette lighting as is — the point is seeing the
+  textures under the game's real light, up close.
 
 The walkable bedroom is scrapped — the game opens on a **menu-style lobby**
 (see ROADMAP, lobby session). That leaves the earn-your-furniture direction

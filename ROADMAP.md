@@ -2832,11 +2832,32 @@ bold so you can see it — dialing back is easy)? Verdict options: promote
 (roll this look across all snow + all 24 slope models), adjust (say which
 knob), or reject (we go back to the drawing board with references).
 
-**Next:** the director's texture verdict decides: promote across the slope
-(+ eventually characters/lobby), tune, or rethink. After that, the parked
-slope-vis list (gear style + longer skis, always-on feet, angulation
-round 3 + boot fix, hair-roots + cat-tail), music (still last), then the
-end-of-M2 tuning pass.
+**Playtest verdict (director, 2026-07-22): split decision — trees
+promoted, snow redirected.**
+
+- **"I like the trees"** — the painted triplanar detail is approved for
+  trees/rocks/props. Promotion across all 24 slope models is a coming
+  slope-visuals session (roll the shader detail onto the scatter, retire
+  the test pairs).
+- **"I'm going for realism snow"** — the painted dapple patch is *not*
+  the snow direction. Snow gets its own follow-up test in the realism
+  direction (sparkle, soft relief, believable white — sketch in
+  [IDEAS.md](IDEAS.md)); the snowfield plane has proper UVs, so real
+  image textures are possible there even though the tree models aren't.
+- **Lobby showcase requested:** the lobby background should feature the
+  new textures so the director can inspect them up close — tagged for
+  the lobby session in [IDEAS.md](IDEAS.md) (needs a small hand-off from
+  slope-visuals: the painted-detail function lives in `skiScene.ts`).
+
+The Art Style Bible's transition note in
+[DESIGN.md](DESIGN.md#art-style-bible) now records the split verdict as
+binding.
+
+**Next:** *(slope-vis)* the realistic-snow test (director judges again),
+then promote painted detail across all slope models. *(lobby)* the
+texture showcase vignette. Then the parked slope-vis list (gear style +
+longer skis, always-on feet, angulation round 3 + boot fix, hair-roots +
+cat-tail), music (still last), then the end-of-M2 tuning pass.
 
 ## Milestones
 

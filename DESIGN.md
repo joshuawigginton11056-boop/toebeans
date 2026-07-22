@@ -139,25 +139,31 @@ interact with your space for more XP → repeat.
 
 ## Art Style Bible
 
-> **⚠ In transition (direction session, 2026-07-22):** the no-texture
-> rule is **amended by director call**. The standing verdict ("I don't
-> like the flat graphics. And there's no texture") got its direction
-> session: the *Omno* references stay the target for mood, lighting,
-> haze, and palette — but surfaces stop being flat. The approved
-> approach is **both** of: (a) **stylized painted textures** on the
-> existing low-poly geometry (visible bark, dappled foliage, snow
-> grain — hand-painted feel, never photoreal), and (b) **procedural
-> surface detail** (shader grain/sparkle, carved ski trails, baked
-> lighting variation). Palette discipline stands: texture colors must
-> stay inside a palette color's family (value/saturation shifts of it),
-> exactly like the existing value-shift allowance. Signal red stays
-> reserved. The first build slice is a **side-by-side test on the real
-> slope** (retextured trees + a snow patch next to the current flat
-> versions) — the bible's shape-language and asset-sourcing sections
-> get their full rewrite once the director approves a test look, since
-> the test decides the texel density, sourcing, and tooling rules worth
-> writing down. Until then: don't invest in new *flat-shaded* assets;
-> everything else below still governs.
+> **⚠ In transition (direction session + test verdict, 2026-07-22):**
+> the no-texture rule is **amended by director call**, and the first
+> side-by-side test returned a **split verdict** that now governs:
+>
+> - **Trees, rocks, props: stylized painted detail is APPROVED**
+>   ("I like the trees") — visible bark strokes, posterized foliage
+>   dapple, grain; hand-painted feel on the existing low-poly geometry,
+>   colors inside a palette color's family (value/saturation shifts).
+>   To be rolled across all 24 slope models.
+> - **Snow: REALISM** ("I'm going for realism snow") — the painted
+>   dapple patch is *not* the snow direction. Snow should read as real
+>   snow: fine sparkle, soft relief, believable sunlit white — while
+>   keeping the two snow palette colors as its family and living under
+>   the same dawn lighting. What "realism" means in practice (photo-based
+>   CC0 textures vs. procedural sparkle/normal detail) is the next
+>   slope-visuals test; it has not been seen or approved yet.
+>
+> The *Omno* references stay the target for mood, lighting, haze, and
+> palette. Signal red stays reserved. The bible's shape-language and
+> asset-sourcing sections get their full rewrite once the realistic
+> snow look is approved — that verdict decides sourcing/tooling rules
+> (image textures need CREDITS rows; painted tree detail is generated
+> in code and needs none). Until then: no new *flat-shaded* assets, and
+> no snow work that isn't the realism test; everything else below still
+> governs.
 
 The binding reference for all art in the game. Written 2026-07-21 from the
 director's five *Omno* reference images and their notes on each. When
