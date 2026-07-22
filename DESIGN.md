@@ -88,8 +88,15 @@ interact with your space for more XP → repeat.
 ## Look & Feel
 
 - **Graphics:** low-poly, cute, wholesome.
-- **Cameras:** environments use a Sims-style bird's-eye view with full room
-  rotation (so all walls can hold art). Skiing uses a 2.5D
+- **Cameras:** environments put you *inside* a complete room with a
+  third-person camera following behind the character — you live in the
+  space, not above it. *(Director call, 2026-07-22 — this supersedes the
+  original Sims-style bird's-eye direction after playing with it: the
+  top-down view was rejected outright. The original "all walls can hold
+  art" goal survives naturally — an inside camera looks at walls all the
+  time. Note: TOEBEANS_VISION.md still describes the bird's-eye view;
+  the director may want to update it, since the vision file is otherwise
+  the source of truth.)* Skiing uses a 2.5D
   isometric/axonometric side-scroller with a three-quarter front
   perspective — you clearly see what's ahead, and (multiplayer phase only)
   behind you, the friend you just passed getting crushed by a snowball.
@@ -425,8 +432,9 @@ above).
 
 - Character customization (basic options)
 - Cat customization (basic options)
-- One environment: the starting bedroom, with the Sims-style rotating
-  bird's-eye camera
+- One environment: the starting bedroom — a complete room (full-height
+  walls, ceiling) with a behind-the-character follow camera *(camera
+  direction changed by director call, 2026-07-22)*
 - Furniture/appliance placement system (place, move, store owned items)
 - **6–8 starter furniture/appliance items**: at least one timed-task item
   (e.g. a TV or grill) and one passive/AFK item (the bed), plus a few

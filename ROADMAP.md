@@ -1589,6 +1589,43 @@ intuitive near eye level?
 assets or the bedroom lighting pass (the room is still ~45% too dark next
 to the slope; both queued from earlier verdicts).
 
+## (bedroom) 2026-07-22 — Director call: scrap the bird's-eye view — follow camera inside a complete room
+
+**Playtest verdict on camera round 2, and a redirect:** the director
+doesn't like the top-down view *at all* — not the tuning, the whole idea.
+The new direction: **play inside a complete room, with the camera
+following behind the character.** Scribing session only — no code; this
+entry, [DESIGN.md](DESIGN.md), and [IDEAS.md](IDEAS.md) were updated so
+the next session starts clean.
+
+- **What this supersedes, honestly:** the two bedroom camera chunks (the
+  Q/E orbit and this session's drag + tilt) built out a bird's-eye view
+  that is now rejected as the way to see the room. The *substrate*
+  largely survives retargeted — the eased-target camera math, the
+  pointer-drag plumbing, the camera-relative walk remap — but the
+  top-down framing, the see-over-the-walls room, and the orbit-the-room-
+  center model are gone. DESIGN.md's camera direction (which came from
+  the vision doc) is updated with the director's call; TOEBEANS_VISION.md
+  still says bird's-eye and is the director's own file to amend.
+- **What the new direction implies** (full sketch in
+  [IDEAS.md](IDEAS.md), written for the next session): full-height walls
+  and a ceiling (the current 1.2-unit walls exist *only* so a high camera
+  sees over them), a follow camera behind the character with the classic
+  third-person problems a small room forces (walls behind the camera,
+  furniture between camera and character), a room that may need to grow —
+  its proportions were tuned for a doll-house view — and the queued
+  bedroom lighting pass becoming an *interior* lighting design (a room
+  with a ceiling has no skylight; it needs a window and/or lamps, which
+  the vision's detail-touches already want anyway).
+- The M3 milestone line ("rotating bird's-eye camera") is updated to
+  match, and IDEAS.md's superseded orbit entries are annotated rather
+  than deleted — the history of why stays readable.
+
+**Next (bedroom session):** build the follow camera + complete room
+(sketch in IDEAS.md). This replaces the furniture/lighting queue as the
+first order of business — both of those now depend on what the room
+becomes.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -1644,7 +1681,8 @@ sounds like the real game.
 Includes the vertical-slice systems that weren't part of the M2 area:
 
 - [ ] The other area (bedroom or slope) brought to the same polish level
-      — incl. the rotating bird's-eye camera if that area is the bedroom
+      — for the bedroom that now means the complete room + follow camera
+      (director call, 2026-07-22 — replaced the rotating bird's-eye view)
 - [ ] Furniture placement system (place/move/store)
 - [ ] One timed-task item and one passive/AFK item working end to end
 - [ ] XP and leveling wired to unlocks

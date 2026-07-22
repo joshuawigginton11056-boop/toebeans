@@ -3,6 +3,54 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (bedroom) Follow camera + complete room — next bedroom chunk (director call, 2026-07-22)
+
+The director rejected the top-down view outright: **play inside a
+complete room, camera following behind the character.** Sketch for the
+build session (probably two chunks — the room and the camera interlock,
+but each is a session's worth):
+
+- **The room becomes real.** Walls go full height (~2.6–3 units for a
+  1.6-unit character; the current 1.2-unit walls exist only so a high
+  camera sees over them) and gain a ceiling. The floor plan likely needs
+  to grow — the current room was proportioned as a doll-house viewed from
+  above, and rooms feel much smaller from inside. Check `/shared`'s
+  `roomWidth`/`roomDepth` against how a follow camera frames the
+  furniture; resizing is a `createInitialBedroomState` change (static
+  layout isn't saved, so old saves survive — positions clamp).
+- **The camera is a chase boom.** Behind the character at a tunable
+  distance/height, easing toward a point behind their facing (reuse the
+  eased-target pattern; the walk-facing state already exists). Mouse drag
+  should orbit *around the character* (the drag plumbing and sensitivity
+  from camera round 2 retarget directly); scroll zoom survives as boom
+  length. Q/E/R/F may keep working for free on the same targets — decide
+  in-session whether to keep the chips or simplify to drag-only.
+- **The classic small-room problems, from day one:** the boom will back
+  into walls constantly — clamp the camera inside the room and/or
+  raycast-shorten the boom against walls/furniture (pull in, ease back
+  out); consider fading/hiding a wall or furniture piece that ends up
+  between camera and character. Near-plane clipping through the
+  character's back at short boom lengths — set a boom minimum. The HUD
+  hint bar and banners are screen-space and unaffected.
+- **Walk input:** the camera-relative remap survives unchanged — feed it
+  the follow camera's yaw instead of the orbit azimuth. "Up = walk away
+  from camera" is exactly what a chase camera wants. The walk *feel*
+  question moves though: with the camera at your back, walking toward
+  the camera (turning around) is the case to playtest.
+- **The cat:** it follows *behind* you, which is now permanently
+  off-screen. Worth a playtest question — should the cat prefer flanking
+  or running ahead so you actually see it? (Its brain is `/shared`; keep
+  any change small and separate.)
+- **Lighting becomes interior design.** A ceiling kills the current
+  skylight-ish setup; the queued "room is ~45% too dark" fix becomes
+  designing interior light — a window (sun + the slope's palette leaking
+  in) and/or warm lamps (the vision's detail-touches want glowing lamps
+  anyway). Probably its own session after the room exists.
+- **Scene switch framing:** entering the bedroom from the slope should
+  place the camera behind the character facing into the room, never
+  inside a wall — pick a deterministic reset (same reasoning as the
+  camera deliberately not being saved).
+
 ## (slope) Push-off audio — a pole scrape synced to the push cycle
 
 The momentum session (2026-07-22) gave the push-off its visuals but no
@@ -16,17 +64,19 @@ speed-gated aperiodic scuffing bed (no discrete strokes, nothing to
 desync). Decide in-session; goes well with the end-of-M2 tuning pass or
 the music session.
 
-## (bedroom) ~~Orbit-camera playtest verdict (director, 2026-07-22)~~ — RESOLVED
+## (bedroom) ~~Orbit-camera playtest verdict (director, 2026-07-22)~~ — RESOLVED, then SUPERSEDED
 
-**(RESOLVED 2026-07-22, bedroom camera round 2 — see ROADMAP.md.)** Both
-items landed as sketched here: pointer-event drag (any mouse button —
-left is the convention, right/middle work with the canvas-only
-`contextmenu` suppression; touch rides along via `touch-action: none`)
-feeding the same eased targets as the keys, and elevation as a third
-eased orbit variable clamped 15°–85° with R/F for keyboard parity. The
-walk-input remap indeed needed no change. If M3's click-to-interact
-furniture wants left-click to itself, add a click-vs-drag movement
-threshold then.
+**(RESOLVED 2026-07-22, bedroom camera round 2 — then SUPERSEDED the same
+day: the director rejected the bird's-eye view entirely; see the follow-
+camera entry at the top.)** Both items landed as sketched here:
+pointer-event drag (any mouse button — left is the convention,
+right/middle work with the canvas-only `contextmenu` suppression; touch
+rides along via `touch-action: none`) feeding the same eased targets as
+the keys, and elevation as a third eased orbit variable clamped 15°–85°
+with R/F for keyboard parity. The walk-input remap needed no change. The
+drag plumbing, eased targets, and remap all carry over to the follow
+camera; the orbit-the-room-center model itself is what's gone. The
+click-vs-drag threshold note for M3's click-to-interact still applies.
 
 ## Cat-hug + hair-physics playtest verdict (director, 2026-07-22) — parked
 
