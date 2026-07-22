@@ -1781,6 +1781,81 @@ anticipation, gear style + longer skis, always-on feet, angulation round 3
 + the boot-containment fix, hair-roots + cat-tail), then music (still
 deliberately last), then the end-of-M2 tuning pass.
 
+## (slope) 2026-07-22 — M2: turning round 2 — air spins, directional falls, faster turning
+
+The three items from the real-turning playtest, in one session. Jumps are
+now a place for style: steering works mid-air at a much faster spin rate —
+fast enough to fit a full 360 inside a jump — and the crash tip-over
+finally falls the way you actually fell.
+
+- **Air spinning** (`shared/src/skiing.ts`): the airborne heading freeze is
+  gone. In the air the skis have nothing to bite, so spinning runs at
+  9 rad/s (vs 1.8 carving on snow) at full authority whatever your speed —
+  even a standstill hop can spin. A jump's ~0.78s of air fits a full 360
+  with margin.
+- **Two design defaults went in un-ratified** (the questions were asked but
+  not answered this session — both are one-line flips, flag at playtest):
+  **(a) full 360° spins are a legal trick** — landing collapses the
+  accumulated heading to its nearest downhill-equivalent (new exported
+  `downhillHeading()`), so a completed spin lands clean and a half spin
+  lands pointing backward; **(b) an over-rotated landing crashes on the
+  first grounded frame** — a botched landing is a fall, no grace window.
+- **The fall matches the fall** (`skiRender.ts`, renderer-only): over-
+  rotating right tips you right, left tips left, and a chasm crash reads as
+  a forward drop instead of the old fixed sideways flop. The tip is now
+  animated too — an accelerating topple over the first 0.35s of the crash
+  pause (the respawn timer doubles as the clock; a forfeit holds fully
+  tipped). And the body keeps its steer through the pause: the renderer
+  used to zero it the moment status ≠ "skiing", which visibly unwound the
+  turn while tipping.
+- **Turn rate 1.2 → 1.8 rad/s** (director-sanctioned tune) with
+  `FALL_HEADING` retuned 2.0 → 2.2 alongside it, keeping the margin-of-
+  error window past sideways at the same ~0.35s it was before the speedup.
+- **A landed spin can't unwind the body**: the model's steer easing now
+  shifts by whole turns first (a 2π jump is visually identity), so when
+  the sim collapses a landed 360 the body settles instead of visibly
+  spinning a full rotation backward.
+- `shared/src/save.ts`: a saved heading now heals by collapsing to its
+  downhill-equivalent before clamping (a save taken mid-air mid-spin can
+  carry whole turns). No save-shape change, so **no SAVE_VERSION bump** —
+  old saves load fine.
+- Housekeeping: the worktree's `.claude/launch.json` gained the
+  `toebeans-slope` (port 5302) dev-server entry PARALLEL.md references,
+  mirroring the bedroom session's addition.
+- Tests 67 → 71 (the mid-air-freeze test now asserts the opposite: air
+  spins beat ground carving; plus standstill hop spin, a completed spin
+  landing clean and collapsed, an over-rotated landing crashing on the
+  first grounded frame, and a mid-spin save healing to its equivalent).
+- `npm run check` (71 tests) and `npm run build` pass. Verified in the
+  live page by driving the real served modules on this session's own dev
+  server (5302): ground turn measures exactly 1.8 rad/s and air exactly
+  9, a real jump gives 0.783s of air and a held spin reaches 7.05 rad
+  (> 2π) then lands clean, collapsed to 0.767; a half-spin landing is
+  legal while airborne and crashes on the first grounded frame (9 → 8
+  lives); the tip animates quadratically to exactly −π/2 for a rightward
+  fall, +π/2 leftward, forward −π/2 for a chasm, holds through forfeit,
+  and snaps upright on respawn; the body's carve node holds exactly −2.3
+  through a crash pause (the old code eased it to 0); and a landed 360's
+  visual jump measures 0.0000 mod a full turn — no backward unwind. Zero
+  console errors throughout. What a spin *looks and feels* like at speed
+  is the eyeballs item below.
+
+**What to playtest:** `npm run dev`, Enter to ski. Jump and hold a steer
+key: you should whip around in the air — try to land a full 360 (land
+clean) and a half-spin (should crash you the moment you touch down). Does
+spinning feel like style or like chaos? Is 9 rad/s the right spin rate —
+can you control a re-aim, or is it all-or-nothing? Crash each way on
+purpose: over-turn left, over-turn right, and ski into a chasm — does each
+tip-over now read as *that* fall? Is the faster ground turning (1.8) right,
+or still too slow? And the two defaults to ratify: should full 360s stay a
+legal trick, and should an over-rotated landing crash instantly (or get a
+brief grace window to steer back)?
+
+**Next:** remaining round-2 list by director's pick — jump anticipation,
+gear style + longer skis, always-on feet, angulation round 3 + the
+boot-containment fix, or the hair-roots + cat-tail fixes. Then music
+(still deliberately last), then the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

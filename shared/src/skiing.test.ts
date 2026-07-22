@@ -195,7 +195,7 @@ describe("stepSkiing", () => {
     expect(state.lateral).toBeLessThan(lateralBefore);
   });
 
-  it("freezes the heading mid-air", () => {
+  it("spins faster in the air than the skis can carve on the snow", () => {
     const airborne: SkiState = {
       ...cruising,
       heading: 0.5,
@@ -203,9 +203,62 @@ describe("stepSkiing", () => {
       verticalVelocity: 2,
     };
 
-    const state = stepSkiing(airborne, { ...noInput, right: true }, 0.1);
+    const spun = stepSkiing(airborne, { ...noInput, right: true }, 0.1);
+    const carved = stepSkiing(cruising, { ...noInput, right: true }, 0.1);
 
-    expect(state.heading).toBe(0.5);
+    // Air has no ski-bite resistance — a jump is where you spin.
+    expect(spun.heading - 0.5).toBeGreaterThan(carved.heading * 2);
+  });
+
+  it("spins in the air even from a standstill hop", () => {
+    // Ground steering authority scales with speed, but air spinning is
+    // free rotation — no snow for the skis to bite.
+    const hopping: SkiState = {
+      ...cruising,
+      speed: 0,
+      height: 0.5,
+      verticalVelocity: 1,
+    };
+
+    const state = stepSkiing(hopping, { ...noInput, left: true }, 0.1);
+
+    expect(state.heading).toBeLessThan(0);
+  });
+
+  it("lands a completed spin clean, collapsed to its downhill-equivalent", () => {
+    // Nearly a full 360 accumulated in the air, about to touch down.
+    const landing: SkiState = {
+      ...cruising,
+      heading: 2 * Math.PI - 0.3,
+      height: 0.05,
+      verticalVelocity: -5,
+    };
+
+    let state = stepSkiing(landing, noInput, 0.05); // touches down
+    state = stepSkiing(state, noInput, 0.05); // first grounded frame
+
+    expect(state.status).toBe("skiing");
+    // The whole turns collapse away — the skis point where they point.
+    expect(Math.abs(state.heading)).toBeLessThan(FALL_HEADING);
+    expect(state.heading).toBeCloseTo(-0.3, 1);
+  });
+
+  it("crashes an over-rotated landing on the first grounded frame", () => {
+    // A half spin: the skis land pointing backward — a botched landing is
+    // a fall, checked the moment the snow is back under them.
+    const landing: SkiState = {
+      ...cruising,
+      heading: 3.0,
+      height: 0.05,
+      verticalVelocity: -5,
+    };
+
+    let state = stepSkiing(landing, noInput, 0.05); // touches down, still legal
+    expect(state.status).toBe("skiing");
+    state = stepSkiing(state, noInput, 0.05); // grounded — the edge gives out
+
+    expect(state.status).toBe("crashed");
+    expect(state.lives).toBe(STARTING_LIVES - 1);
   });
 
   it("slows the descent as the skis point across the hill", () => {

@@ -209,6 +209,15 @@ describe("save/load", () => {
     expect(restored.ski.heading).toBe(FALL_HEADING);
   });
 
+  it("collapses a mid-spin heading to its downhill-equivalent", () => {
+    const { save } = midGameSave();
+    // A save taken mid-air mid-spin can carry whole turns (spins are legal
+    // in the air) — heal to where the skis actually point, not the clamp.
+    const spinning = { ...save, ski: { ...save.ski, heading: 2 * Math.PI + 0.5 } };
+    const restored = restoreSave(decodeSave(JSON.stringify(spinning))!);
+    expect(restored.ski.heading).toBeCloseTo(0.5, 10);
+  });
+
   it("restores a crashed run mid-pause so the respawn still happens", () => {
     let ski = createInitialSkiState();
     // Ski straight into the first chasm at distance 20.
