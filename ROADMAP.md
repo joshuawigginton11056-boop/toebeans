@@ -2129,7 +2129,20 @@ mushy? Is the 40% standstill pivot too slow? Does the over-shoulder look
 sell the stance? Is the hockey stop satisfying? And the 360 question
 above.
 
-**Next:** the remaining round-2 list (jump anticipation, gear style +
+**Playtest verdict (director, 2026-07-22): turning around feels good —
+turning *back* around is clunky and unintuitive.** The specific miss:
+holding W (which should mean "go down the slope") just keeps you going
+the way the character is traveling — in switch, W makes you ski
+*backward faster*. The director's bar: you should be able to turn
+backwards and return forward without ever letting off W. Cause: the sim
+has no input that means "downhill" as a *direction* — W/S only scale the
+speed magnitude along the ski axis, and heading is steered exclusively
+by left/right, so recovering from switch demands a deliberate multi-key
+pivot. Parked in [IDEAS.md](IDEAS.md)'s top block as turning round 4,
+with fix options sketched for the director's pick.
+
+**Next:** turning round 4 — make W mean "downhill" (sketch in IDEAS.md)
+— then the remaining round-2 list (jump anticipation, gear style +
 longer skis, always-on feet, angulation round 3 + the boot-containment
 fix, hair-roots + cat-tail), then music (still deliberately last), then
 the end-of-M2 tuning pass.
