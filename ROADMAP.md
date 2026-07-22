@@ -1626,6 +1626,82 @@ the next session starts clean.
 first order of business — both of those now depend on what the room
 becomes.
 
+## (bedroom) 2026-07-22 — The room view rebuilt: follow camera inside a complete room
+
+The bird's-eye view is gone. You now play *inside* the bedroom — full-height
+walls, a ceiling overhead, and a camera that rides behind the character and
+drifts round to follow wherever you walk. This is the director's redirect
+from the last bedroom session, built as one chunk: the room and the camera
+interlocked too tightly to split (full walls are pointless from above; a
+follow camera is pointless in a doll house).
+
+- **The room is a real interior.** Walls went from the 1.2-unit fence (sized
+  to be seen over) to full 2.8-unit walls with a ceiling closing the box.
+  The floor plan grew 10×8 → 12×10 — rooms feel much smaller at eye level —
+  and the furniture moved flush against the walls, where bedroom furniture
+  actually lives; mid-floor boxes read fine from above and as clutter from
+  inside. This is the one `/shared` change (`createInitialBedroomState`
+  only); static layout isn't saved, so **old saves survive** — positions
+  clamp back in on load, no `SAVE_VERSION` bump.
+- **The camera is a chase boom** (`bedroomRender.ts`): hung behind the
+  character at chest height, eased like everything else in the game. While
+  you walk, it drifts round to sit behind your walk direction — but only as
+  hard as you're walking *away* from it (walking toward the camera doesn't
+  swing it 180° and flip your controls mid-step, the classic chase-camera
+  death spiral), and it keeps its hands off for 1.5s after any manual orbit
+  so a deliberate look-around isn't fought. **Dragging orbits around the
+  character** (same plumbing, sensitivity, and grab-the-world signs as the
+  rejected orbit camera — that substrate survived retargeted), **scroll
+  zooms the boom** (1.2–6.5), Q/E/R/F still work on the same targets.
+- **The small-room problems, handled from day one:** the boom shortens
+  instantly against walls and ceiling (inset 0.25, comfortably past the near
+  plane) and eases back out when space returns, so backing into a corner
+  gives an over-the-shoulder close-up instead of a camera in the void — plus
+  a last-resort position clamp so the camera *provably* can't leave the
+  room. Furniture can't occlude: every gray-box piece tops out below the
+  boom's 1.1-unit origin (the check that tall M3 furniture will need is
+  marked in code).
+- **Walking stays camera-relative** — the remap from the orbit sessions
+  survived unchanged; it just reads the follow camera's yaw now. "Up" is
+  always away from the camera, which is exactly what a chase camera wants.
+- **Coming home is deterministic:** every scene entry (and game load)
+  resets to the same framing — character facing into the room, camera
+  behind, squeezed inside the walls if the character stands near one. The
+  camera still deliberately isn't saved.
+- `npm run check` (59 tests — bedroom tests updated for the new layout) and
+  `npm run build` pass. Verified in the live page by driving the real
+  modules on this session's own dev server (screenshots still frozen —
+  eighteenth session running): the opening camera lands on the exact
+  derived numbers (boom wall-clamped to 2.653, camera z at exactly 4.75);
+  auto-follow settles within 0.05 rad of dead-behind after 3s of walking;
+  walking back toward the camera moves the yaw by only 0.04 (the gate
+  holds); a drag mid-walk applies, freezes auto-follow for exactly its
+  cooldown, then re-converges; walking backwards into a wall pins the
+  camera at exactly the 4.75 bound with the boom on its 0.3 floor; tilt
+  clamps at exactly 60° with the camera at exactly the 2.55 ceiling bound;
+  3 wheel notches multiply the boom by exactly 1.13³; and a pixel-read of
+  a rendered frame shows **zero background-colored pixels** — the room is
+  genuinely sealed. Fresh page load: zero console errors.
+
+**What to playtest:** `npm run dev` — you're inside the room now. Walk
+around and let the camera drift behind you: does the follow feel like a
+companion or a leash (too eager, too lazy)? Drag to look at your
+character's face, then walk — the camera should wait a beat before
+swinging behind you again. Walk straight at the camera: it holds its
+ground and you get a close-up as you pass — does that read okay, or
+disorienting? Back into a corner: the close-up squeeze — acceptable? Scroll
+both ways for the zoom range. And two known things: **the room is dark**
+(the ceiling makes the parked lighting problem worse — the interior
+lighting session is next, judge the camera not the gloom), and **the cat
+now rides behind you**, permanently off-screen while walking — is that a
+problem worth changing its brain for?
+
+**Next (bedroom session):** the interior lighting design (window + lamps —
+now unblocked and urgent, the room reads near-black in places), then real
+bedroom furniture assets. Playtest verdicts on the camera feel numbers
+(follow rate, cooldown, zoom range) fold into the end-of-M2-style tuning
+pass for the bedroom.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -1682,7 +1758,9 @@ Includes the vertical-slice systems that weren't part of the M2 area:
 
 - [ ] The other area (bedroom or slope) brought to the same polish level
       — for the bedroom that now means the complete room + follow camera
-      (director call, 2026-07-22 — replaced the rotating bird's-eye view)
+      (director call, 2026-07-22 — replaced the rotating bird's-eye view;
+      *room + camera landed 2026-07-22 — interior lighting and real
+      furniture still open*)
 - [ ] Furniture placement system (place/move/store)
 - [ ] One timed-task item and one passive/AFK item working end to end
 - [ ] XP and leveling wired to unlocks

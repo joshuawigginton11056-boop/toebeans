@@ -3,12 +3,28 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (bedroom) Follow camera + complete room — next bedroom chunk (director call, 2026-07-22)
+## (bedroom) ~~Follow camera + complete room~~ — BUILT 2026-07-22, two follow-ups remain
 
-The director rejected the top-down view outright: **play inside a
-complete room, camera following behind the character.** Sketch for the
-build session (probably two chunks — the room and the camera interlock,
-but each is a session's worth):
+**(BUILT 2026-07-22 in one chunk — the room and camera interlocked too
+tightly to split.)** Landed as sketched: full-height walls + ceiling,
+room grown 10×8 → 12×10 with furniture flush to the walls, chase boom
+with auto-follow + drag/key orbit + wall/ceiling clamping, walk remap
+retargeted, deterministic reset on coming home. Still live from this
+sketch:
+
+- **Interior lighting design** — now *unblocked* and more urgent: the
+  ceiling makes the already-dark room darker (ceiling and far wall render
+  near-black under the old gray-box lights). A window and/or warm lamps,
+  its own session.
+- **The cat rides behind you** — now permanently off-screen while
+  walking. Playtest question first; if confirmed, a small `/shared`
+  change (flank or lead instead of trail).
+- **Tall furniture occlusion** — the camera boom skips furniture checks
+  because every gray-box piece (0.6–0.9) sits below the boom's 1.1-unit
+  origin. The day M3 furniture includes a wardrobe/shelves, the boom
+  needs an occlusion check (marked in `maxBoomInside`).
+
+Original sketch kept below for the reasoning:
 
 - **The room becomes real.** Walls go full height (~2.6–3 units for a
   1.6-unit character; the current 1.2-unit walls exist only so a high

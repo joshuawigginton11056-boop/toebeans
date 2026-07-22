@@ -49,17 +49,24 @@ export const PLAYER_RADIUS = 0.3;
 export const CAT_RADIUS = 0.2;
 
 export function createInitialBedroomState(): BedroomState {
+  // Proportions are tuned for being *inside* the room (follow camera,
+  // director call 2026-07-22), not the old doll-house view from above:
+  // rooms feel much smaller at eye level, so the floor plan grew from
+  // 10×8, and the furniture moved flush against the walls — mid-floor
+  // furniture read fine from a bird's eye but reads as clutter from
+  // inside. Static layout isn't saved, so old saves survive a resize
+  // (positions clamp back in on load).
   return {
-    player: { x: 0, z: 2.5 },
+    player: { x: 0, z: 2.2 },
     // Starts sitting beside the bed, far enough from the player's spawn
     // that it immediately trots over to greet you.
-    cat: { x: -1.6, z: -0.9, facing: 0, mood: "sitting" },
-    roomWidth: 10,
-    roomDepth: 8,
+    cat: { x: -3.0, z: -1.0, facing: 0, mood: "sitting" },
+    roomWidth: 12,
+    roomDepth: 10,
     obstacles: [
-      { id: "bed", x: -3.4, z: -2.2, width: 2.4, depth: 3.4 },
-      { id: "dresser", x: 4.0, z: -3.2, width: 1.8, depth: 1.2 },
-      { id: "desk", x: 4.1, z: 1.6, width: 1.6, depth: 2.6 },
+      { id: "bed", x: -4.8, z: -3.3, width: 2.4, depth: 3.4 },
+      { id: "dresser", x: 2.5, z: -4.4, width: 1.8, depth: 1.2 },
+      { id: "desk", x: 5.2, z: 1.0, width: 1.6, depth: 2.6 },
     ],
   };
 }

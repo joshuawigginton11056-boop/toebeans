@@ -16,6 +16,7 @@ import {
 import {
   createBedroomScene,
   renderBedroom,
+  resetBedroomView,
   syncBedroomSceneToState,
 } from "./bedroomRender";
 import { createAudio } from "./audio";
@@ -179,6 +180,10 @@ window.addEventListener("keydown", (event) => {
       skiState = createInitialSkiState();
     } else {
       mode = "bedroom";
+      // Coming home always opens on the same deterministic framing —
+      // camera behind the character, facing into the room, never inside a
+      // wall (the follow camera is deliberately not saved).
+      resetBedroomView(bedroomScene, bedroomState);
     }
     showActiveCanvas();
     persist();
@@ -240,8 +245,9 @@ function loop(now: number): void {
   lastTime = now;
 
   if (mode === "bedroom") {
-    // Q/E spin the room, R/F tilt it, the wheel zooms, dragging the canvas
-    // orbits. Wheel notches and drag pixels are consumed once per frame.
+    // Q/E orbit the camera around the character, R/F tilt it, the wheel
+    // zooms the boom, dragging the canvas orbits. Wheel notches and drag
+    // pixels are consumed once per frame.
     const cameraInput = {
       rotate:
         (heldKeys.has("KeyE") ? 1 : 0) - (heldKeys.has("KeyQ") ? 1 : 0),
@@ -255,7 +261,7 @@ function loop(now: number): void {
     dragPixelsY = 0;
     bedroomState = stepBedroom(
       bedroomState,
-      readBedroomInput(bedroomScene.orbit.azimuth),
+      readBedroomInput(bedroomScene.follow.yaw),
       dt,
     );
     syncBedroomSceneToState(bedroomScene, bedroomState, dt, cameraInput);

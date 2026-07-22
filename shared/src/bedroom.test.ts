@@ -63,26 +63,28 @@ describe("stepBedroom", () => {
     // Start to the right of the bed, level with its center, and walk left.
     const start: BedroomState = {
       ...createInitialBedroomState(),
-      player: { x: -1, z: -2.2 },
+      player: { x: -1, z: -3.3 },
     };
     const state = walk(start, { ...noInput, left: true }, 500);
 
-    // Bed center x is -3.4, half width 1.2, plus the player's radius.
-    expect(state.player.x).toBeCloseTo(-3.4 + 1.2 + PLAYER_RADIUS, 5);
+    // Bed center x is -4.8, half width 1.2, plus the player's radius.
+    expect(state.player.x).toBeCloseTo(-4.8 + 1.2 + PLAYER_RADIUS, 5);
   });
 
   it("slides along furniture instead of sticking to it", () => {
+    // Start 0.9 from the bed's blocked edge (at -3.3), so the walk below
+    // hits it inside its 20 steps (each covers ~0.05 per axis).
     const start: BedroomState = {
       ...createInitialBedroomState(),
-      player: { x: -1, z: -2.2 },
+      player: { x: -2.4, z: -3.3 },
     };
     // 20 short steps: long enough to see z progress, short enough that the
     // player is still alongside the bed (not yet slid past its edge).
     const state = walk(start, { ...noInput, left: true, down: true }, 20);
 
     // Blocked on x by the bed, but still moving on z the whole time.
-    expect(state.player.x).toBeCloseTo(-3.4 + 1.2 + PLAYER_RADIUS, 5);
-    expect(state.player.z).toBeGreaterThan(-1.5);
+    expect(state.player.x).toBeCloseTo(-4.8 + 1.2 + PLAYER_RADIUS, 5);
+    expect(state.player.z).toBeGreaterThan(-2.6);
   });
 
   it("cat trots over to greet the player at game start", () => {
@@ -114,7 +116,7 @@ describe("stepBedroom", () => {
     // cat sits down) and the start distance (where a sitting cat gets up).
     const start: BedroomState = {
       ...createInitialBedroomState(),
-      player: { x: -1.6, z: 0.6 },
+      player: { x: -3.0, z: 0.5 },
     };
     const state = walk(start, noInput, 50);
 
@@ -126,7 +128,7 @@ describe("stepBedroom", () => {
     // with dz = 0 is π/2.
     const start: BedroomState = {
       ...createInitialBedroomState(),
-      player: { x: 3, z: -0.9 },
+      player: { x: 3, z: -1.0 },
       obstacles: [],
     };
     const state = stepBedroom(start, noInput, 0.02);
@@ -137,17 +139,18 @@ describe("stepBedroom", () => {
 
   it("cat walks around furniture instead of getting stuck on it", () => {
     // Cat north of the desk, player south of it — the straight line goes
-    // through the desk, so the cat has to round its open (west) corners.
+    // through the desk, so the cat has to round its open (west) corners
+    // (the desk sits flush against the east wall).
     const start: BedroomState = {
       ...createInitialBedroomState(),
-      player: { x: 3.5, z: 3.4 },
-      cat: { x: 3.5, z: -0.8, facing: 0, mood: "sitting" },
+      player: { x: 5.2, z: 3.8 },
+      cat: { x: 5.2, z: -1.5, facing: 0, mood: "sitting" },
     };
 
     // Step manually so every intermediate position can be checked: the
     // cat must never overlap the desk on the way around it.
-    // Desk collision bounds inflated by the cat's radius: x ≥ 3.1,
-    // 0.1 ≤ z ≤ 3.1.
+    // Desk collision bounds inflated by the cat's radius: x ≥ 4.2,
+    // -0.5 ≤ z ≤ 2.5.
     let state = start;
     for (let i = 0; i < 500; i++) {
       state = stepBedroom(state, noInput, 0.02);
@@ -155,7 +158,7 @@ describe("stepBedroom", () => {
       // anything past it means real penetration.
       const e = 1e-6;
       const insideDesk =
-        state.cat.x > 3.1 + e && state.cat.z > 0.1 + e && state.cat.z < 3.1 - e;
+        state.cat.x > 4.2 + e && state.cat.z > -0.5 + e && state.cat.z < 2.5 - e;
       expect(insideDesk).toBe(false);
     }
 
