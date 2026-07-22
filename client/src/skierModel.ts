@@ -147,6 +147,35 @@ const SKI_STAGGER = { L: 0.06, R: -0.04 } as const;
 const TUCK_EASE = 8;
 /** How fast the body eases into a turn (per second). */
 const STEER_EASE = 8;
+
+/**
+ * The pole push-off cycle — the visible propulsion while the run is below
+ * cruise speed (momentum starts runs at a standstill now). A double-pole
+ * push: both arms reach forward together, plant, and drive back past the
+ * hips while the torso crunches into the push; the poles pivot at the grip
+ * so they plant tip-forward and sweep back with the drive. Driven by
+ * setSkiMotion's push (0..1) — the scene fades it out as speed approaches
+ * cruise, where gravity takes over from the poles.
+ *
+ * The arm swing rides the same adduction axis the pole-holding pose uses
+ * (on this rig a hanging arm swings forward mostly via local ±z — L
+ * negative, R positive), with the elbows straightening into the reach.
+ * Amplitudes in radians at full push; the crunch keys off the drive half
+ * of the cycle only.
+ */
+const PUSH_FREQ = 5.2;
+const PUSH_ARM_SWING = 0.55;
+const PUSH_ARM_LIFT = 0.18;
+const PUSH_ELBOW_REACH = -0.3;
+const PUSH_CRUNCH = { Abdomen: 0.08, Torso: 0.1, Neck: -0.12 } as const;
+/** Body dips this far (game units) into each pole drive. */
+const PUSH_DIP = 0.025;
+/** How fast the push cycle blends in and out (per second). */
+const PUSH_EASE = 6;
+/** Pole pivot: tip plants forward on the reach, sweeps back on the drive. */
+const POLE_REST_TILT = 0.7;
+const POLE_PLANT_SWING = 1.1;
+const POLE_DRIVE_SWING = 0.3;
 /**
  * Carving bank: how much the carve group rolls into a turn, as a fraction of
  * the eased steer yaw, and the cap that keeps an emergency swerve from
@@ -527,6 +556,12 @@ export interface SkiMotion {
   readonly steer: number;
   /** Mid-air bodies don't chatter against the snow. */
   readonly airborne: boolean;
+  /**
+   * Pole push-off strength, 0..1: how hard the arms are working to get the
+   * run up to speed. The scene derives it from the run's speed (full pushes
+   * at a standstill, fading to none as gravity takes over near cruise).
+   */
+  readonly push: number;
 }
 
 export interface SkierRig {
@@ -789,12 +824,19 @@ function applySkiPose(
   airborne: boolean,
   bank: number,
   feet: Record<"L" | "R", FootPlacement>,
+  push: number,
+  pushSwing: number,
 ): void {
   instance.skiRest ??= captureSkiRest(instance);
 
   // Micro-motion grows with speed: quiet balance drift while braking,
   // busy working-body at full tuck.
   const wobbleScale = 0.35 + 0.65 * tuck;
+
+  // Push-off cycle phases: the reach half (arms forward, elbows straight)
+  // and the drive half (arms sweeping back, torso crunching into it).
+  const pushReach = push * Math.max(0, pushSwing);
+  const pushDrive = push * Math.max(0, -pushSwing);
 
   for (const [name, delta] of Object.entries(SKI_POSE_ROTATIONS)) {
     const bone = instance.bones.get(name);
@@ -811,6 +853,24 @@ function applySkiPose(
     // roll does (measured live, not assumed) — so countering subtracts.
     const counter = ANGULATION_COUNTER[name];
     if (counter !== undefined) scratchEuler.z -= counter * bank;
+    // The double-pole push: both arms swing together through the full
+    // cycle on the adduction axis (forward reach ↔ backward drive), the
+    // elbows straighten into the reach, and the trunk crunches into the
+    // drive half only — with the neck countering so the eyes stay downhill.
+    if (push > 0) {
+      const armSwing = push * pushSwing * PUSH_ARM_SWING;
+      if (name === "UpperArmL") {
+        scratchEuler.z -= armSwing;
+        scratchEuler.x -= pushReach * PUSH_ARM_LIFT;
+      } else if (name === "UpperArmR") {
+        scratchEuler.z += armSwing;
+        scratchEuler.x -= pushReach * PUSH_ARM_LIFT;
+      } else if (name === "LowerArmL" || name === "LowerArmR") {
+        scratchEuler.x += pushReach * PUSH_ELBOW_REACH;
+      } else if (name in PUSH_CRUNCH) {
+        scratchEuler.x += pushDrive * PUSH_CRUNCH[name as keyof typeof PUSH_CRUNCH];
+      }
+    }
     for (const wobble of SKI_WOBBLE[name] ?? []) {
       const swing =
         wobble.amp * wobbleScale * Math.sin(wobble.freq * time + wobble.phase);
@@ -829,7 +889,10 @@ function applySkiPose(
   const bob =
     lerp(BOB_AMP.brake, BOB_AMP.tuck, tuck) *
       Math.sin(lerp(BOB_FREQ.brake, BOB_FREQ.tuck, tuck) * time) +
-    (airborne ? 0 : tuck * tuck * CHATTER_AMP * Math.sin(CHATTER_FREQ * time));
+    (airborne ? 0 : tuck * tuck * CHATTER_AMP * Math.sin(CHATTER_FREQ * time)) -
+    // The body dips into each pole drive — the legs load up as the arms
+    // push, which is what makes the push read as effort instead of a wave.
+    pushDrive * PUSH_DIP;
   if (instance.pelvis && instance.skiRest.pelvis) {
     instance.pelvis.position
       .copy(instance.skiRest.pelvis)
@@ -921,6 +984,10 @@ export function createSkierRig(): SkierRig {
   let steerTarget = 0;
   let steerCurrent = 0;
   let airborne = false;
+  let pushTarget = 0;
+  let pushCurrent = 0;
+  /** This frame's point in the push cycle — shared with the pole pivots. */
+  let pushSwing = 0;
   /** The micro-motion clock — accumulates only while skiing. */
   let poseTime = 0;
 
@@ -1091,8 +1158,16 @@ export function createSkierRig(): SkierRig {
 
   // Glue each pole's grip to its fist. Runs after the pose is applied, so
   // the poles follow the hands through the brake↔tuck blend for free.
+  // During a push-off the pole also pivots at the grip: tip swinging
+  // forward to plant on the reach, sweeping back past the rest tilt on
+  // the drive — the grip stays glued to the fist throughout.
   function updatePoles(): void {
     if (active === null || pose !== "skiing") return;
+    const tilt =
+      POLE_REST_TILT +
+      pushCurrent *
+        (POLE_DRIVE_SWING * Math.max(0, -pushSwing) -
+          POLE_PLANT_SWING * Math.max(0, pushSwing));
     for (const side of ["L", "R"] as const) {
       const pole = gear.poles[side];
       const fist = active.bones.get(`Fist${side}`);
@@ -1103,6 +1178,7 @@ export function createSkierRig(): SkierRig {
       pole.visible = true;
       fist.getWorldPosition(scratchVector);
       pole.position.copy(carve.worldToLocal(scratchVector));
+      pole.rotation.x = tilt;
     }
   }
 
@@ -1123,6 +1199,7 @@ export function createSkierRig(): SkierRig {
       tuckTarget = Math.min(1, Math.max(0, motion.tuck));
       steerTarget = motion.steer;
       airborne = motion.airborne;
+      pushTarget = Math.min(1, Math.max(0, motion.push));
     },
     setAppearance(appearance: Appearance): void {
       colors = resolveAppearance(appearance);
@@ -1137,6 +1214,8 @@ export function createSkierRig(): SkierRig {
         const ease = (rate: number): number => 1 - Math.exp(-rate * dt);
         tuckCurrent += (tuckTarget - tuckCurrent) * ease(TUCK_EASE);
         steerCurrent += (steerTarget - steerCurrent) * ease(STEER_EASE);
+        pushCurrent += (pushTarget - pushCurrent) * ease(PUSH_EASE);
+        pushSwing = Math.sin(PUSH_FREQ * poseTime);
         // Yaw toward the movement direction. The scene's facing is the
         // downhill half-turn (y = π), which mirrors x — so a positive
         // (rightward) steer needs a negative local yaw to come out turned
@@ -1181,7 +1260,16 @@ export function createSkierRig(): SkierRig {
           );
           assembly.rotation.z = edge - bank;
         }
-        applySkiPose(active, tuckCurrent, poseTime, airborne, bank, feet);
+        applySkiPose(
+          active,
+          tuckCurrent,
+          poseTime,
+          airborne,
+          bank,
+          feet,
+          pushCurrent,
+          pushSwing,
+        );
         updatePoles();
       } else {
         carve.rotation.y = 0;

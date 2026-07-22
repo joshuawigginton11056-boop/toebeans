@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { BOOST_SPEED, MIN_SPEED, type SkiState } from "@toebeans/shared";
+import { BASE_SPEED, BOOST_SPEED, MIN_SPEED, type SkiState } from "@toebeans/shared";
 import { createCatRig, type CatRig } from "./catModel";
 import { createSkierRig, type SkierRig } from "./skierModel";
 
@@ -49,7 +49,7 @@ export interface SkiSceneHandle {
    * respawn (which teleports lateral back to 0) can't read as one frame of
    * violent swerving.
    */
-  readonly steerMemory: { lateral: number; skiing: boolean };
+  readonly steerMemory: { lateral: number; skiing: boolean; speed: number };
 }
 
 const SLOPE_LENGTH = 100;
@@ -186,7 +186,7 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     sun,
     skyDome,
     sunBillboard,
-    steerMemory: { lateral: 0, skiing: true },
+    steerMemory: { lateral: 0, skiing: true, speed: 0 },
   };
 }
 
@@ -219,13 +219,27 @@ export function syncSkiSceneToState(
     const cap = 6;
     steer = Math.atan2(Math.max(-cap, Math.min(cap, sideways)), state.speed);
   }
+  // The pole push-off: poles drive while the run is on the snow, below
+  // cruise speed, and actually gaining — detected the same frame-diff way
+  // as the steer above, so braking down to MIN_SPEED (speed falling or
+  // parked at its floor) never pumps the arms. Fades out as the push-off
+  // approaches cruise, where gravity has taken over from the poles.
+  const grounded = state.height <= 0;
+  const gaining =
+    skiing && handle.steerMemory.skiing && state.speed > handle.steerMemory.speed;
+  const push =
+    grounded && gaining
+      ? Math.max(0, Math.min(1, 1 - state.speed / (0.85 * BASE_SPEED)))
+      : 0;
   handle.steerMemory.lateral = state.lateral;
   handle.steerMemory.skiing = skiing;
+  handle.steerMemory.speed = state.speed;
 
   handle.skier.setSkiMotion({
     tuck: tuck + (state.height > 0 ? 0.2 : 0),
     steer,
     airborne: state.height > 0,
+    push,
   });
 
   handle.cat.update(dt);

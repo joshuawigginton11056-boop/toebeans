@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  BASE_SPEED,
+  BOOST_SPEED,
   createInitialSkiState,
+  MIN_SPEED,
   RESPAWN_DELAY,
   STARTING_LIVES,
   stepSkiing,
@@ -42,25 +45,93 @@ function skiUntilCrash(start: SkiState): SkiState {
   return state;
 }
 
-describe("stepSkiing", () => {
-  it("moves downhill at base speed with no input", () => {
-    const state = stepSkiing(createInitialSkiState(), noInput, 1);
+// Mid-run cruising state (at the momentum model's no-input equilibrium),
+// with no hazards in reach — for tests about steering and speed changes.
+const cruising: SkiState = {
+  ...nearChasm,
+  distance: 0,
+  speed: BASE_SPEED,
+  chasms: [],
+};
 
-    expect(state.distance).toBe(8);
+describe("stepSkiing", () => {
+  it("starts from a standstill and pushes off up to cruise speed", () => {
+    expect(createInitialSkiState().speed).toBe(0);
+
+    // Same start, hazards out of the way — this is about the speed curve.
+    let state: SkiState = { ...createInitialSkiState(), chasms: [] };
+
+    state = stepSkiing(state, noInput, 0.5);
+    const early = state.speed;
+    expect(early).toBeGreaterThan(0);
+    expect(early).toBeLessThan(BASE_SPEED);
+
+    for (let i = 0; i < 300; i++) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    expect(state.speed).toBe(BASE_SPEED);
     expect(state.status).toBe("skiing");
   });
 
   it("steers laterally within the slope limits", () => {
-    const state = stepSkiing(createInitialSkiState(), { ...noInput, right: true }, 1);
+    const state = stepSkiing(cruising, { ...noInput, right: true }, 1);
 
     expect(state.lateral).toBeGreaterThan(0);
     expect(state.lateral).toBeLessThanOrEqual(4);
   });
 
-  it("boosts speed while held", () => {
-    const state = stepSkiing(createInitialSkiState(), { ...noInput, boost: true }, 1);
+  it("has almost no steering authority at a standstill", () => {
+    const still = stepSkiing(createInitialSkiState(), { ...noInput, right: true }, 0.01);
+    const atSpeed = stepSkiing(cruising, { ...noInput, right: true }, 0.01);
 
-    expect(state.speed).toBe(16);
+    // The first push-off frame grants a sliver of authority (speed updates
+    // before steering) — call it under 2% of full-speed steering.
+    expect(still.lateral).toBeLessThan(atSpeed.lateral * 0.02);
+  });
+
+  it("builds boost speed over time rather than snapping to it", () => {
+    const halfway = stepSkiing(cruising, { ...noInput, boost: true }, 0.5);
+    expect(halfway.speed).toBeGreaterThan(BASE_SPEED);
+    expect(halfway.speed).toBeLessThan(BOOST_SPEED);
+
+    let state = cruising;
+    for (let i = 0; i < 100; i++) {
+      state = stepSkiing(state, { ...noInput, boost: true }, 0.02);
+    }
+    expect(state.speed).toBe(BOOST_SPEED);
+  });
+
+  it("coasts back down gradually when boost is released", () => {
+    const boosted: SkiState = { ...cruising, speed: BOOST_SPEED };
+
+    const state = stepSkiing(boosted, noInput, 0.5);
+
+    expect(state.speed).toBeGreaterThan(BASE_SPEED);
+    expect(state.speed).toBeLessThan(BOOST_SPEED);
+  });
+
+  it("brakes harder than it coasts", () => {
+    const fast: SkiState = { ...cruising, speed: BOOST_SPEED };
+
+    const braked = stepSkiing(fast, { ...noInput, down: true }, 0.5);
+    const coasted = stepSkiing(fast, noInput, 0.5);
+
+    expect(braked.speed).toBeLessThan(coasted.speed);
+    expect(braked.speed).toBeGreaterThanOrEqual(MIN_SPEED);
+  });
+
+  it("holds its speed while airborne", () => {
+    const airborne: SkiState = {
+      ...cruising,
+      height: 1,
+      verticalVelocity: 2,
+    };
+
+    const braking = stepSkiing(airborne, { ...noInput, down: true }, 0.1);
+    const boosting = stepSkiing(airborne, { ...noInput, boost: true }, 0.1);
+
+    expect(braking.speed).toBe(BASE_SPEED);
+    expect(boosting.speed).toBe(BASE_SPEED);
   });
 
   it("jumps and comes back down under gravity", () => {
@@ -127,6 +198,8 @@ describe("crashing and the cat's nine lives", () => {
     expect(respawned.distance).toBe(10);
     expect(respawned.lateral).toBe(0);
     expect(respawned.height).toBe(0);
+    // Momentum: the crash scrubbed your speed — you push off again.
+    expect(respawned.speed).toBe(0);
     expect(respawned.lives).toBe(STARTING_LIVES - 1);
   });
 
@@ -135,7 +208,7 @@ describe("crashing and the cat's nine lives", () => {
     const respawned = stepSkiing(crashed, noInput, RESPAWN_DELAY + 0.01);
 
     let state = respawned;
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 300; i++) {
       state = stepSkiing(state, { ...noInput, jump: state.distance > 18 }, 0.02);
     }
 
