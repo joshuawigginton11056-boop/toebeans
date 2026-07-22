@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BOOST_SPEED,
   CHARACTERS,
+  LATERAL_LIMIT,
   SKIN_TONES,
   createDefaultAppearance,
   createInitialSkiState,
@@ -182,7 +183,10 @@ describe("save/load", () => {
       ski: { ...save.ski, lateral: 50, distance: -10, height: -5 },
     };
     const restored = restoreSave(decodeSave(JSON.stringify(wild))!);
-    expect(restored.ski.lateral).toBe(4);
+    // Both sides of the 2026-07-22 merge: no bedroom block anymore (lobby
+    // session), and the widened slope clamps to LATERAL_LIMIT, not a magic 4
+    // (skiable-area session).
+    expect(restored.ski.lateral).toBe(LATERAL_LIMIT);
     expect(restored.ski.distance).toBe(0);
     expect(restored.ski.height).toBe(0);
   });

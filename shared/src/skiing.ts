@@ -92,8 +92,12 @@ const STANDSTILL_AUTHORITY = 0.4;
 // W+left/right holds a stable diagonal rather than fighting the steer to a
 // draw. Left/right alone still steer additively, exactly as before.
 const SEEK_DIAGONAL = Math.PI / 4;
-// Exported for save.ts: restoring a save clamps lateral position into range.
-export const LATERAL_LIMIT = 4;
+// Half the skiable width. Widened 4 → 12 (director directive, 2026-07-22:
+// open up the skiable area — carving, hockey stops, and switch riding all
+// want room). The edge stays a hard clamp (director call, same day).
+// Exported for save.ts (restoring a save clamps lateral into range) and the
+// renderer (the visual lane and decor scatter key off it).
+export const LATERAL_LIMIT = 12;
 const JUMP_VELOCITY = 7;
 const GRAVITY = -18;
 const CHASM_CLEAR_HEIGHT = 0.4;

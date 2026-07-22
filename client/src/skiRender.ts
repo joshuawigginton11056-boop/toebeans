@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   BASE_SPEED,
   BOOST_SPEED,
+  LATERAL_LIMIT,
   MIN_SPEED,
   RESPAWN_DELAY,
   downhillHeading,
@@ -59,7 +60,13 @@ export interface SkiSceneHandle {
 }
 
 const SLOPE_LENGTH = 100;
-const SLOPE_WIDTH = 10;
+// The visual lane derives from the sim's clamp — one extra unit each side,
+// so the skier's body never visibly overlaps the treeline while pinned at
+// the limit. (Was a separate hardcoded 10 when the limit was 4; deriving it
+// keeps the visuals honest now that the area opened up.)
+const SLOPE_WIDTH = LATERAL_LIMIT * 2 + 2;
+// Where the decor scatter starts: just past the visual lane edge.
+const LANE_EDGE = SLOPE_WIDTH / 2;
 // How long the crash tip-over takes to hit the ground, inside the
 // RESPAWN_DELAY pause — quick like a real balance loss, then it holds.
 const TIP_DURATION = 0.35;
@@ -117,10 +124,12 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   const sun = new THREE.DirectionalLight(sunColor, Math.PI);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -45;
-  sun.shadow.camera.right = 45;
-  sun.shadow.camera.top = 45;
-  sun.shadow.camera.bottom = -45;
+  // ±55 covers the widened lane (±12 of skier travel) plus both treelines;
+  // tuned against the old 8-unit lane at ±45.
+  sun.shadow.camera.left = -55;
+  sun.shadow.camera.right = 55;
+  sun.shadow.camera.top = 55;
+  sun.shadow.camera.bottom = -55;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 160;
   sun.shadow.normalBias = 0.05;
@@ -138,7 +147,7 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   // so it quietly follows the skier's z (see sync) — the snow never ends,
   // and its far edge always sits past where the haze fully takes over.
   const slope = new THREE.Mesh(
-    new THREE.PlaneGeometry(80, 220),
+    new THREE.PlaneGeometry(120, 220),
     new THREE.MeshStandardMaterial({ color: PALETTE.sunlitSnow }),
   );
   slope.rotation.x = -Math.PI / 2;
@@ -496,7 +505,9 @@ async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
   };
 
   // Near flanks: a mixed treeline on both sides of the skiable lane,
-  // starting just past its edge (SLOPE_WIDTH/2 = 5) so the lane stays clear.
+  // starting just past its edge (LANE_EDGE) so the lane stays clear. With
+  // the edge kept as a hard clamp (director call, 2026-07-22), this
+  // treeline is the visible cue for where the skiable area ends.
   for (const side of [-1, 1]) {
     for (let z = -4; z > -(SLOPE_LENGTH + 30); z -= 2.5 + random() * 3) {
       const roll = random();
@@ -510,7 +521,7 @@ async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
               : roll < 0.87
                 ? pick(DECOR_MODELS.rocks)
                 : pick(DECOR_MODELS.filler);
-      const x = side * (5.8 + random() * 9);
+      const x = side * (LANE_EDGE + 0.8 + random() * 9);
       place(model, x, z, 0.85 + random() * 0.5);
     }
   }
@@ -523,7 +534,7 @@ async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
         random() < 0.5
           ? pick(DECOR_MODELS.pines)
           : pick(DECOR_MODELS.deadBirches);
-      const x = side * (16 + random() * 16);
+      const x = side * (LANE_EDGE + 11 + random() * 16);
       place(model, x, z, 1.2 + random() * 0.6);
     }
   }

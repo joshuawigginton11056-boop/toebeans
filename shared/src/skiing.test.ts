@@ -3,6 +3,7 @@ import {
   BASE_SPEED,
   BOOST_SPEED,
   createInitialSkiState,
+  LATERAL_LIMIT,
   MIN_SPEED,
   RESPAWN_DELAY,
   STARTING_LIVES,
@@ -79,7 +80,7 @@ describe("stepSkiing", () => {
     const state = stepSkiing(cruising, { ...noInput, right: true }, 1);
 
     expect(state.lateral).toBeGreaterThan(0);
-    expect(state.lateral).toBeLessThanOrEqual(4);
+    expect(state.lateral).toBeLessThanOrEqual(LATERAL_LIMIT);
   });
 
   it("pivots slower at a standstill than carving at speed", () => {
