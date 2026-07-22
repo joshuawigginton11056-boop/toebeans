@@ -159,6 +159,8 @@ interface Hint {
 
 const BEDROOM_HINTS: readonly Hint[] = [
   { key: "WASD / ←↑↓→", label: "walk" },
+  { key: "Q / E", label: "spin room" },
+  { key: "scroll", label: "zoom" },
   { key: "Enter", label: "go skiing" },
   { key: "M", label: "mute" },
   // Home is where you'd look at yourself, so the appearance keys live in

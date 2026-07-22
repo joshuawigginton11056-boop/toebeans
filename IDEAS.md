@@ -16,6 +16,36 @@ speed-gated aperiodic scuffing bed (no discrete strokes, nothing to
 desync). Decide in-session; goes well with the end-of-M2 tuning pass or
 the music session.
 
+## (bedroom) Orbit-camera playtest verdict (director, 2026-07-22) — next bedroom chunk
+
+The Q/E-spin + scroll-zoom camera landed mechanically, but the director
+wants two things it doesn't do. Both live entirely in the bedroom
+session's territory (`client/src/bedroomRender.ts` for the camera math,
+`client/src/main.ts` for input wiring — small additive edits there):
+
+- **Mouse drag should move the camera.** There's currently no pointer
+  control at all — only Q/E. Fix direction: drag with a held mouse button
+  to orbit (horizontal drag = azimuth, vertical drag = elevation, which
+  pairs naturally with the item below). Decide in-session which button:
+  left-drag is the Sims convention but risks colliding with future
+  click-to-interact furniture (an M3 system); right-drag or middle-drag
+  avoids that but needs `contextmenu` suppressed. Drag deltas would feed
+  the same eased `targetAzimuth`/target-elevation the keys use, so feel
+  stays consistent between mouse and keyboard. Touch (pointer events)
+  could ride along nearly free if done via `pointerdown/move/up` instead
+  of mouse events — worth doing since the game may end up on the web
+  portals' touch devices (M5).
+- **Vertical movement — the tilt is fixed.** `ORBIT_ELEVATION` is a
+  constant (~50.7°); the director wants to orbit up/down too. Fix
+  direction: make elevation a third eased orbit variable (like azimuth
+  and radius) with its own clamp — floor around ~15° (any lower and the
+  low walls block the view into the room; they're 1.2 units tall by
+  design so a *high* camera sees over them) and ceiling around ~85°
+  (straight overhead flips `lookAt`'s up-vector — stop just short).
+  Keyboard access (R/F or similar) alongside mouse-drag, for parity with
+  Q/E. Note the walk-input remap only cares about azimuth, so vertical
+  orbit doesn't touch it.
+
 ## Cat-hug + hair-physics playtest verdict (director, 2026-07-22) — parked
 
 Two issues, parked by director's call ("will fix later"):

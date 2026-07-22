@@ -1384,6 +1384,68 @@ longer skis, always-on feet, angulation round 3 + the boot-containment
 fix, or the hair-roots + cat-tail fixes above. Then music (still
 deliberately last), then the end-of-M2 tuning pass.
 
+## (bedroom) 2026-07-22 — Bedroom orbit camera: spin the room, zoom in and out
+
+First chunk from the new bedroom session (see [PARALLEL.md](PARALLEL.md) —
+two sessions now work the repo in parallel; this one owns the bedroom).
+Director's pick: **zoom into and out of the room, spin the room around.**
+The fixed Sims-style bird's-eye camera is now an orbit camera — hold
+**Q / E** to swing the room around its center, **scroll** to zoom — which
+pulls the M3 "rotating bird's-eye camera" note forward. All presentation:
+no `/shared` changes, test count stays at 55.
+
+- **The camera orbits the room center** at the same downward tilt as
+  before; the opening view is *derived from* the old fixed camera's
+  numbers, so the game still opens on exactly the familiar framing —
+  rotation and zoom are additions, not a reframing. Zoom is clamped
+  (6–20 units out) and multiplicative per wheel notch, so every notch
+  changes the view by the same proportion whether close in or far out.
+  Both angle and distance are eased, like the character's turn — the room
+  swings round rather than teleporting.
+- **Walking is now camera-relative.** Spinning the camera 180° would have
+  made "up" walk *toward* you — so the walk keys are read in screen
+  space, rotated by the camera's current angle into world space, and
+  quantized back to the 8-way input `/shared` expects. The shared
+  simulation stays camera-ignorant; mid-spin, a held key curves the walk
+  naturally as the camera comes round.
+- Camera state lives in the renderer handle next to the walk-facing state
+  (same reasoning: pure presentation, deliberately not saved — reopening
+  the game always starts from the classic view). Wheel input drains every
+  frame in both scenes, so scrolling on the slope can't pile up and lurch
+  the camera when you get home.
+- The bedroom hint bar gains **Q / E · spin room** and **scroll · zoom**
+  chips.
+- `npm run check` (55 tests) and `npm run build` pass. Verified in the
+  live page by driving the real modules (screenshots still frozen —
+  sixteenth session running): the opening camera lands on the derived
+  (0, 11, 9) exactly; a 1-second held spin settles at exactly 2.0 radians
+  with radius and tilt invariant and the camera pointed dead at room
+  center (dot 1.000000); 3 wheel notches change distance by exactly
+  1.13³; slam-scrolls clamp at 6 and 20; and the *shipped* input-remap
+  code (extracted from the served source) passes 11 direction cases —
+  identity at the classic view, full flip at 180°, both quarter turns,
+  diagonals, negative and wrapped angles. Zero console errors. How the
+  spin *feels* (speed, easing, zoom range) is the eyeballs item below.
+
+**What to playtest:** `npm run dev` — in the bedroom, hold **Q** or **E**
+to spin the room and scroll to zoom. Does the spin speed feel right for
+looking around a small room? Is the zoom range enough at both ends? And
+the important one: walk while spinning — "up" should always mean "away
+from the camera"; does walking stay intuitive mid-spin, or does the
+remapping ever surprise you?
+
+**Playtest verdict (director, 2026-07-22): two things missing** — recorded
+and parked in [IDEAS.md](IDEAS.md) for the next bedroom session:
+
+1. **No mouse control** — the camera can't be changed by dragging with the
+   mouse; Q/E-plus-scroll is keyboard-only.
+2. **No vertical movement** — the downward tilt is fixed; you can't orbit
+   the camera up toward overhead or down toward eye level.
+
+**Next (bedroom session):** the camera round 2 (mouse drag + vertical
+orbit, details in IDEAS.md), unless the director redirects — real
+furniture assets and the bedroom lighting pass are still queued.
+
 ## (slope) 2026-07-22 — M2: momentum + pole push-off — runs start from a standstill
 
 Director's pick from the round-2 list: the momentum session — the first
