@@ -3,6 +3,61 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope) ~~Turning round 4~~ — BUILT 2026-07-22 (W means "downhill")
+
+**(BUILT 2026-07-22 — see ROADMAP. Option 1, director-picked: while W is
+held the heading eases toward the fall line at the normal turn rate
+through the same authority system — implemented as a target the heading
+eases toward (0 alone; a ±45° carve diagonal with a steer key, so W+A/D
+holds a stable diagonal instead of fighting the steer to a draw).
+Shortest-way-around falls out of easing toward the nearest equivalent
+angle — which is also the drift side — and exactly-backwards tie-breaks
+to a right turn. Works mid-air too (one steering system; flight stays
+ballistic). Left/right alone unchanged; S stays a pure brake; no
+SAVE_VERSION bump. The renderer un-twist came free as predicted — the
+over-shoulder look is eased with a deadband at the speed zero-crossing.)**
+
+Verdict on turning round 3: **turning around feels good; turning back
+around is clunky and not intuitive.** Holding W just continues in the
+direction of travel — riding switch, W accelerates you *backward* — and
+the director's bar is explicit: **you should be able to turn backwards
+and return forward without ever letting off W.**
+
+Cause: after round 3, heading is steered exclusively by left/right, and
+W/S only scale the speed magnitude along the ski axis (projected by
+cos(heading)). No input means "downhill" as a *direction*, so escaping
+switch requires a deliberate left/right pivot — mechanically fine,
+intuitively wrong: W reads as "go down the slope," not "more of whatever
+the skis are doing."
+
+Fix options for the build session (director picks):
+
+1. **W seeks the fall line** *(probably recommended)*: while W is held,
+   the heading also eases toward 0 at the normal carve turn rate — the
+   shortest way around — on top of its speed-up meaning. One key, one
+   intent: "downhill, faster." Left/right still add on top, so W+A/D
+   carves a diagonal and a bare W always comes home to straight running,
+   from any stance, without releasing. S stays a pure brake (it already
+   reads correctly in switch: it slows you whatever end leads).
+2. **Switch-only variant**: W pivots you back only when past sideways
+   (|heading| > π/2), otherwise it's today's pure speed lean. Smaller
+   change, but it puts a behavior seam at exactly sideways, and W would
+   *still* do nothing directional at a 89° carve — the intuition gap
+   just moves.
+3. **Full screen-relative steering** (the bedroom's camera-relative walk,
+   on snow): keys stop being ski-relative entirely and steer the desired
+   travel direction; the sim derives heading. Biggest rework, changes the
+   feel of everything that already passed playtest — only if 1 doesn't
+   land.
+
+Details option 1 must settle: the tie-break at exactly backwards (±π —
+suggest: turn toward the side of your current lateral drift, else
+right); whether W's pivot uses the same speed-scaled authority + 40%
+standstill floor as manual steering (suggest: yes, one steering system);
+and whether the heading collapse toward 0 also un-twists the renderer's
+over-shoulder look smoothly (it should — the look keys off the speed
+sign, which flips through the same continuous pivot).
+
 ## (bedroom) Earn-your-furniture: bare rundown start, XP unlocks, unlock-tree UI (director, 2026-07-22)
 
 Director redirect at the furniture playtest — three connected calls, now
@@ -51,49 +106,6 @@ new references. Needs director references/examples of what "not flat"
 looks like to them before anyone builds — the *Omno* references that
 wrote the bible were themselves flat-shaded, so the target has genuinely
 moved.
-
-## (slope) Turning round 4 — W means "downhill" (director playtest, 2026-07-22)
-
-Verdict on turning round 3: **turning around feels good; turning back
-around is clunky and not intuitive.** Holding W just continues in the
-direction of travel — riding switch, W accelerates you *backward* — and
-the director's bar is explicit: **you should be able to turn backwards
-and return forward without ever letting off W.**
-
-Cause: after round 3, heading is steered exclusively by left/right, and
-W/S only scale the speed magnitude along the ski axis (projected by
-cos(heading)). No input means "downhill" as a *direction*, so escaping
-switch requires a deliberate left/right pivot — mechanically fine,
-intuitively wrong: W reads as "go down the slope," not "more of whatever
-the skis are doing."
-
-Fix options for the build session (director picks):
-
-1. **W seeks the fall line** *(probably recommended)*: while W is held,
-   the heading also eases toward 0 at the normal carve turn rate — the
-   shortest way around — on top of its speed-up meaning. One key, one
-   intent: "downhill, faster." Left/right still add on top, so W+A/D
-   carves a diagonal and a bare W always comes home to straight running,
-   from any stance, without releasing. S stays a pure brake (it already
-   reads correctly in switch: it slows you whatever end leads).
-2. **Switch-only variant**: W pivots you back only when past sideways
-   (|heading| > π/2), otherwise it's today's pure speed lean. Smaller
-   change, but it puts a behavior seam at exactly sideways, and W would
-   *still* do nothing directional at a 89° carve — the intuition gap
-   just moves.
-3. **Full screen-relative steering** (the bedroom's camera-relative walk,
-   on snow): keys stop being ski-relative entirely and steer the desired
-   travel direction; the sim derives heading. Biggest rework, changes the
-   feel of everything that already passed playtest — only if 1 doesn't
-   land.
-
-Details option 1 must settle: the tie-break at exactly backwards (±π —
-suggest: turn toward the side of your current lateral drift, else
-right); whether W's pivot uses the same speed-scaled authority + 40%
-standstill floor as manual steering (suggest: yes, one steering system);
-and whether the heading collapse toward 0 also un-twists the renderer's
-over-shoulder look smoothly (it should — the look keys off the speed
-sign, which flips through the same continuous pivot).
 
 ## (slope) ~~Turning round 3~~ — BUILT 2026-07-22 (no falls, backwards skiing, one turn rate)
 

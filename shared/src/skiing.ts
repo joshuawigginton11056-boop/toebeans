@@ -84,6 +84,14 @@ const TURN_RATE = 1.8;
 // skis in place. Without the floor, braking-by-turning down to a full
 // sideways stop would leave you unable to steer back — a softlock.
 const STANDSTILL_AUTHORITY = 0.4;
+// W means "downhill" (turning round 4, director call 2026-07-22). On top of
+// its speed-up meaning, holding W steers the skis home: the heading eases
+// toward straight-downhill at the normal turn rate, so you can carve into
+// switch and come back to forward running without ever releasing W. With a
+// steer key held too, the target is a carve diagonal to that side instead —
+// W+left/right holds a stable diagonal rather than fighting the steer to a
+// draw. Left/right alone still steer additively, exactly as before.
+const SEEK_DIAGONAL = Math.PI / 4;
 // Exported for save.ts: restoring a save clamps lateral position into range.
 export const LATERAL_LIMIT = 4;
 const JUMP_VELOCITY = 7;
@@ -202,8 +210,22 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     // accumulate mid-air.
     heading = downhillHeading(heading);
   }
-  if (input.left) heading -= TURN_RATE * steerAuthority * dt;
-  if (input.right) heading += TURN_RATE * steerAuthority * dt;
+  const maxTurn = TURN_RATE * steerAuthority * dt;
+  if (input.up) {
+    // W seeks the fall line: ease toward pointing downhill (or a carve
+    // diagonal, with a steer key). Easing the nearest-equivalent offset
+    // takes the shortest way around — which is also the side you're
+    // already drifting toward; from exactly backwards, where both ways
+    // are equidistant, the tie breaks to a right turn.
+    const target =
+      (input.right ? SEEK_DIAGONAL : 0) - (input.left ? SEEK_DIAGONAL : 0);
+    let delta = downhillHeading(target - heading);
+    if (delta === -Math.PI) delta = Math.PI;
+    heading += Math.max(-maxTurn, Math.min(maxTurn, delta));
+  } else {
+    if (input.left) heading -= maxTurn;
+    if (input.right) heading += maxTurn;
+  }
 
   // Speed is signed along the ski axis; the target is the input magnitude
   // projected onto the downhill direction. Pointed downhill that's the full

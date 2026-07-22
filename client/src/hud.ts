@@ -176,7 +176,10 @@ const BEDROOM_HINTS: readonly Hint[] = [
 
 const SLOPE_HINTS: readonly Hint[] = [
   { key: "← →", label: "steer" },
-  { key: "↑ ↓", label: "lean" },
+  // W's full meaning is "downhill, faster" (turning round 4) — one word
+  // has to carry it, and "downhill" is the half a player can't guess.
+  { key: "↑", label: "downhill" },
+  { key: "↓", label: "brake" },
   { key: "Space", label: "jump" },
   { key: "Shift", label: "boost" },
   { key: "M", label: "mute" },
