@@ -1168,9 +1168,32 @@ at both extremes? Jump mid-carve and land: anything jarring? And the taste
 question: is the amount of life right — too twitchy, too calm, or close
 enough to park for the end-of-M2 tuning pass?
 
-**Next:** the remaining round-2 chunks by director's pick — cat hug + hair
-physics (the big one), gear style + longer skis, always-on feet — then
-music (still deliberately last), then the end-of-M2 tuning pass.
+**Playtest verdict (director, 2026-07-22): moved, but didn't land — six
+issues**, honestly recorded and parked in [IDEAS.md](IDEAS.md)'s new top
+block with cause analysis:
+
+1. **The turn isn't fluid** — the whole body banks as one plank. Wants real
+   ski *angulation*: feet/skis pushing out from under the body with knees
+   bent while the torso stays relatively upright.
+2. **The legs are still static** — differently positioned now, but frozen;
+   wants random movement and spacing. (The life layer deliberately left
+   the leg bones and foot pins alone — that gap is now the complaint.)
+3. **No momentum** — runs start at speed and speed returns instantly after
+   nearly stopping; wants resistance and a **pole push-off** to get going.
+   ⚠️ Flagged in IDEAS.md as a `/shared` gameplay change (the first since
+   M1) — speed is currently computed directly from input every frame. Its
+   own session, not a ride-along.
+4. **Knees don't bend to jump** — no takeoff extension or landing absorb.
+5. **The ski boots are blocky** — folded into the parked gear-style pass,
+   with the boots specifically called out.
+6. **Still no feet in the bedroom** — re-confirmed; the always-on-feet
+   item stands.
+
+**Next (new session):** work down the round-2 list by director's pick —
+now: turn angulation + leg life (the reopened motion items), the momentum/
+pole-push-off gameplay session, jump anticipation, plus the still-parked
+cat hug + hair physics, gear style + longer skis, and always-on feet.
+Then music (still deliberately last), then the end-of-M2 tuning pass.
 
 ## Milestones
 

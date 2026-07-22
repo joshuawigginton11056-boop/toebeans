@@ -3,26 +3,76 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## Motion & life playtest verdict (director, 2026-07-22)
+
+The turn/bank + life-layer session moved things but didn't land the feel.
+Six issues, with causes and what each fix takes:
+
+- **The whole body turns as one unit — not fluid.** The director wants
+  real ski *angulation*: in a carve, the feet/skis push OUT from under the
+  body with knees slightly bent, while the torso stays relatively upright
+  over the snow. Cause: the bank is one roll on the carve group, so the
+  character tilts like a plank. Fix: split the bank — keep (or increase)
+  the roll on the skis/feet, push the foot pins laterally outward as steer
+  grows (the pins are already per-frame positions), and counter-rotate the
+  spine bones against the roll so the torso stays near-vertical. All the
+  machinery exists (per-frame foot pins, layered spine deltas); this is
+  re-plumbing where the bank lives, not new tech.
+- **The legs are still static** — differently *positioned* now, but
+  frozen. Wants random movement and spacing. Cause: the life layer wobbles
+  pelvis/arms/torso/head but deliberately left the leg bones and foot pins
+  alone. Two free facts make this cheap: (1) on this rig the feet are
+  root-level IK-style bones, so wobbling Upper/LowerLeg bones wiggles the
+  knees *without* moving the boots off the skis; (2) stance width/stagger
+  can breathe slowly over seconds if each side's ski + boot + foot pin
+  move together (they must stay glued — the skis are currently one static
+  gear group, so per-side ski groups are the small refactor needed).
+- **No momentum: runs start at speed, and speed comes back instantly after
+  nearly stopping.** Wants resistance, and a pole push-off to get going.
+  ⚠️ This is a **/shared gameplay change**, not presentation — the first
+  since M1: `stepSkiing` computes speed directly from input every frame
+  (base ± lean, clamped; boost instant) and `createInitialSkiState` starts
+  at BASE_SPEED. Fix: speed becomes inertial — eases toward its target
+  with acceleration/drag — and runs start near zero with a push-off phase;
+  the presentation side adds a pole-plant push cycle at low speed (the
+  poles already glue to the fists, so the arms doing a push animation
+  carries the poles for free). Touches run timing → chasm jump timing and
+  several tests; interacts with the future finish-line/XP timing. Its own
+  session, not a ride-along.
+- **Knees don't bend to jump.** Cause: the sim's jump is instant (velocity
+  applied the frame you press), and the presentation neither anticipates
+  nor absorbs. Cheap fix: a takeoff leg-extension + landing crouch-absorb
+  envelope keyed off the airborne transitions (the audio already detects
+  exactly these events by state-diffing). True *pre-jump* anticipation —
+  crouching before leaving the ground — would need a sim-side wind-up
+  delay, which is a feel/fairness call to make in-session.
+- **The ski boots are blocky.** Folds into the already-parked gear-style
+  pass below — noting the director specifically called out the boots.
+  Chunky must not mean box: bevels, facets, a lip over the ski.
+- **Still no feet in the bedroom.** Re-confirmed; the always-on-feet item
+  below stands unchanged.
+
 ## Ski-pose playtest verdict (director, 2026-07-22)
 
 The crouch/gear session landed its mechanics (cat faces forward ✓, real
 ski equipment exists ✓, no more mid-run customization ✓) but the look
 needs a round 2. Eight issues, with what each fix takes:
 
-- ~~**Skier never turns.**~~ **(RESOLVED 2026-07-22, motion & life
-  session):** a carve layer in the skier rig yaws the body toward the
-  movement direction (derived frame-to-frame like the bedroom heading) and
-  rolls it into a banking carve, eased like the tuck; the skis tilt onto
-  their edges with the body, and the cat's mount moved inside the carve
-  layer so it rides the turn too.
+- ~~**Skier never turns.**~~ **(Partially resolved 2026-07-22 — REOPENED
+  by the motion-life verdict above):** a carve layer now yaws the body
+  toward the movement direction and banks it into the turn, skis on edge,
+  cat riding along — but the bank rolls the *whole body* as one plank, and
+  the director wants angulation (feet out, knees bent, torso upright). See
+  "not fluid" in the 2026-07-22 motion-life block above.
 - ~~**Legs and arms aren't independent — the body is a rigid block.**~~
-  **(RESOLVED 2026-07-22, motion & life session):** staggered stance (left
-  ski/boot/foot lead, asymmetric arm and leg bends, torso twist with neck
-  counter-turn) plus a procedural life layer — speed-scaled pelvis bob
-  (reads as knees pumping since the feet are pinned), independent arm
-  float at incommensurate frequencies, torso rock, head corrections, and
-  airborne-gated snow chatter. Idle stays frozen, per the paused-clip
-  gotcha. Whether the *amount* of life is right is a tuning-pass question.
+  **(Partially resolved 2026-07-22 — legs REOPENED by the motion-life
+  verdict above):** staggered stance + a procedural life layer landed
+  (speed-scaled pelvis bob, independent arm float at incommensurate
+  frequencies, torso rock, head corrections, airborne-gated snow chatter;
+  Idle stays frozen per the paused-clip gotcha) — but the *legs* were
+  deliberately left out of the wobble layer and still read static. See
+  "legs are still static" in the block above for why leg wobble is cheap
+  on this rig.
 - **Ski equipment doesn't match the art style.** The gear is plain
   primitives (sharp boxes, thin cylinders) against chunky rounded
   characters. Wants a proportion-and-facet pass: chunkier boots, thicker
