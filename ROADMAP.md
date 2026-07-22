@@ -2618,10 +2618,23 @@ you press)? Is the takeoff pop / landing absorb visible at slope
 distance? And does holding Space too long ever get you into a chasm you
 meant to jump — is that fair or cheap?
 
-**Next:** the rest of the round-2 list (gear style + longer skis,
-always-on feet, angulation round 3 + the boot-containment fix,
-hair-roots + cat-tail), then music (still deliberately last), then the
-end-of-M2 tuning pass.
+**Playtest report (director, 2026-07-22): a boost × turning bug reopens
+the turning saga.** Turning backward while holding Shift sends the
+character speeding *toward the camera* — up the hill — instead of
+continuing downhill; and Shift should speed up direction changing, not
+worsen it. Reproduced and measured same session: a boosted pivot travels
+uphill for 3.46s at up to 9.4 u/s, because grounded travel follows the
+ski axis (a pivot rotates the momentum with the skis) and the decay to
+the correct switch target runs at coast drag. Normal speeds mask it;
+boost exposes it. Full diagnosis + three fix options (recommended: flip
+the stance at the sideways crossing so momentum stays on the hill) parked
+in [IDEAS.md](IDEAS.md)'s top block as **turning round 5**.
+
+**Next:** turning round 5 (the boost × turnaround fix above — director
+picks from the sketched options), then the rest of the round-2 list
+(gear style + longer skis, always-on feet, angulation round 3 + the
+boot-containment fix, hair-roots + cat-tail), then music (still
+deliberately last), then the end-of-M2 tuning pass.
 
 ## Milestones
 
