@@ -1696,6 +1696,12 @@ lighting session is next, judge the camera not the gloom), and **the cat
 now rides behind you**, permanently off-screen while walking — is that a
 problem worth changing its brain for?
 
+**Playtest verdict (director, 2026-07-22): "Looks great."** The rebuilt
+room view stands as-is — no follow-ups called on the camera feel, the
+squeeze behavior, or the room proportions. The two flagged questions (the
+dark room, the cat riding off-screen behind you) weren't ruled on and stay
+open in [IDEAS.md](IDEAS.md).
+
 **Next (bedroom session):** the interior lighting design (window + lamps —
 now unblocked and urgent, the room reads near-black in places), then real
 bedroom furniture assets. Playtest verdicts on the camera feel numbers
