@@ -63,10 +63,17 @@ export function createInitialBedroomState(): BedroomState {
     cat: { x: -3.0, z: -1.0, facing: 0, mood: "sitting" },
     roomWidth: 12,
     roomDepth: 10,
+    // Footprints match the real furniture models (assets/bedroom/, real
+    // furniture session) — collision follows the visuals, not the other
+    // way round. Bed/dresser/desk are the original three pieces; the
+    // nightstand (by the bed's head) and the chair (tucked at the desk)
+    // arrived with the real assets.
     obstacles: [
-      { id: "bed", x: -4.8, z: -3.3, width: 2.4, depth: 3.4 },
-      { id: "dresser", x: 2.5, z: -4.4, width: 1.8, depth: 1.2 },
-      { id: "desk", x: 5.2, z: 1.0, width: 1.6, depth: 2.6 },
+      { id: "bed", x: -4.78, z: -3.42, width: 2.45, depth: 3.16 },
+      { id: "nightstand", x: -3.16, z: -4.66, width: 0.67, depth: 0.67 },
+      { id: "dresser", x: 2.5, z: -4.63, width: 1.81, depth: 0.73 },
+      { id: "desk", x: 5.57, z: 1.0, width: 0.85, depth: 1.82 },
+      { id: "chair", x: 4.9, z: 1.0, width: 0.63, depth: 0.51 },
     ],
   };
 }
@@ -167,48 +174,60 @@ interface Point {
 
 // Where the cat should walk this frame: straight at the player if the
 // line is clear, otherwise the first waypoint of the shortest route
-// around the blocking furniture (cat → its open corners → player, tiny
-// Dijkstra over at most 6 nodes). Recomputed every frame from state
-// alone, so the cat rounds a corner and re-aims with no stored path.
-// (With three well-separated furniture pieces, a corner route blocked by
-// a *second* piece can't happen, so this only routes around one box.)
+// around the furniture in the way (cat → open corners → player, tiny
+// Dijkstra). Recomputed every frame from state alone, so the cat rounds
+// a corner and re-aims with no stored path. The graph covers *every*
+// obstacle's corners, not just the first blocker's, because furniture
+// can sit in tucked clusters (the chair at the desk, since the real
+// furniture session) — there, the way around one piece runs through its
+// neighbor, and a one-box route would pin the cat against the second
+// piece (the original stuck-cat bug in a new coat).
 function pickWalkTarget(
   state: BedroomState,
   cat: BedroomCat,
   player: Point,
 ): Point {
-  const blocking = state.obstacles.find((obstacle) =>
-    segmentHitsBox(
-      cat.x,
-      cat.z,
-      player.x,
-      player.z,
-      inflatedBox(obstacle, VISIBILITY_PAD),
-    ),
-  );
-  if (!blocking) return player;
+  const visBoxes = state.obstacles.map((o) => inflatedBox(o, VISIBILITY_PAD));
+  const clears = (a: Point, b: Point): boolean =>
+    visBoxes.every((box) => !segmentHitsBox(a.x, a.z, b.x, b.z, box));
+  if (clears(cat, player)) return player;
 
-  const visBox = inflatedBox(blocking, VISIBILITY_PAD);
-  const box = inflatedBox(blocking, CAT_RADIUS + CAT_CORNER_CLEARANCE);
-  const corners = [
-    { x: box.minX, z: box.minZ },
-    { x: box.minX, z: box.maxZ },
-    { x: box.maxX, z: box.minZ },
-    { x: box.maxX, z: box.maxZ },
-  ].filter(
-    (corner) =>
-      // Corners squeezed against a wall (furniture sits flush with them)
-      // aren't walkable — drop them so the cat routes the open way round.
-      Math.abs(corner.x) <= state.roomWidth / 2 - CAT_RADIUS &&
-      Math.abs(corner.z) <= state.roomDepth / 2 - CAT_RADIUS &&
-      // A corner the cat is standing on adds nothing to the route graph,
-      // and keeping it would let "walk to where you already are" win.
-      Math.hypot(corner.x - cat.x, corner.z - cat.z) > 0.01,
-  );
+  // Corners buried inside a neighboring piece aren't standable — the
+  // tucked chair's desk-side corners live inside the desk's footprint.
+  const solidBoxes = state.obstacles.map((o) => inflatedBox(o, CAT_RADIUS));
+  const buried = (p: Point): boolean =>
+    solidBoxes.some(
+      (box) =>
+        p.x > box.minX && p.x < box.maxX && p.z > box.minZ && p.z < box.maxZ,
+    );
+
+  const corners: Point[] = [];
+  for (const obstacle of state.obstacles) {
+    const box = inflatedBox(obstacle, CAT_RADIUS + CAT_CORNER_CLEARANCE);
+    for (const corner of [
+      { x: box.minX, z: box.minZ },
+      { x: box.minX, z: box.maxZ },
+      { x: box.maxX, z: box.minZ },
+      { x: box.maxX, z: box.maxZ },
+    ]) {
+      if (
+        // Corners squeezed against a wall (furniture sits flush with them)
+        // aren't walkable — drop them so the cat routes the open way round.
+        Math.abs(corner.x) <= state.roomWidth / 2 - CAT_RADIUS &&
+        Math.abs(corner.z) <= state.roomDepth / 2 - CAT_RADIUS &&
+        !buried(corner) &&
+        // A corner the cat is standing on adds nothing to the route graph,
+        // and keeping it would let "walk to where you already are" win.
+        Math.hypot(corner.x - cat.x, corner.z - cat.z) > 0.01
+      ) {
+        corners.push(corner);
+      }
+    }
+  }
 
   // Shortest path over: node 0 = cat, then corners, last node = player.
-  // Two nodes are connected iff the straight line between them clears the
-  // box; diagonal corner-to-corner hops get pruned by that automatically.
+  // Two nodes are connected iff the straight line between them clears
+  // every box; diagonal corner-to-corner hops get pruned automatically.
   const nodes: readonly Point[] = [{ x: cat.x, z: cat.z }, ...corners, player];
   const playerNode = nodes.length - 1;
   const dist = nodes.map(() => Infinity);
@@ -227,7 +246,7 @@ function pickWalkTarget(
     for (let v = 0; v < nodes.length; v++) {
       if (done[v] || v === u) continue;
       const to = nodes[v]!;
-      if (segmentHitsBox(from.x, from.z, to.x, to.z, visBox)) continue;
+      if (!clears(from, to)) continue;
       const alt = dist[u]! + Math.hypot(to.x - from.x, to.z - from.z);
       if (alt < dist[v]!) {
         dist[v] = alt;

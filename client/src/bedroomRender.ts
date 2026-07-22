@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { type BedroomState } from "@toebeans/shared";
 import { createCatRig, type CatRig } from "./catModel";
 import { createSkierRig, type SkierRig } from "./skierModel";
@@ -115,8 +116,8 @@ const BACKDROP_DISTANCE = 2.6;
 
 /** Where the boom looks at and pivots around: chest height on the 1.6-unit
  * character, so close-ups frame the upper body rather than the feet. It's
- * also the boom's origin, which keeps the camera line above every gray-box
- * furniture top (0.6–0.9) — see maxBoomInside. */
+ * also the boom's origin, which keeps the camera line above every
+ * furniture top (tallest: the chair back at 1.07) — see maxBoomInside. */
 const LOOK_HEIGHT = 1.1;
 
 // The opening framing, also what resetBedroomView returns to: slightly
@@ -180,12 +181,32 @@ const AUTO_FOLLOW_RATE = 1.8;
  * mid-walk isn't immediately undone. */
 const MANUAL_ORBIT_COOLDOWN = 1.5;
 
-// Placeholder furniture heights, keyed by obstacle id. Height is a
-// rendering-only detail — collision in /shared is 2D and doesn't need it.
-const OBSTACLE_HEIGHTS: Record<string, number> = {
-  bed: 0.6,
-  dresser: 0.9,
-  desk: 0.75,
+// ---- Real furniture -------------------------------------------------------
+//
+// assets/bedroom/ models (Quaternius, CC0, palette-recolored by
+// tools/obj2glb_bedroom.py — see assets/CREDITS.md), keyed by obstacle id.
+// Scale and rotation put each model's measured footprint exactly on its
+// obstacle box in /shared — collision follows the visuals. Models load in
+// the background (skiRender's pattern); a gray placeholder box stands in
+// until each one arrives, so the room is never furnitureless.
+interface FurniturePiece {
+  readonly file: string;
+  readonly scale: number;
+  readonly rotationY: number;
+  /** World height at this scale — sizes the placeholder box, and documents
+   * that every piece tops out below the camera boom's 1.1 LOOK_HEIGHT
+   * (the chair back, 1.07, is the tallest — see maxBoomInside). */
+  readonly height: number;
+}
+const FURNITURE: Record<string, FurniturePiece> = {
+  bed: { file: "Bed_King.glb", scale: 0.8, rotationY: 0, height: 0.97 },
+  nightstand: { file: "NightStand_1.glb", scale: 0.7, rotationY: 0, height: 0.57 },
+  dresser: { file: "Drawer_1.glb", scale: 0.65, rotationY: 0, height: 0.88 },
+  // The desk is authored long-in-x with its drawers facing +z; rotated to
+  // sit against the east wall, drawers toward the sitter.
+  desk: { file: "Desk.glb", scale: 1, rotationY: -Math.PI / 2, height: 0.92 },
+  // The chair faces +z natively; turned to face +x, tucked at the desk.
+  chair: { file: "Chair.glb", scale: 1, rotationY: Math.PI / 2, height: 1.07 },
 };
 
 export function createBedroomScene(
@@ -320,16 +341,42 @@ export function createBedroomScene(
   addOutsideBackdrop(scene, state);
   addLamps(scene, state);
 
+  const loader = new GLTFLoader();
   for (const obstacle of state.obstacles) {
-    const height = OBSTACLE_HEIGHTS[obstacle.id] ?? 0.8;
-    const mesh = new THREE.Mesh(
+    const piece = FURNITURE[obstacle.id];
+    const height = piece?.height ?? 0.8;
+    const placeholder = new THREE.Mesh(
       new THREE.BoxGeometry(obstacle.width, height, obstacle.depth),
       new THREE.MeshStandardMaterial({ color: 0xaaa49a }),
     );
-    mesh.position.set(obstacle.x, height / 2, obstacle.z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    scene.add(mesh);
+    placeholder.position.set(obstacle.x, height / 2, obstacle.z);
+    placeholder.castShadow = true;
+    placeholder.receiveShadow = true;
+    scene.add(placeholder);
+    if (!piece) continue;
+
+    loader
+      .loadAsync(`${import.meta.env.BASE_URL}bedroom/${piece.file}`)
+      .then((gltf) => {
+        const model = gltf.scene;
+        model.scale.setScalar(piece.scale);
+        model.rotation.y = piece.rotationY;
+        // Converted models are origin-at-base and centered on x/z, so the
+        // obstacle's center is the model's position.
+        model.position.set(obstacle.x, 0, obstacle.z);
+        model.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        scene.remove(placeholder);
+        placeholder.geometry.dispose();
+        scene.add(model);
+      })
+      // A failed load just keeps the placeholder — same graceful shape as
+      // the slope's background decor loading.
+      .catch(() => undefined);
   }
 
   // The same skier rig that goes down the slope, so "you" are recognizably
@@ -482,84 +529,109 @@ function addOutsideBackdrop(scene: THREE.Scene, state: BedroomState): void {
   scene.add(backdrop);
 }
 
+/** The pendant fixture's native height is 0.48; at this scale it hangs
+ * 0.216 down from the ceiling, keeping its lowest point (2.584) above the
+ * camera's ceiling clamp (WALL_HEIGHT − CAMERA_MARGIN = 2.55) — the boom
+ * can slide along the ceiling right through the room's center, and a
+ * fixture clipping the near plane there would flash the frame. */
+const PENDANT_SCALE = 0.45;
+const PENDANT_NATIVE_HEIGHT = 0.48;
+
+/** Table-lamp fixture scale (native height 0.57 → 0.34 on a surface). */
+const TABLE_LAMP_SCALE = 0.6;
+
 /**
  * The warm lamps (the vision's detail-touches want glowing lamps): a
- * pendant over the room's center plus small lamps on the dresser and desk.
- * Each is a sun-glow bulb (unlit, so it visibly glows) under a birch-bark
- * shade, with a warm point light pooling on top of the cool ambient —
- * cozy warmth against the blue, rather than the thing keeping the room
+ * pendant over the room's center plus table lamps on the dresser and desk.
+ * The fixtures are real models now (Light_CeilingSingle + Light_Desk from
+ * assets/bedroom/ — the lamp-shape restyle the director called at the
+ * interior-lighting playtest); the *light* itself passed that playtest and
+ * is untouched: same warm point lights pooling on top of the cool ambient,
+ * cozy warmth against the blue rather than the thing keeping the room
  * visible. No lamp shadows: point-light shadow maps cost six faces each,
  * and a soft shadowless fill is exactly what lamp light should feel like.
+ * Each model's "Light" material (the bulb faces) is swapped to unlit sun
+ * glow so bulbs visibly glow, like the code-built spheres they replace.
  */
 function addLamps(scene: THREE.Scene, state: BedroomState): void {
-  const shadeMaterial = new THREE.MeshStandardMaterial({
-    color: PALETTE.birchBark,
-    side: THREE.DoubleSide, // the cones are open — their insides show
-  });
-  const metalMaterial = new THREE.MeshStandardMaterial({ color: 0x66738c });
   const bulbMaterial = new THREE.MeshBasicMaterial({ color: PALETTE.sunGlow });
   // Warmer than the bulbs' sun-glow surface: lamp light drops more blue
   // than a low sun does, which is what makes the pools read as *lamp*
   // against the sun patch.
   const lampLight = new THREE.Color(1.0, 0.84, 0.6);
+  const loader = new GLTFLoader();
 
-  const addTableLamp = (x: number, topY: number, z: number): void => {
-    const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.055, 0.065, 0.03, 10),
-      metalMaterial,
-    );
-    base.position.set(x, topY + 0.015, z);
-    const stem = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.015, 0.015, 0.16, 8),
-      metalMaterial,
-    );
-    stem.position.set(x, topY + 0.11, z);
-    const shade = new THREE.Mesh(
-      new THREE.ConeGeometry(0.1, 0.12, 10, 1, true),
-      shadeMaterial,
-    );
-    shade.position.set(x, topY + 0.25, z);
-    const bulb = new THREE.Mesh(
-      new THREE.SphereGeometry(0.035, 12, 8),
-      bulbMaterial,
-    );
-    bulb.position.set(x, topY + 0.2, z);
-    const light = new THREE.PointLight(lampLight, 2);
-    light.position.set(x, topY + 0.18, z);
-    scene.add(base, stem, shade, bulb, light);
+  const glowBulbs = (model: THREE.Object3D): void => {
+    model.traverse((child) => {
+      if (
+        child instanceof THREE.Mesh &&
+        (child.material as THREE.Material).name === "Light"
+      ) {
+        child.material = bulbMaterial;
+      }
+    });
   };
 
-  // Pendant: hung so its lowest point sits just above the camera's
-  // ceiling clamp (WALL_HEIGHT − CAMERA_MARGIN = 2.55) — the camera can
-  // slide along the ceiling right through the room's center, and a shade
-  // clipping the near plane there would flash the frame.
-  const cord = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.012, 0.012, 0.1, 6),
-    metalMaterial,
-  );
-  cord.position.set(0, WALL_HEIGHT - 0.05, 0);
-  const shade = new THREE.Mesh(
-    new THREE.ConeGeometry(0.16, 0.14, 10, 1, true),
-    shadeMaterial,
-  );
-  shade.position.set(0, 2.63, 0);
-  const bulb = new THREE.Mesh(
-    new THREE.SphereGeometry(0.045, 12, 8),
-    bulbMaterial,
-  );
-  bulb.position.set(0, 2.6, 0);
+  // The pendant, hung flush under the ceiling over the room's center.
+  loader
+    .loadAsync(`${import.meta.env.BASE_URL}bedroom/Light_CeilingSingle.glb`)
+    .then((gltf) => {
+      const pendant = gltf.scene;
+      pendant.scale.setScalar(PENDANT_SCALE);
+      pendant.position.set(
+        0,
+        WALL_HEIGHT - PENDANT_NATIVE_HEIGHT * PENDANT_SCALE,
+        0,
+      );
+      glowBulbs(pendant);
+      scene.add(pendant);
+    })
+    .catch(() => undefined);
   const pendantLight = new THREE.PointLight(lampLight, 7);
   pendantLight.position.set(0, 2.5, 0);
-  scene.add(cord, shade, bulb, pendantLight);
+  scene.add(pendantLight);
 
   // On the furniture: the dresser lamp sits in the opening view next to
   // the window; the desk lamp warms the room's south-east end, the far
-  // corner from the sun. Positions keyed to the gray-box tops — when real
-  // furniture lands, these move with it.
+  // corner from the sun. Heights are the real models' surfaces: the
+  // dresser's top (0.88) and the desk's desktop plane (0.53 — its bounding
+  // top, 0.92, is the hutch shelf along the wall side).
   const dresser = state.obstacles.find((o) => o.id === "dresser");
   const desk = state.obstacles.find((o) => o.id === "desk");
-  if (dresser) addTableLamp(dresser.x, OBSTACLE_HEIGHTS["dresser"]!, dresser.z);
-  if (desk) addTableLamp(desk.x + 0.3, OBSTACLE_HEIGHTS["desk"]!, desk.z + 0.7);
+  const spots: Array<{ x: number; y: number; z: number; turn: number }> = [];
+  if (dresser) spots.push({ x: dresser.x, y: 0.88, z: dresser.z, turn: 0 });
+  // On the desk's south end, turned to lean over the desktop.
+  if (desk) spots.push({ x: desk.x - 0.12, y: 0.53, z: desk.z + 0.6, turn: Math.PI });
+  loader
+    .loadAsync(`${import.meta.env.BASE_URL}bedroom/Light_Desk.glb`)
+    .then((gltf) => {
+      for (const spot of spots) {
+        const lamp = gltf.scene.clone(true);
+        lamp.scale.setScalar(TABLE_LAMP_SCALE);
+        lamp.rotation.y = spot.turn;
+        lamp.position.set(spot.x, spot.y, spot.z);
+        scene.add(lamp);
+      }
+    })
+    .catch(() => undefined);
+  for (const spot of spots) {
+    // Unlike the pendant, Light_Desk has no "Light" bulb material (its
+    // head is plain White), so each table lamp keeps a small unlit bulb
+    // tucked under the head — the glow the code-built lamps had. The head
+    // leans toward the model's +z, rotated by the lamp's turn.
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.03, 12, 8),
+      bulbMaterial,
+    );
+    bulb.position.set(
+      spot.x + 0.1 * Math.sin(spot.turn),
+      spot.y + 0.26,
+      spot.z + 0.1 * Math.cos(spot.turn),
+    );
+    const light = new THREE.PointLight(lampLight, 2);
+    light.position.set(spot.x, spot.y + 0.27, spot.z);
+    scene.add(bulb, light);
+  }
 }
 
 /**
@@ -640,10 +712,11 @@ function placeFollowCamera(
  * easing back out (the ease in syncBedroomSceneToState).
  *
  * Furniture deliberately isn't tested: the boom starts at LOOK_HEIGHT
- * (1.1) and only rises (pitch ≥ 3°), while every gray-box furniture top
- * sits at 0.6–0.9 — the camera line can't geometrically touch one. That
- * stops being true the day real furniture includes something tall (a
- * wardrobe, shelves); this is where its occlusion check goes.
+ * (1.1) and only rises (pitch ≥ 3°), while every furniture piece tops out
+ * below that (the chair back, 1.07, is the tallest — see FURNITURE) — the
+ * camera line can't geometrically touch one. That stops being true the
+ * day the room gains something tall (a wardrobe, shelves, a floor lamp);
+ * this is where its occlusion check goes.
  */
 function maxBoomInside(
   state: BedroomState,

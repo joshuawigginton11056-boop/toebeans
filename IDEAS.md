@@ -130,7 +130,12 @@ door-shaped when their sessions come up anyway:
 - Both sessions touch this seam (scene switching is shared territory) —
   coordinate via ROADMAP entries when it starts.
 
-## (bedroom) Lamp shapes need a restyle (director, 2026-07-22)
+## (bedroom) ~~Lamp shapes need a restyle~~ — BUILT 2026-07-22 (furniture-assets session)
+
+**(BUILT 2026-07-22: the lamps are real Quaternius fixtures now —
+`Light_CeilingSingle` pendant + two `Light_Desk` table lamps on the real
+dresser and desk. The light itself — colors, intensities, positions —
+is untouched, per the playtest pass.)** Original entry:
 
 Interior-lighting playtest: the code-built primitive lamps (cone shade,
 cylinder stem) read wrong. Director call: fine to fix when the room gets
