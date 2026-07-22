@@ -2115,12 +2115,38 @@ felt wrong about the cone lamps? Trap the cat behind the desk chair —
 does it round the cluster convincingly? And the scale question: does the
 furniture feel right-sized against the character and the cat?
 
-**Next (bedroom session):** the room's big build items are done. Still
-open from earlier playtests: the cat riding permanently off-screen
-behind you while walking (parked at the room rebuild). Candidates in
-IDEAS.md: the front-door direction (slope select), or dressing the room
-further with houseplants/carpet/curtains from the same interior pack.
-Director's call.
+**Playtest verdict (director, 2026-07-22): two bugs and a redirect.**
+
+- **Bug: walking into the nightstand got the director stuck in the
+  wall.** Reproduced and diagnosed same session: the collision resolver
+  clamps to walls *before* the obstacle push-out, so wall-flush
+  furniture can eject the player through the wall into a permanent trap
+  (z = −5.295, measured). Latent since the room rebuild; the nightstand
+  made it easy to hit. Full diagnosis + fix sketch in
+  [IDEAS.md](IDEAS.md).
+- **Bug: the desk corner is glitchy.** Also reproduced: corner
+  approaches face-snap the player up to 0.46 units backward through the
+  desk, and the desk/chair boundary-contact lets you slip between the
+  flush pieces. Same resolver, same fix session — see IDEAS.md.
+- **Redirect — earn your furniture:** the room shouldn't *start*
+  furnished. Bare start (a mattress at most), XP earned from races,
+  furniture/decoration arriving as level unlocks, and an
+  unlocks-by-level UI. This session's models become the unlock pool.
+  Recorded in [DESIGN.md](DESIGN.md#leveling--unlocks).
+- **Art redirect — rundown, and not flat:** the house should be rundown
+  (shaggy stained carpet, peeling wallpaper), and the director doesn't
+  like the flat, textureless graphics — which challenges the Art Style
+  Bible's core no-texture rule. The bible now carries an ⚠ under-review
+  note; the direction session's options are sketched in IDEAS.md. This
+  one is game-wide — it affects the slope's assets too.
+
+**Next (bedroom session):** per the director — (1) the collision fix
+(both bugs, one resolver session, diagnosis already done), then (2) the
+art-direction session for rundown/textured (needs director references),
+and (3) the earn-your-furniture progression (bare start + XP unlocks +
+unlock UI — pulls M3's XP/unlock items forward). Order is the
+director's call; the older parked items (cat off-screen behind you,
+front door) queue behind these.
 
 ## (slope) 2026-07-22 — M2: turning round 3 — the fall is gone, backwards is a stance
 
@@ -2363,10 +2389,19 @@ Includes the vertical-slice systems that weren't part of the M2 area:
       (director call, 2026-07-22 — replaced the rotating bird's-eye view;
       *room + camera landed 2026-07-22; interior lighting (window, dawn
       backdrop, lamps) landed 2026-07-22; real furniture + lamp fixtures
-      landed 2026-07-22 — the room has no gray-box items left*)
+      landed 2026-07-22 — no gray-box items left, but the 2026-07-22
+      playtest reopened the look: rundown + textured direction pending
+      (see IDEAS.md), and two collision bugs to fix first*
+- [ ] Fix the collision resolver (wall-trap + corner-warp bugs,
+      2026-07-22 playtest — diagnosis in IDEAS.md)
+- [ ] Bare rundown start: bedroom begins with a mattress at most;
+      this session's furniture becomes the unlock pool (director call,
+      2026-07-22)
 - [ ] Furniture placement system (place/move/store)
 - [ ] One timed-task item and one passive/AFK item working end to end
 - [ ] XP and leveling wired to unlocks
+- [ ] Unlocks-by-level UI (furniture/decoration tree per level —
+      director call, 2026-07-22)
 - [ ] All 3 v1.0 slopes built
 - [ ] Full 6–8 item furniture/appliance set
 - [ ] Character + cat customization options
