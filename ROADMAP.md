@@ -1360,10 +1360,29 @@ flop. Press **C** in the bedroom: check a hatted character (does hair
 clipping under the hat bother you?) and the bald one. And the taste
 question: is the hair's amount of motion right — too floaty, too stiff?
 
+**Playtest verdict (director, 2026-07-22): two issues, parked by the
+director's call ("will fix later") — recorded honestly:**
+
+1. **The hair roots float inside the head** — especially during left/right
+   turns, making characters look bald from some angles. The roots should be
+   welded to the scalp. (Cause: the hair swings as one rigid piece around
+   the crown pivot, so a lateral swing translates the roots at the sides of
+   the scalp right off the head. The fix needs the swing to *fade in* down
+   the hair — roots pinned, tips swinging — details in
+   [IDEAS.md](IDEAS.md).)
+2. **The cat's tail is stiff** — it should be swooshing, and reacting to
+   the wind. (The current tail motion is a slow idle sway; it isn't
+   connected to speed or wind at all. The hair spring already knows how to
+   do this — the tail wants the same treatment. Details in
+   [IDEAS.md](IDEAS.md).)
+
+Both parked in [IDEAS.md](IDEAS.md)'s top block for a later session.
+
 **Next:** remaining round-2 list by director's pick — momentum/pole
 push-off (the `/shared` gameplay session), jump anticipation, gear style +
-longer skis, always-on feet, or angulation round 3 + the boot-containment
-fix. Then music (still deliberately last), then the end-of-M2 tuning pass.
+longer skis, always-on feet, angulation round 3 + the boot-containment
+fix, or the hair-roots + cat-tail fixes above. Then music (still
+deliberately last), then the end-of-M2 tuning pass.
 
 ## Milestones
 

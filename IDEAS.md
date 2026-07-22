@@ -3,6 +3,35 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## Cat-hug + hair-physics playtest verdict (director, 2026-07-22) — parked
+
+Two issues, parked by director's call ("will fix later"):
+
+- **Hair roots float inside the head — characters look bald mid-turn.**
+  The swinging hair is one rigid mesh rotating around a crown pivot, so a
+  lateral swing (left/right turns are the worst case) translates the roots
+  at the sides and front of the scalp off the head, exposing skull. The
+  roots must be *welded to the scalp* while the tips keep swinging. Fix
+  direction: make the swing fade in from root to tip instead of rotating
+  the whole piece — weight each vertex's deflection by its distance below
+  the crown (roots 0, tips 1). Cheapest robust route is doing that blend in
+  the hair material's vertex shader (`onBeforeCompile`: pass the swing as a
+  uniform, weight by vertex height); a coarser mesh-side alternative is
+  splitting the hair into a welded cap + swinging lower section, but the
+  shader blend avoids inventing a split line on 11 different hairdos. The
+  spring/drag/gust/repulsor model itself passed — this is purely about how
+  the swing is *applied* to the geometry.
+- **The cat's tail is stiff — should swoosh and react to wind.** The
+  clinging cat's tail only has the slow CLING_LIFE idle sway (small, low
+  frequency, not speed-linked). Wanted: real swooshing driven by the wind
+  and the run — which is exactly what the hair spring already models. Fix
+  direction: drive the Tail bone with its own small damped spring fed by
+  the same inputs as the hair (speed-scaled drag + gusts, gated off
+  `SkiMotion`), with a bigger amplitude than the current sway. The tail is
+  a single bone on this rig, so a two-stage delay (rotate the bone, lag the
+  tip) would need either faking (phase-offset components) or accepting
+  one-segment swoosh — decide by eye in-session.
+
 ## Angulation playtest verdict (director, 2026-07-22) — parked, focus shifted
 
 The angulation session measured right but didn't *read* right. Two issues,
