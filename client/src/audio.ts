@@ -1,4 +1,11 @@
-import { BOOST_SPEED, MAX_SPEED, type SkiState } from "@toebeans/shared";
+import {
+  BOOST_SPEED,
+  JUMP_CHARGE_TIME,
+  MAX_JUMP_VELOCITY,
+  MAX_SPEED,
+  MIN_JUMP_VELOCITY,
+  type SkiState,
+} from "@toebeans/shared";
 
 // Slope sound effects (M2). Everything here is synthesized with the Web
 // Audio API — no audio files. That keeps the repo asset-free for sound and,
@@ -41,6 +48,8 @@ interface Nodes {
   readonly carveGain: GainNode;
   readonly carveFilter: BiquadFilterNode;
   readonly boostGain: GainNode;
+  readonly chargeGain: GainNode;
+  readonly chargeFilter: BiquadFilterNode;
 }
 
 function buildNodes(ctx: AudioContext): Nodes {
@@ -93,7 +102,16 @@ function buildNodes(ctx: AudioContext): Nodes {
   boostFilter.Q.value = 1.2;
   const boostGain = noiseLayer(boostFilter);
 
-  return { ctx, master, windGain, carveGain, carveFilter, boostGain };
+  // Jump charge: a low snow-press noise that swells and rises in pitch as
+  // the hold-to-charge load deepens — the held-breath before the release's
+  // whoosh. Loudness and brightness both track the charge (see sync).
+  const chargeFilter = ctx.createBiquadFilter();
+  chargeFilter.type = "bandpass";
+  chargeFilter.frequency.value = 250;
+  chargeFilter.Q.value = 1.4;
+  const chargeGain = noiseLayer(chargeFilter);
+
+  return { ctx, master, windGain, carveGain, carveFilter, boostGain, chargeGain, chargeFilter };
 }
 
 // --- One-shot helpers -----------------------------------------------------
@@ -169,22 +187,37 @@ function thud(nodes: Nodes, when: number, fromHz: number, toHz: number, peak: nu
 
 // --- The one-shots themselves ---------------------------------------------
 
-function playJump(nodes: Nodes): void {
-  // Rising whoosh — air moving past on the way up.
+function playJump(nodes: Nodes, launchVelocity: number): void {
+  // Rising whoosh — air moving past on the way up. Bigger with the charge:
+  // a full-charge launch whooshes longer and louder than a tap.
+  const big = Math.max(
+    0,
+    Math.min(
+      1,
+      (launchVelocity - MIN_JUMP_VELOCITY) / (MAX_JUMP_VELOCITY - MIN_JUMP_VELOCITY),
+    ),
+  );
   puff(nodes, {
     when: nodes.ctx.currentTime,
-    duration: 0.28,
-    peak: 0.18,
+    duration: 0.28 + 0.14 * big,
+    peak: 0.18 + 0.1 * big,
     filterFrom: 500,
-    filterTo: 2400,
+    filterTo: 2400 + 800 * big,
   });
 }
 
-function playLand(nodes: Nodes): void {
-  // A soft snow-compression thump.
+function playLand(nodes: Nodes, impactVelocity: number): void {
+  // A soft snow-compression thump — a touch heavier off a bigger drop.
+  const big = Math.min(1, Math.abs(impactVelocity) / 14);
   const now = nodes.ctx.currentTime;
-  puff(nodes, { when: now, duration: 0.14, peak: 0.22, filterFrom: 450, filterTo: 250 });
-  thud(nodes, now, 130, 80, 0.12);
+  puff(nodes, {
+    when: now,
+    duration: 0.14,
+    peak: 0.16 + 0.12 * big,
+    filterFrom: 450,
+    filterTo: 250,
+  });
+  thud(nodes, now, 130, 80, 0.08 + 0.08 * big);
 }
 
 function playCrash(nodes: Nodes): void {
@@ -245,6 +278,7 @@ export function createAudio(initiallyMuted = false): AudioHandle {
     let wind = 0;
     let carve = 0;
     let boost = 0;
+    let charge = 0;
     if (mode === "slope") {
       // Magnitude: speed is signed now (negative = riding switch), and a
       // fast switch run sounds as fast as it is.
@@ -254,15 +288,18 @@ export function createAudio(initiallyMuted = false): AudioHandle {
         wind = 0.04 + 0.1 * speedNorm + (airborne ? 0.05 : 0);
         carve = airborne ? 0 : 0.05 + 0.18 * speedNorm;
         boost = Math.abs(state.speed) > MAX_SPEED ? 0.12 : 0;
+        charge = state.jumpCharge / JUMP_CHARGE_TIME;
       } else {
         // Crashed or forfeited: just a low ambient wind.
         wind = 0.04;
       }
       carveFilter.frequency.setTargetAtTime(1200 + 1600 * speedNorm, now, LAYER_SMOOTHING);
+      nodes.chargeFilter.frequency.setTargetAtTime(250 + 450 * charge, now, LAYER_SMOOTHING);
     }
     windGain.gain.setTargetAtTime(wind, now, LAYER_SMOOTHING);
     carveGain.gain.setTargetAtTime(carve, now, LAYER_SMOOTHING);
     boostGain.gain.setTargetAtTime(boost, now, LAYER_SMOOTHING);
+    nodes.chargeGain.gain.setTargetAtTime(0.08 * charge, now, LAYER_SMOOTHING);
   }
 
   function fireTransitions(state: SkiState): void {
@@ -276,9 +313,12 @@ export function createAudio(initiallyMuted = false): AudioHandle {
       playForfeit(nodes);
     } else if (prev.status === "skiing" && state.status === "skiing") {
       if (prev.height <= 0 && state.height > 0) {
-        playJump(nodes);
+        // The takeoff frame's verticalVelocity IS the launch speed — the
+        // whoosh scales with how charged the jump was.
+        playJump(nodes, state.verticalVelocity);
       } else if (prev.height > 0 && state.height <= 0) {
-        playLand(nodes);
+        // …and the last airborne frame's fall speed sizes the touchdown.
+        playLand(nodes, prev.verticalVelocity);
       }
       if (state.lastCheckpoint > prev.lastCheckpoint) {
         playCheckpoint(nodes);

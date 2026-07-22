@@ -180,7 +180,9 @@ const SLOPE_HINTS: readonly Hint[] = [
   // has to carry it, and "downhill" is the half a player can't guess.
   { key: "↑", label: "downhill" },
   { key: "↓", label: "brake" },
-  { key: "Space", label: "jump" },
+  // Hold-to-charge: the hold is the half of the control a player can't
+  // guess from "jump" alone.
+  { key: "Space", label: "hold to jump" },
   { key: "Shift", label: "boost" },
   { key: "M", label: "mute" },
   { key: "Enter", label: "home" },

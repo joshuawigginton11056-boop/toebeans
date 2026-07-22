@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   BASE_SPEED,
   BOOST_SPEED,
+  JUMP_CHARGE_TIME,
   LATERAL_LIMIT,
   MIN_SPEED,
   RESPAWN_DELAY,
@@ -57,6 +58,12 @@ export interface SkiSceneHandle {
    * the sim carries a real heading and the renderer just reads it.)
    */
   readonly steerMemory: { skiing: boolean; speed: number };
+  /**
+   * Takeoff/landing pop for the hold-to-charge jump: a short crouch offset
+   * that fires on the airborne transitions (legs extend on launch, absorb on
+   * touchdown) and decays. Presentation-side memory, like steerMemory.
+   */
+  readonly jumpMemory: { airborne: boolean; envelope: number };
 }
 
 const SLOPE_LENGTH = 100;
@@ -205,6 +212,7 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     skyDome,
     sunBillboard,
     steerMemory: { skiing: true, speed: 0 },
+    jumpMemory: { airborne: false, envelope: 0 },
   };
 }
 
@@ -269,8 +277,20 @@ export function syncSkiSceneToState(
   handle.steerMemory.skiing = skiing;
   handle.steerMemory.speed = pace;
 
+  // Hold-to-charge jump on the body: the loading crouch reads straight off
+  // the sim's charge (deeper as it fills, full crouch at a full charge), and
+  // a short envelope pops the legs out on the takeoff frame and absorbs the
+  // touchdown — so a jump reads load → explode upward → tuck → absorb
+  // instead of teleporting off the snow.
+  const jump = handle.jumpMemory;
+  if (!jump.airborne && airborne) jump.envelope = -0.5; // legs extend
+  if (jump.airborne && !airborne && skiing) jump.envelope = 0.55; // absorb
+  jump.airborne = airborne;
+  jump.envelope -= jump.envelope * Math.min(1, dt * 7);
+  const load = state.jumpCharge / JUMP_CHARGE_TIME;
+
   handle.skier.setSkiMotion({
-    tuck: tuck + (state.height > 0 ? 0.2 : 0),
+    tuck: Math.max(tuck, load) + (airborne ? 0.2 : 0) + jump.envelope,
     steer,
     carve,
     switchLook,

@@ -3,7 +3,10 @@ import {
   BASE_SPEED,
   BOOST_SPEED,
   createInitialSkiState,
+  JUMP_CHARGE_TIME,
   LATERAL_LIMIT,
+  MAX_JUMP_VELOCITY,
+  MIN_JUMP_VELOCITY,
   MIN_SPEED,
   RESPAWN_DELAY,
   STARTING_LIVES,
@@ -31,6 +34,7 @@ const nearChasm: SkiState = {
   height: 0,
   verticalVelocity: 0,
   speed: 8,
+  jumpCharge: 0,
   status: "skiing",
   lives: STARTING_LIVES,
   respawnTimer: 0,
@@ -143,15 +147,82 @@ describe("stepSkiing", () => {
     expect(boosting.speed).toBe(BASE_SPEED);
   });
 
-  it("jumps and comes back down under gravity", () => {
-    const jumped = stepSkiing(createInitialSkiState(), { ...noInput, jump: true }, 0.1);
+  it("jumps on release and comes back down under gravity", () => {
+    // Hold-to-charge: the press loads, the release launches.
+    const pressed = stepSkiing(createInitialSkiState(), { ...noInput, jump: true }, 0.1);
+    expect(pressed.height).toBe(0);
 
+    const jumped = stepSkiing(pressed, noInput, 0.1);
     expect(jumped.height).toBeGreaterThan(0);
+  });
+
+  it("charges while held — the load deepens on the snow, capped at full", () => {
+    let state = stepSkiing(cruising, { ...noInput, jump: true }, 0.2);
+    expect(state.jumpCharge).toBeCloseTo(0.2, 5);
+    expect(state.height).toBe(0); // loading, not leaving the ground
+
+    for (let i = 0; i < 60; i++) {
+      state = stepSkiing(state, { ...noInput, jump: true }, 0.05);
+    }
+    expect(state.jumpCharge).toBe(JUMP_CHARGE_TIME);
+    expect(state.height).toBe(0);
+  });
+
+  it("launches on release scaled by the charge — tap low, full charge high", () => {
+    // Tap: one press frame, then release — essentially the minimum jump.
+    let tap = stepSkiing(cruising, { ...noInput, jump: true }, 0.02);
+    tap = stepSkiing(tap, noInput, 0.02);
+    expect(tap.height).toBeGreaterThan(0);
+    expect(tap.verticalVelocity).toBeGreaterThanOrEqual(MIN_JUMP_VELOCITY);
+    expect(tap.verticalVelocity).toBeLessThan(MIN_JUMP_VELOCITY + 0.5);
+
+    // Full charge: hold well past the cap, then release.
+    let charged = cruising;
+    for (let i = 0; i < 50; i++) {
+      charged = stepSkiing(charged, { ...noInput, jump: true }, 0.02);
+    }
+    charged = stepSkiing(charged, noInput, 0.02);
+    expect(charged.height).toBeGreaterThan(0);
+    expect(charged.verticalVelocity).toBeCloseTo(MAX_JUMP_VELOCITY, 5);
+    expect(charged.jumpCharge).toBe(0);
+  });
+
+  it("accrues no charge mid-air — holding through a landing starts fresh", () => {
+    let state: SkiState = { ...cruising, height: 1.5, verticalVelocity: 0 };
+    for (let i = 0; i < 5; i++) {
+      state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+      expect(state.jumpCharge).toBe(0);
+    }
+
+    // Ride it down with the key still held: no instant bounce on touchdown —
+    // the next grounded frame starts a fresh load instead.
+    while (state.height > 0) {
+      state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    }
+    expect(state.jumpCharge).toBe(0);
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    expect(state.jumpCharge).toBeCloseTo(0.02, 5);
+    expect(state.height).toBe(0);
+  });
+
+  it("drops the charge on a crash — it doesn't survive to the respawn", () => {
+    // Holding jump doesn't jump, so charging straight into the chasm skis
+    // into it — and the crash zeroes the load.
+    let state = nearChasm;
+    for (let i = 0; i < 60 && state.status === "skiing"; i++) {
+      state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    }
+    expect(state.status).toBe("crashed");
+    expect(state.jumpCharge).toBe(0);
+
+    const respawned = stepSkiing(state, noInput, RESPAWN_DELAY + 0.01);
+    expect(respawned.jumpCharge).toBe(0);
   });
 
   it("clears a chasm when jumping over it", () => {
     let state = nearChasm;
     for (let i = 0; i < 30; i++) {
+      // Press on frame 0; frame 1's release launches the tap jump.
       state = stepSkiing(state, { ...noInput, jump: i === 0 }, 0.02);
     }
 
@@ -238,6 +309,7 @@ describe("stepSkiing", () => {
       state = stepSkiing(state, { ...noInput, right: true }, 0.02);
     }
     state = stepSkiing(state, { ...noInput, right: true, jump: true }, 0.02);
+    state = stepSkiing(state, { ...noInput, right: true }, 0.02); // release launches
     expect(state.height).toBeGreaterThan(0);
     const atTakeoff = state.heading;
 
@@ -272,6 +344,7 @@ describe("stepSkiing", () => {
   it("freezes the travel direction on the takeoff frame", () => {
     let state: SkiState = { ...cruising, heading: 0.5 };
     state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    state = stepSkiing(state, noInput, 0.02); // release launches
     expect(state.height).toBeGreaterThan(0);
     const frozen = state.flightHeading;
     expect(frozen).toBeCloseTo(0.5, 5);
@@ -552,7 +625,10 @@ describe("crashing and the cat's nine lives", () => {
 
     let state = respawned;
     for (let i = 0; i < 300; i++) {
-      state = stepSkiing(state, { ...noInput, jump: state.distance > 18 }, 0.02);
+      // Hold-to-charge: load through the approach, release just before the
+      // chasm's lip and the release launches.
+      const jump = state.distance > 18 && state.distance < 19;
+      state = stepSkiing(state, { ...noInput, jump }, 0.02);
     }
 
     expect(state.distance).toBeGreaterThan(23);

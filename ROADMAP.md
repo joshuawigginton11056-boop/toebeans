@@ -2465,6 +2465,79 @@ longer skis, always-on feet, angulation round 3 + the boot-containment
 fix, hair-roots + cat-tail), then music (still deliberately last), then
 the end-of-M2 tuning pass.
 
+## (slope) 2026-07-22 — M2: hold-to-charge jump — load, release, fly
+
+First item off the remaining round-2 list: jump anticipation. The parked
+sketch offered presentation-only knee-bends or a fixed sim wind-up; the
+director's call went further — **jumping is hold-to-charge now.** Holding
+Space visibly loads a crouch, releasing launches, and how long you held
+decides how high you fly.
+
+- `/shared` `skiing.ts`: the state gains a `jumpCharge` (seconds held,
+  capped at 0.6). Holding jump on the snow accrues it — and no longer
+  launches; the launch happens on *release*, scaled linearly from the
+  minimum jump velocity (7 — exactly the old fixed jump, so a quick tap
+  behaves like the jump always did) up to 11 at a full charge (~57%
+  higher, airtime 0.8s → 1.24s). Charge is grounded-only: pressing
+  mid-air does nothing, and a key still held through a landing starts a
+  fresh load instead of instantly bouncing (the old hold-to-hop is gone).
+  A crash zeroes the load, and respawns start uncharged.
+- **No SAVE_VERSION bump** — `jumpCharge` is transient input state and
+  deliberately not saved, same spirit as `flightHeading`: a restore
+  starts uncharged.
+- **The body sells the load** (`skiRender.ts`): the crouch depth reads
+  the charge directly — a full charge is a full crouch, whatever your
+  speed — and a short envelope pops the legs out on the takeoff frame
+  and absorbs the touchdown, so a jump reads *load → explode upward →
+  tuck → absorb* instead of teleporting off the snow (the exact envelope
+  the IDEAS sketch asked for, layered on top of the charge crouch).
+- **The sound sells it too** (`audio.ts`): a new continuous layer — a low
+  snow-press that swells and rises in pitch as the load deepens — plus
+  the takeoff whoosh now scales with launch speed (a full-charge release
+  whooshes longer, louder, brighter) and the landing thump with impact
+  speed (bigger drops land heavier).
+- The slope hint chip became "Space · hold to jump" — the hold is the
+  half of the control a player can't guess (small shared-territory edit
+  in `hud.ts`).
+- **One honest note on the 360 question** (parked at turning round 3):
+  a full charge buys ~2.2 rad of held-steer spin per jump, up from ~1.4 —
+  more re-aim room, comfortably enough to deliberately land switch, but
+  still not a full 360 (that would need ~3.5s of airtime — a moon jump).
+  If 360s matter, they need purpose-built big jumps, not more charge.
+- Tests 83 → 91 in this worktree's count (5 new: charge accrual + cap,
+  tap-vs-full launch scaling, no mid-air accrual / no landing bounce,
+  crash drops the load, launch-on-release; 3 existing jump tests
+  restructured to press-then-release). `npm run check` and
+  `npm run build` pass.
+- Verified against the real served modules in the live page on this
+  session's own dev server (5302; screenshots still time out —
+  fourteenth session running): holding 1s caps charge at exactly 0.6
+  with height 0, release launches at exactly v=11 with 1.24s airtime, a
+  tap launches at 7.11 with 0.80s, charging into the chasm crashes with
+  the load zeroed, a held key through touchdown starts a 0.02 fresh
+  load with no bounce; the rig's captured motion shows tuck 0.33 → 1.0
+  as charge fills, takeoff envelope −0.44 decaying to −0.04, landing
+  absorb +0.49; the audio layer targets measure 0.08 gain / 700 Hz at
+  full charge and the takeoff whoosh peak 0.28 (the full-charge value);
+  the new hint chip is in the DOM; zero console errors. What the load →
+  release rhythm *feels* like is the eyeballs item below.
+
+**What to playtest:** `npm run dev`, Enter to ski. Hold Space — the
+character sinks into a crouch (listen for the rising press of snow) —
+then release: the legs pop and you fly, higher the longer you held. Tap
+Space at a chasm lip: it should feel like the jump always did. The feel
+questions: is 0.6s to full charge the right length — does charging feel
+like coiling a spring or like waiting? Does the release timing feel in
+your control at speed (the jump now happens when you let go, not when
+you press)? Is the takeoff pop / landing absorb visible at slope
+distance? And does holding Space too long ever get you into a chasm you
+meant to jump — is that fair or cheap?
+
+**Next:** the rest of the round-2 list (gear style + longer skis,
+always-on feet, angulation round 3 + the boot-containment fix,
+hair-roots + cat-tail), then music (still deliberately last), then the
+end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

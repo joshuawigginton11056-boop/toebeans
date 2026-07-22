@@ -497,13 +497,15 @@ Six issues, with causes and what each fix takes:
   double-pole push cycle at low speed: arms reach-plant-drive with the
   poles pivoting at the grip, trunk crunching into each drive. One
   follow-on parked below (push-off *audio*).
-- **Knees don't bend to jump.** Cause: the sim's jump is instant (velocity
-  applied the frame you press), and the presentation neither anticipates
-  nor absorbs. Cheap fix: a takeoff leg-extension + landing crouch-absorb
-  envelope keyed off the airborne transitions (the audio already detects
-  exactly these events by state-diffing). True *pre-jump* anticipation —
-  crouching before leaving the ground — would need a sim-side wind-up
-  delay, which is a feel/fairness call to make in-session.
+- ~~**Knees don't bend to jump.**~~ **(RESOLVED 2026-07-22, hold-to-charge
+  session):** the feel/fairness call went past both sketched options —
+  director call: jumping is hold-to-charge now. Holding Space loads a
+  crouch (the sim carries a real `jumpCharge`), releasing launches — a tap
+  is the old fixed jump, a full 0.6s charge jumps ~57% higher. The
+  presentation side is the sketched envelope: charge drives the crouch
+  depth, takeoff pops the legs out, landing absorbs. The charge also gets
+  a rising audio layer, and the takeoff whoosh/landing thump scale with
+  launch/impact speed.
 - **The ski boots are blocky.** Folds into the already-parked gear-style
   pass below — noting the director specifically called out the boots.
   Chunky must not mean box: bevels, facets, a lip over the ski.

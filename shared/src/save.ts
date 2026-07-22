@@ -41,6 +41,8 @@ import {
 // signed (negative = riding switch) and a heading past sideways is legal,
 // both of which old v4 saves trivially satisfy. flightHeading is transient
 // air state and deliberately not saved (a restore re-derives it below).
+// Hold-to-charge jump (no bump): jumpCharge is transient input state and
+// deliberately not saved — a restore starts uncharged, same as flightHeading.
 export const SAVE_VERSION = 4;
 
 export type SceneMode = "bedroom" | "slope";

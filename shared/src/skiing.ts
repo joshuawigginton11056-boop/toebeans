@@ -44,6 +44,12 @@ export interface SkiState {
   // backwards is a stance, not a crash). Magnitude is how fast; sign is
   // which end of the skis leads.
   readonly speed: number;
+  // How long the jump key has been held while grounded, in seconds, capped
+  // at JUMP_CHARGE_TIME. Jumping is hold-to-charge (director call,
+  // 2026-07-22): holding crouches into a load, releasing launches — deeper
+  // charge, higher jump. Transient input state, deliberately not saved: a
+  // restore starts uncharged, same spirit as flightHeading above.
+  readonly jumpCharge: number;
   readonly status: RunStatus;
   readonly lives: number;
   readonly respawnTimer: number;
@@ -98,7 +104,14 @@ const SEEK_DIAGONAL = Math.PI / 4;
 // Exported for save.ts (restoring a save clamps lateral into range) and the
 // renderer (the visual lane and decor scatter key off it).
 export const LATERAL_LIMIT = 12;
-const JUMP_VELOCITY = 7;
+// Hold-to-charge jumping (director call, 2026-07-22): a tap gives the
+// minimum jump — exactly the old fixed jump, so quick reactions still clear
+// chasms — and holding loads a deeper crouch that launches on release, up
+// to the max at a full charge. Exported for the renderer (crouch depth
+// reads the charge) and audio (takeoff whoosh scales with launch speed).
+export const MIN_JUMP_VELOCITY = 7;
+export const MAX_JUMP_VELOCITY = 11;
+export const JUMP_CHARGE_TIME = 0.6;
 const GRAVITY = -18;
 const CHASM_CLEAR_HEIGHT = 0.4;
 export const STARTING_LIVES = 9;
@@ -124,6 +137,7 @@ export function createInitialSkiState(): SkiState {
     // Runs start from a standstill — the push-off to cruise speed is part
     // of the run, not something that happens before it.
     speed: 0,
+    jumpCharge: 0,
     status: "skiing",
     lives: STARTING_LIVES,
     respawnTimer: 0,
@@ -166,6 +180,7 @@ function respawnAtCheckpoint(state: SkiState): SkiState {
     // A crash scrubs all your speed — you push off again from the
     // checkpoint, so momentum lost is part of the crash's cost.
     speed: 0,
+    jumpCharge: 0,
     status: "skiing",
     respawnTimer: 0,
   };
@@ -272,8 +287,23 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   let lateral = state.lateral + travelSpeed * Math.sin(travelHeading) * dt;
   lateral = Math.max(-LATERAL_LIMIT, Math.min(LATERAL_LIMIT, lateral));
 
-  const verticalVelocity =
-    grounded && input.jump ? JUMP_VELOCITY : state.verticalVelocity + GRAVITY * dt;
+  // Hold-to-charge: holding jump on the snow loads the crouch (charge only
+  // ever accrues grounded — pressing mid-air does nothing, and a key still
+  // held through a landing starts a fresh load). Releasing launches, scaled
+  // by how full the load got; a quick tap launches at essentially the
+  // minimum — the old fixed jump.
+  let jumpCharge = state.jumpCharge;
+  let verticalVelocity = state.verticalVelocity + GRAVITY * dt;
+  if (grounded) {
+    if (input.jump) {
+      jumpCharge = Math.min(JUMP_CHARGE_TIME, jumpCharge + dt);
+    } else if (jumpCharge > 0) {
+      verticalVelocity =
+        MIN_JUMP_VELOCITY +
+        (MAX_JUMP_VELOCITY - MIN_JUMP_VELOCITY) * (jumpCharge / JUMP_CHARGE_TIME);
+      jumpCharge = 0;
+    }
+  }
   const height = Math.max(0, state.height + verticalVelocity * dt);
 
   // The landing frame: the accumulated spin collapses to where the skis
@@ -308,6 +338,8 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     height,
     verticalVelocity: height <= 0 ? 0 : verticalVelocity,
     speed,
+    // A crash drops the load — the charge doesn't survive into the respawn.
+    jumpCharge: crashed ? 0 : jumpCharge,
     status: crashed ? "crashed" : "skiing",
     lives: crashed ? state.lives - 1 : state.lives,
     respawnTimer: crashed ? RESPAWN_DELAY : 0,
