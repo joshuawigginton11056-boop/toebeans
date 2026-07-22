@@ -1856,10 +1856,22 @@ more? Does the blue-shadow-plus-warm-lamp mix read cozy or cold
 anywhere? And check the cat at home — it should finally be its real
 amber indoors, not mud.
 
+**Playtest verdict (director, 2026-07-22): the light lands.** "I really
+like the shadow and the light from the window." Two notes, both parked
+in [IDEAS.md](IDEAS.md):
+
+1. **The lamp shapes aren't right** — fine to fix when the room gets
+   real assets; folded into the furniture-assets session rather than
+   nibbled at now.
+2. **New direction (eventually): a front door.** Exiting through it
+   leads to *choosing which slope to race*, and coming home, the slope
+   you picked is the one visible outside the window. Not a now-item —
+   sketched in IDEAS.md with what it touches.
+
 **Next (bedroom session):** real bedroom furniture assets (the last big
-gray-box item in the room), unless the director redirects. The lamp
-positions are keyed to the gray-box furniture tops and move with
-whatever the furniture session builds.
+gray-box item in the room; includes the lamp restyle), unless the
+director redirects. The lamp positions are keyed to the gray-box
+furniture tops and move with whatever the furniture session builds.
 
 ## (slope) 2026-07-22 — M2: turning round 2 — air spins, directional falls, faster turning
 
