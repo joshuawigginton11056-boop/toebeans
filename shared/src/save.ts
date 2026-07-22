@@ -8,6 +8,7 @@ import {
 } from "./bedroom";
 import {
   BOOST_SPEED,
+  FALL_HEADING,
   LATERAL_LIMIT,
   RESPAWN_DELAY,
   STARTING_LIVES,
@@ -33,7 +34,10 @@ import {
 // before this are discarded, which costs a player their position and the
 // current run — acceptable this early, and the alternative is carrying every
 // old save shape forever.
-export const SAVE_VERSION = 3;
+// Bumped to 4 (heading session): the ski run gained a heading — which way
+// the skis point. Old saves have no heading, and the discard costs the same
+// acceptable thing it did last time: a position and a run in progress.
+export const SAVE_VERSION = 4;
 
 export type SceneMode = "bedroom" | "slope";
 
@@ -54,6 +58,7 @@ export interface SaveData {
   readonly ski: {
     readonly distance: number;
     readonly lateral: number;
+    readonly heading: number;
     readonly height: number;
     readonly verticalVelocity: number;
     readonly speed: number;
@@ -88,6 +93,7 @@ export function createSave(
     ski: {
       distance: ski.distance,
       lateral: ski.lateral,
+      heading: ski.heading,
       height: ski.height,
       verticalVelocity: ski.verticalVelocity,
       speed: ski.speed,
@@ -160,11 +166,12 @@ export function decodeSave(json: string): SaveData | null {
 
   const ski = parsed.ski;
   if (!isRecord(ski)) return null;
-  const { distance, lateral, height, verticalVelocity, speed, respawnTimer, lastCheckpoint } =
+  const { distance, lateral, heading, height, verticalVelocity, speed, respawnTimer, lastCheckpoint } =
     ski;
   if (
     !isFinite(distance) ||
     !isFinite(lateral) ||
+    !isFinite(heading) ||
     !isFinite(height) ||
     !isFinite(verticalVelocity) ||
     !isFinite(speed) ||
@@ -197,6 +204,7 @@ export function decodeSave(json: string): SaveData | null {
     ski: {
       distance,
       lateral,
+      heading,
       height,
       verticalVelocity,
       speed,
@@ -262,6 +270,9 @@ export function restoreSave(save: SaveData): RestoredGame {
       ...skiBase,
       distance: Math.max(0, save.ski.distance),
       lateral: clamp(save.ski.lateral, -LATERAL_LIMIT, LATERAL_LIMIT),
+      // A stale heading is healed like a stale position: clamped into the
+      // still-standing range, so a restored save never falls over on frame 1.
+      heading: clamp(save.ski.heading, -FALL_HEADING, FALL_HEADING),
       height: Math.max(0, save.ski.height),
       verticalVelocity: save.ski.verticalVelocity,
       speed: clamp(save.ski.speed, 0, BOOST_SPEED),

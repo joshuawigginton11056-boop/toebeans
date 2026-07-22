@@ -3,6 +3,7 @@ import {
   BASE_SPEED,
   BOOST_SPEED,
   createInitialSkiState,
+  FALL_HEADING,
   MIN_SPEED,
   RESPAWN_DELAY,
   STARTING_LIVES,
@@ -25,6 +26,7 @@ const noInput: SkiInput = {
 const nearChasm: SkiState = {
   distance: 19,
   lateral: 0,
+  heading: 0,
   height: 0,
   verticalVelocity: 0,
   speed: 8,
@@ -160,6 +162,65 @@ describe("stepSkiing", () => {
     expect(initial).toEqual(snapshot);
   });
 
+  it("keeps turning while the key is held", () => {
+    let state = cruising;
+    for (let i = 0; i < 25; i++) {
+      state = stepSkiing(state, { ...noInput, right: true }, 0.02);
+    }
+    const halfTurn = state.heading;
+    expect(halfTurn).toBeGreaterThan(0);
+
+    for (let i = 0; i < 25; i++) {
+      state = stepSkiing(state, { ...noInput, right: true }, 0.02);
+    }
+    // No built-in stop: the turn keeps accumulating as long as you hold it.
+    expect(state.heading).toBeGreaterThan(halfTurn);
+  });
+
+  it("holds its heading when the steering key is released", () => {
+    let state = cruising;
+    for (let i = 0; i < 25; i++) {
+      state = stepSkiing(state, { ...noInput, left: true }, 0.02);
+    }
+    const turned = state.heading;
+    expect(turned).toBeLessThan(0);
+
+    const lateralBefore = state.lateral;
+    for (let i = 0; i < 25; i++) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    // Like real skiing: nobody straightens the skis for you, and movement
+    // keeps following the direction they point.
+    expect(state.heading).toBe(turned);
+    expect(state.lateral).toBeLessThan(lateralBefore);
+  });
+
+  it("freezes the heading mid-air", () => {
+    const airborne: SkiState = {
+      ...cruising,
+      heading: 0.5,
+      height: 1,
+      verticalVelocity: 2,
+    };
+
+    const state = stepSkiing(airborne, { ...noInput, right: true }, 0.1);
+
+    expect(state.heading).toBe(0.5);
+  });
+
+  it("slows the descent as the skis point across the hill", () => {
+    const straight = stepSkiing(cruising, noInput, 0.1);
+    const sideways = stepSkiing(
+      { ...cruising, heading: Math.PI / 2 },
+      noInput,
+      0.1,
+    );
+
+    // Fully sideways, all the speed goes across the hill, none of it down.
+    expect(sideways.distance - cruising.distance).toBeCloseTo(0, 5);
+    expect(straight.distance).toBeGreaterThan(cruising.distance);
+  });
+
   it("records the last checkpoint passed", () => {
     let state: SkiState = { ...nearChasm, distance: 24, height: 1 };
     for (let i = 0; i < 30; i++) {
@@ -214,6 +275,46 @@ describe("crashing and the cat's nine lives", () => {
 
     expect(state.distance).toBeGreaterThan(23);
     expect(state.status).toBe("skiing");
+  });
+
+  it("falls over when turned too far past sideways, costing a life", () => {
+    // Start already at the edge of standing — one more held-steer step tips
+    // it past FALL_HEADING.
+    let state: SkiState = { ...cruising, heading: FALL_HEADING };
+    for (let i = 0; i < 5 && state.status === "skiing"; i++) {
+      state = stepSkiing(state, { ...noInput, right: true }, 0.02);
+    }
+
+    expect(state.status).toBe("crashed");
+    expect(state.lives).toBe(STARTING_LIVES - 1);
+    expect(state.respawnTimer).toBeCloseTo(RESPAWN_DELAY, 5);
+  });
+
+  it("respawns from a fall-over pointing straight downhill", () => {
+    let state: SkiState = { ...cruising, heading: FALL_HEADING, lastCheckpoint: 10 };
+    for (let i = 0; i < 5 && state.status === "skiing"; i++) {
+      state = stepSkiing(state, { ...noInput, right: true }, 0.02);
+    }
+    expect(state.status).toBe("crashed");
+
+    const respawned = stepSkiing(state, noInput, RESPAWN_DELAY + 0.01);
+
+    expect(respawned.status).toBe("skiing");
+    expect(respawned.heading).toBe(0);
+    expect(respawned.distance).toBe(10);
+    expect(respawned.speed).toBe(0);
+  });
+
+  it("never falls over from a turn held only up to sideways", () => {
+    // Ride at exactly sideways (inside the fall threshold) for two seconds
+    // with no further steering — legal, just not descending.
+    let state: SkiState = { ...cruising, heading: Math.PI / 2 };
+    for (let i = 0; i < 100; i++) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+
+    expect(state.status).toBe("skiing");
+    expect(state.lives).toBe(STARTING_LIVES);
   });
 
   it("forfeits the run when the last life is lost", () => {
