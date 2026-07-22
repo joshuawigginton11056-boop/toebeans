@@ -1195,6 +1195,75 @@ pole-push-off gameplay session, jump anticipation, plus the still-parked
 cat hug + hair physics, gear style + longer skis, and always-on feet.
 Then music (still deliberately last), then the end-of-M2 tuning pass.
 
+## 2026-07-22 — M2: turn angulation + leg life — the plank becomes a skier
+
+Director's pick from the round-2 list: the two reopened motion items. The
+carve no longer tilts the whole body as one plank — it's now real ski
+*angulation*: the legs and skis drive out from under the body into the
+turn while the torso stays nearly upright over the snow. And the legs
+finally live: knees pump independently, and the stance itself slowly
+breathes in width and stagger instead of holding one frozen spacing. All
+rendering-side (`client/src/skierModel.ts`); no `/shared` changes, test
+count stays at 55.
+
+- **The bank got split into two systems, like a real skier.** The carve
+  group's roll still supplies the lean (and got *stronger* — the gain rose
+  0.45 → 0.62 — because the rest of this list makes it safe), but now the
+  spine bones counter-roll against it (~75% comes back out through the
+  abdomen and chest, the neck levels the head almost fully, because a
+  skier's eyes stay on the hill) and the foot pins push laterally out from
+  under the body toward the outside of the turn. Measured mid-carve: the
+  leg line tilts **0.65 radians** into the turn while the torso tilts just
+  **0.10** — legs carry 6.6× the torso's lean, which is exactly the
+  angulated silhouette the director asked for, confirmed by an ASCII
+  pixel-read: feet planted outside, body stacked over laterally-shifted
+  hips.
+- **The skis stay ON the snow now.** Found while measuring: the old
+  one-plank roll happened at the body's center, so it quietly lifted the
+  outside ski off the ground (0.09 units at a cruise carve — worse the
+  further the feet push out). Each ski assembly now counter-rolls so its
+  world tilt is exactly the intended edge angle (~0.13 rad, edging into
+  the turn a touch harder than the body), and its position is pre-rotated
+  to land back on the ground plane. Verified across braking swerves, boost
+  tucks, and airborne frames: ski centers at 0.0173–0.0175 (= resting on
+  the snow) in every case.
+- **The legs joined the life layer.** Upper and lower leg bones wobble at
+  slow incommensurate frequencies — free on this rig, because the feet are
+  separate root-level bones pinned to the skis, so knee wiggle can't slide
+  a boot off a ski. Measured working range ±0.03–0.045 rad, scaling with
+  speed like the rest of the life layer.
+- **The stance breathes.** The ski gear was rebuilt from one static group
+  into per-side assemblies (ski + tip + boot), each repositioned every
+  frame from the *same* placement numbers the foot pins use — one source
+  of truth, so a boot can never disagree with its ski. On top of base
+  stance and stagger, each side wanders slowly and independently: width
+  varies ~0.05 units over seconds, stagger similarly — the frozen
+  mannequin spacing is gone.
+- Verified in the live page by driving the real modules (screenshots still
+  time out — fifteenth session): the spine-counter sign was wrong on the
+  first try (the measured head drift matched the bank instead of opposing
+  it — the guessed bone-axis convention was backwards) and was flipped
+  against the live measurement; carves mirror exactly left/right; boots
+  stay glued to feet within 5mm through continuous steer sweeps (13.5mm
+  worst case at the full-clamp braking swerve — still inside the boot);
+  feet height varies just 3mm through everything; and a 30-second
+  continuous drive returns the pose bit-exact to baseline — no drift
+  through the paused-clip overwrite path. Zero console errors in the
+  running game.
+
+**What to playtest:** `npm run dev`, Enter to ski, and carve hard both
+ways. The headline: does the turn finally look *fluid* — skis pushing out
+under a bent-knee crouch, torso staying calm and upright over them —
+instead of the whole body tipping like a plank? Watch the knees at cruise:
+do the legs read as alive now? Watch the feet through a few turns: does
+the spacing drifting slightly feel natural or noticeable? And since the
+bank got stronger: does a hard swerve feel dynamic or excessive?
+
+**Next:** by director's pick from the remaining round-2 list — the
+momentum/pole-push-off gameplay session, jump anticipation, cat hug + hair
+physics, gear style + longer skis, always-on feet. Then music (still
+deliberately last), then the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

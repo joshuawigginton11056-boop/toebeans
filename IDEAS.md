@@ -8,25 +8,20 @@ land here instead of in code.
 The turn/bank + life-layer session moved things but didn't land the feel.
 Six issues, with causes and what each fix takes:
 
-- **The whole body turns as one unit — not fluid.** The director wants
-  real ski *angulation*: in a carve, the feet/skis push OUT from under the
-  body with knees slightly bent, while the torso stays relatively upright
-  over the snow. Cause: the bank is one roll on the carve group, so the
-  character tilts like a plank. Fix: split the bank — keep (or increase)
-  the roll on the skis/feet, push the foot pins laterally outward as steer
-  grows (the pins are already per-frame positions), and counter-rotate the
-  spine bones against the roll so the torso stays near-vertical. All the
-  machinery exists (per-frame foot pins, layered spine deltas); this is
-  re-plumbing where the bank lives, not new tech.
-- **The legs are still static** — differently *positioned* now, but
-  frozen. Wants random movement and spacing. Cause: the life layer wobbles
-  pelvis/arms/torso/head but deliberately left the leg bones and foot pins
-  alone. Two free facts make this cheap: (1) on this rig the feet are
-  root-level IK-style bones, so wobbling Upper/LowerLeg bones wiggles the
-  knees *without* moving the boots off the skis; (2) stance width/stagger
-  can breathe slowly over seconds if each side's ski + boot + foot pin
-  move together (they must stay glued — the skis are currently one static
-  gear group, so per-side ski groups are the small refactor needed).
+- ~~**The whole body turns as one unit — not fluid.**~~ **(RESOLVED
+  2026-07-22, angulation session):** the bank is split — the carve roll
+  (now stronger) supplies the leg lean, the spine counter-rotates ~75% of
+  it back out so the torso rides near-upright, and the foot pins push
+  laterally out from under the body. Bonus fix found while measuring: the
+  old center-roll lifted the outside ski off the snow; the per-side ski
+  assemblies now counter-roll to their true edge angle and stay grounded.
+  See ROADMAP.md for the measured numbers.
+- ~~**The legs are still static.**~~ **(RESOLVED 2026-07-22, angulation
+  session):** leg bones joined the wobble layer (knees pump independently;
+  the root-level foot pins mean a boot can never slide off), and the gear
+  was rebuilt into per-side assemblies driven by the same placement
+  numbers as the foot pins, so stance width and stagger breathe slowly
+  per side.
 - **No momentum: runs start at speed, and speed comes back instantly after
   nearly stopping.** Wants resistance, and a pole push-off to get going.
   ⚠️ This is a **/shared gameplay change**, not presentation — the first

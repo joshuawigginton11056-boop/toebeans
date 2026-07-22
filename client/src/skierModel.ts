@@ -74,8 +74,12 @@ const MATERIAL_REGIONS: Record<string, CharacterRegion> = {
 // input via setSkiMotion's tuck (0..1). That makes the up/down speed control
 // legible on the body, which was the director's playtest ask. On top of the
 // blend sit the stagger, wobble, and bob layers (constants below) — the
-// round-2 "life" fixes — and around it the carve group steers and banks the
-// whole body into turns.
+// round-2 "life" fixes — and around it the carve group steers the body into
+// turns. The carving bank is *split*, not applied as one roll (playtest:
+// "the whole body banks as one plank"): the carve group's roll supplies the
+// leg-and-ski lean, the spine bones counter-rotate against it so the torso
+// stays near-upright over the snow, and the foot pins push laterally out
+// from under the body — which is what real ski angulation is.
 //
 // The crouch works because of a quirk of this rig: Foot.L/Foot.R are
 // root-level bones, separate from the leg chains (the pack animates legs
@@ -144,22 +148,83 @@ const TUCK_EASE = 8;
 /** How fast the body eases into a turn (per second). */
 const STEER_EASE = 8;
 /**
- * Carving bank: how much the body rolls into a turn, as a fraction of the
- * eased steer yaw, and the cap that keeps an emergency swerve from tipping
- * the character onto their ear.
+ * Carving bank: how much the carve group rolls into a turn, as a fraction of
+ * the eased steer yaw, and the cap that keeps an emergency swerve from
+ * tipping the character onto their ear. The gain is higher than the old
+ * one-plank bank dared to be — the spine counter-rotation below means the
+ * roll reads as legs driving into the turn, not the whole body toppling.
  */
-const BANK_GAIN = 0.45;
-const BANK_MAX = 0.32;
+const BANK_GAIN = 0.62;
+const BANK_MAX = 0.46;
+
+/**
+ * Angulation — the round-2 fix for "the whole body banks as one plank."
+ * A carving skier is two systems: the legs and skis lean hard into the turn
+ * while the torso stays nearly upright over the snow, the hips hinging
+ * sideways between them. The carve roll (BANK_* above) supplies the leg
+ * lean; each spine bone here counter-rolls against it by its fraction —
+ * ~75% of the bank comes back out through the torso, and the neck levels
+ * the head almost fully, because a skier's eyes stay on the hill.
+ */
+const ANGULATION_COUNTER: Record<string, number> = {
+  Abdomen: 0.45,
+  Torso: 0.3,
+  Neck: 0.12,
+};
+/**
+ * The feet push laterally out from under the body toward the outside of the
+ * turn, in game units per radian of eased steer — the "skis out from under
+ * you" half of angulation. Capped so a braking swerve (steer ≈ 0.9 rad)
+ * can't push the boots past what the leg mesh can plausibly reach.
+ */
+const FEET_OUT_GAIN = 0.25;
+const FEET_OUT_MAX = 0.12;
+/**
+ * Extra edge-roll on the ski assemblies themselves, beyond the body's bank —
+ * carving happens on the ski edges, and the skis commit to the edge a touch
+ * harder than the body above them. Rolls each side group about its own
+ * ground-level origin, so the ski tilts in place instead of lifting.
+ */
+const EDGE_GAIN = 0.3;
+const EDGE_MAX = 0.15;
+
+/**
+ * Stance breathing — the legs' spacing drifts slowly instead of holding one
+ * width and stagger forever (playtest: "the legs are still static… wants
+ * random movement and spacing"). Each side wanders independently at slow
+ * incommensurate rates, in both width (x) and stagger (z). The offsets are
+ * applied to the per-side placement that BOTH the gear meshes and the foot
+ * pins are computed from, so a ski, its boot, and the foot inside move as
+ * one — the breathe can never slide a boot off its ski.
+ */
+const STANCE_BREATHE: Record<
+  "L" | "R",
+  {
+    xAmp: number;
+    xFreq: number;
+    xPhase: number;
+    zAmp: number;
+    zFreq: number;
+    zPhase: number;
+  }
+> = {
+  L: { xAmp: 0.02, xFreq: 0.9, xPhase: 0, zAmp: 0.028, zFreq: 0.6, zPhase: 1.1 },
+  R: { xAmp: 0.02, xFreq: 0.7, xPhase: 2.3, zAmp: 0.028, zFreq: 0.75, zPhase: 3.9 },
+};
 
 /**
  * Procedural micro-motion — the "life" layer (playtest: "symmetric and
  * frozen"). Small sinusoidal offsets, per bone, on top of the brake↔tuck
  * blend: the arms float independently (different frequencies and phases, so
  * they never sync up into a march), the torso rocks as weight shifts, the
- * head makes tiny corrections. Frequencies are in radians/second and
- * deliberately incommensurate — the pattern never visibly repeats.
- * Amplitudes scale up with speed (see applySkiPose): gentle balance drift
- * at a braking crawl, busy working-body at a full tuck.
+ * head makes tiny corrections — and the legs work (the round-2 fix: the
+ * first life pass left the leg bones alone and they read frozen). Leg
+ * wobble is free on this rig: the feet are separate root-level bones pinned
+ * to the skis, so wiggling the Upper/LowerLeg chain pumps the knees without
+ * ever moving a boot. Frequencies are in radians/second and deliberately
+ * incommensurate — the pattern never visibly repeats. Amplitudes scale up
+ * with speed (see applySkiPose): gentle balance drift at a braking crawl,
+ * busy working-body at a full tuck.
  */
 const SKI_WOBBLE: Record<
   string,
@@ -172,6 +237,10 @@ const SKI_WOBBLE: Record<
   Abdomen: [{ axis: 2, amp: 0.028, freq: 1.6, phase: 0.3 }],
   Torso: [{ axis: 1, amp: 0.03, freq: 1.2, phase: 1.7 }],
   Neck: [{ axis: 0, amp: 0.02, freq: 1.9, phase: 2.6 }],
+  UpperLegL: [{ axis: 0, amp: 0.045, freq: 1.7, phase: 1.2 }],
+  UpperLegR: [{ axis: 0, amp: 0.045, freq: 2.15, phase: 4.0 }],
+  LowerLegL: [{ axis: 0, amp: 0.06, freq: 2.45, phase: 0.4 }],
+  LowerLegR: [{ axis: 0, amp: 0.06, freq: 1.95, phase: 2.9 }],
 };
 
 /** Pelvis bob (game units) — knees pump as the skis run over the snow. */
@@ -205,6 +274,14 @@ const BOOT_COLOR = 0x3a2f2f;
 
 interface SkiGear {
   readonly group: THREE.Group;
+  /**
+   * Per-side ski + boot assemblies, repositioned every frame to the same
+   * placement the foot pins use (see footPlacement) — that shared source is
+   * what lets the stance breathe and the feet push out in a carve without a
+   * boot ever sliding off its ski. Each side's origin is at ground level
+   * under the boot, so rolling one onto its edge tilts it in place.
+   */
+  readonly sides: { readonly L: THREE.Group; readonly R: THREE.Group };
   /** Pole grips get glued to the fists every frame — see updatePoles. */
   readonly poles: { readonly L: THREE.Group; readonly R: THREE.Group };
 }
@@ -224,12 +301,8 @@ function createSkiGear(): SkiGear {
     roughness: 0.7,
   });
 
-  for (const side of [-1, 1]) {
-    const x = side * SKI_STANCE;
-    // side 1 is the character's left (feet pin at +x for L below) — the lead
-    // ski. Ski, tip, and boot all shift together so the boot stays centered
-    // on its own ski and the foot pinning lands inside the boot.
-    const stagger = side === 1 ? SKI_STAGGER.L : SKI_STAGGER.R;
+  const buildSide = (side: "L" | "R"): THREE.Group => {
+    const assembly = new THREE.Group();
 
     // The ski: a plank with an upturned tip, sized to the chunky big-headed
     // characters rather than to real skis — short and wide reads cuter.
@@ -237,24 +310,35 @@ function createSkiGear(): SkiGear {
       new THREE.BoxGeometry(0.1, 0.035, 1.15),
       skiMaterial,
     );
-    ski.position.set(x, 0.0175, 0.12 + stagger); // more ski ahead than behind
+    ski.position.set(0, 0.0175, 0.12); // more ski ahead than behind
     const tip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.03, 0.2), skiMaterial);
-    tip.position.set(x, 0.052, 0.76 + stagger);
+    tip.position.set(0, 0.052, 0.76);
     tip.rotation.x = -0.5; // front end curls up
 
     const boot = new THREE.Mesh(
       new THREE.BoxGeometry(0.15, 0.16, 0.26),
       bootMaterial,
     );
-    boot.position.set(x, 0.115, stagger); // standing on the ski
+    boot.position.set(0, 0.115, 0); // standing on the ski
 
     for (const mesh of [ski, tip, boot]) mesh.castShadow = true;
-    group.add(ski, tip, boot);
-  }
+    assembly.add(ski, tip, boot);
+    // Neutral placement so the first skiing frame looks right even before
+    // the first update repositions it.
+    assembly.position.set(
+      (side === "L" ? 1 : -1) * SKI_STANCE,
+      0,
+      SKI_STAGGER[side],
+    );
+    return assembly;
+  };
+
+  const sides = { L: buildSide("L"), R: buildSide("R") };
+  group.add(sides.L, sides.R);
 
   const poles = { L: createPole(poleMaterial), R: createPole(poleMaterial) };
   group.add(poles.L, poles.R);
-  return { group, poles };
+  return { group, sides, poles };
 }
 
 // A pole's origin is its grip, so gluing it to a fist is just a position
@@ -483,17 +567,62 @@ const scratchEuler = new THREE.Euler();
 const scratchQuaternion = new THREE.Quaternion();
 const scratchVector = new THREE.Vector3();
 
+/** Where one foot (and its ski + boot) belongs this frame, in game units. */
+interface FootPlacement {
+  x: number;
+  z: number;
+}
+
+/**
+ * The single source of truth for where a foot goes: base stance, lead-foot
+ * stagger, the angulation push toward the outside of the turn, and the slow
+ * stance breathe. The foot pin divides these by the model scale; the gear
+ * assembly uses them as-is — same numbers, so boot and ski always agree.
+ */
+function footPlacement(
+  side: "L" | "R",
+  steer: number,
+  time: number,
+  wobbleScale: number,
+): FootPlacement {
+  const breathe = STANCE_BREATHE[side];
+  // Positive steer = turning right = lean right (local -x under the facing
+  // mirror) — so the feet push out the other way, toward local +x.
+  const out = Math.max(
+    -FEET_OUT_MAX,
+    Math.min(FEET_OUT_MAX, FEET_OUT_GAIN * steer),
+  );
+  return {
+    x:
+      (side === "L" ? 1 : -1) * SKI_STANCE +
+      out +
+      wobbleScale *
+        breathe.xAmp *
+        Math.sin(breathe.xFreq * time + breathe.xPhase),
+    z:
+      SKI_STAGGER[side] +
+      wobbleScale *
+        breathe.zAmp *
+        Math.sin(breathe.zFreq * time + breathe.zPhase),
+  };
+}
+
 /**
  * Overlay the ski crouch on top of the frozen Idle base frame.
  *
  * `time` drives the micro-motion layer (SKI_WOBBLE + the pelvis bob) —
- * a monotonically accumulating pose clock, not wall time.
+ * a monotonically accumulating pose clock, not wall time. `bank` is the
+ * carve group's eased roll, which the spine counter-rotates against
+ * (ANGULATION_COUNTER); `feet` is where this frame pins the feet, computed
+ * once in update() and shared with the gear assemblies.
  */
 function applySkiPose(
   instance: Instance,
   tuck: number,
   time: number,
   airborne: boolean,
+  bank: number,
+  feet: Record<"L" | "R", FootPlacement>,
 ): void {
   instance.skiRest ??= captureSkiRest(instance);
 
@@ -510,6 +639,12 @@ function applySkiPose(
       lerp(delta.brake[1], delta.tuck[1], tuck),
       lerp(delta.brake[2], delta.tuck[2], tuck),
     );
+    // Angulation: counter-roll the spine against the carve bank so the
+    // torso rides near-upright while the legs lean. On this rig a spine
+    // bone's local +z side-bend tips the head the SAME way the carve's +z
+    // roll does (measured live, not assumed) — so countering subtracts.
+    const counter = ANGULATION_COUNTER[name];
+    if (counter !== undefined) scratchEuler.z -= counter * bank;
     for (const wobble of SKI_WOBBLE[name] ?? []) {
       const swing =
         wobble.amp * wobbleScale * Math.sin(wobble.freq * time + wobble.phase);
@@ -542,15 +677,23 @@ function applySkiPose(
       );
   }
 
-  // Plant the feet: pinned to fixed spots on the skis, left foot leading.
+  // Plant the feet: pinned to this frame's placements — the same numbers
+  // the gear assemblies were just moved to, so each foot lands inside its
+  // boot wherever the carve push and the stance breathe have taken it.
+  // The cos/sin pre-rotation is the snow-contact compensation (see the gear
+  // positioning in update()): the carve roll would otherwise lift the
+  // outside foot off the snow, so each pin is placed where the roll will
+  // carry it back onto the ground plane.
+  const cosBank = Math.cos(bank);
+  const sinBank = Math.sin(bank);
   for (const side of ["L", "R"] as const) {
     const foot = instance.bones.get(`Foot${side}`);
     const rest = instance.skiRest.feet.get(side);
     if (!foot || !rest) continue;
     foot.position.set(
-      ((side === "L" ? 1 : -1) * SKI_STANCE) / instance.scale,
-      rest.p.y + SKI_FOOT_LIFT / instance.scale,
-      SKI_STAGGER[side] / instance.scale,
+      (feet[side].x * cosBank) / instance.scale,
+      rest.p.y + (SKI_FOOT_LIFT - feet[side].x * sinBank) / instance.scale,
+      feet[side].z / instance.scale,
     );
     foot.quaternion.copy(rest.q);
   }
@@ -724,12 +867,44 @@ export function createSkierRig(): SkierRig {
         carve.rotation.y = -steerCurrent;
         // …and roll into the turn. Positive local z-roll tips the head
         // toward local -x, which the facing mirror maps to the character's
-        // right — so bank carries steer's sign directly.
-        carve.rotation.z = Math.max(
+        // right — so bank carries steer's sign directly. The spine
+        // counter-rotates against this roll inside applySkiPose, which is
+        // what turns a plank-tilt into angulation.
+        const bank = Math.max(
           -BANK_MAX,
           Math.min(BANK_MAX, BANK_GAIN * steerCurrent),
         );
-        applySkiPose(active, tuckCurrent, poseTime, airborne);
+        carve.rotation.z = bank;
+        // One placement per foot per frame, shared by the gear assemblies
+        // and the foot pins so they can never disagree.
+        const wobbleScale = 0.35 + 0.65 * tuckCurrent;
+        const feet = {
+          L: footPlacement("L", steerCurrent, poseTime, wobbleScale),
+          R: footPlacement("R", steerCurrent, poseTime, wobbleScale),
+        };
+        const edge = Math.max(
+          -EDGE_MAX,
+          Math.min(EDGE_MAX, EDGE_GAIN * steerCurrent),
+        );
+        // Skis stay ON the snow while the body rolls — that's the other
+        // half of angulation. The carve roll happens at the body's center,
+        // so left alone it would lift the outside ski clean off the ground
+        // (measured: 0.09 units at a cruise carve). Each assembly therefore
+        // counter-rolls (edge - bank: its world tilt ends up at exactly the
+        // edge angle) and is pre-rotated into the position the carve roll
+        // will carry back onto the ground plane.
+        const cosBank = Math.cos(bank);
+        const sinBank = Math.sin(bank);
+        for (const side of ["L", "R"] as const) {
+          const assembly = gear.sides[side];
+          assembly.position.set(
+            feet[side].x * cosBank,
+            -feet[side].x * sinBank,
+            feet[side].z,
+          );
+          assembly.rotation.z = edge - bank;
+        }
+        applySkiPose(active, tuckCurrent, poseTime, airborne, bank, feet);
         updatePoles();
       } else {
         carve.rotation.y = 0;
