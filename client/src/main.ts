@@ -86,6 +86,18 @@ const AUTOSAVE_SECONDS = 5;
 let autosaveTimer = 0;
 
 const heldKeys = new Set<string>();
+
+// Wheel notches for the bedroom's camera zoom, accumulated between frames
+// (trackpads fire many tiny events per frame) and consumed once per loop.
+let wheelSteps = 0;
+window.addEventListener(
+  "wheel",
+  (event) => {
+    wheelSteps += event.deltaY / 100;
+  },
+  { passive: true },
+);
+
 window.addEventListener("keydown", (event) => {
   if (event.code === "KeyM") {
     muted = audio.toggleMuted();
@@ -136,12 +148,37 @@ function readSkiInput(): SkiInput {
   };
 }
 
-function readBedroomInput(): BedroomInput {
+// Walking is camera-relative: "up" always means "away from the camera",
+// however far the room has been spun. The keys are turned into a screen-
+// space direction, rotated by the camera's current angle into world space,
+// and quantized back to the 8-way booleans /shared expects — so the shared
+// simulation stays camera-ignorant.
+const EIGHT_WAY_THRESHOLD = Math.sin(Math.PI / 8);
+
+function readBedroomInput(cameraAzimuth: number): BedroomInput {
+  const screenX =
+    (heldKeys.has("ArrowRight") || heldKeys.has("KeyD") ? 1 : 0) -
+    (heldKeys.has("ArrowLeft") || heldKeys.has("KeyA") ? 1 : 0);
+  const screenZ =
+    (heldKeys.has("ArrowDown") || heldKeys.has("KeyS") ? 1 : 0) -
+    (heldKeys.has("ArrowUp") || heldKeys.has("KeyW") ? 1 : 0);
+  if (screenX === 0 && screenZ === 0) {
+    return { left: false, right: false, up: false, down: false };
+  }
+  // At azimuth 0 (the classic view) screen space and world space agree;
+  // rotating the camera rotates what "screen right/down" mean in the world.
+  const sin = Math.sin(cameraAzimuth);
+  const cos = Math.cos(cameraAzimuth);
+  const worldX = screenX * cos + screenZ * sin;
+  const worldZ = -screenX * sin + screenZ * cos;
+  const length = Math.hypot(worldX, worldZ);
+  const x = worldX / length;
+  const z = worldZ / length;
   return {
-    left: heldKeys.has("ArrowLeft") || heldKeys.has("KeyA"),
-    right: heldKeys.has("ArrowRight") || heldKeys.has("KeyD"),
-    up: heldKeys.has("ArrowUp") || heldKeys.has("KeyW"),
-    down: heldKeys.has("ArrowDown") || heldKeys.has("KeyS"),
+    left: x < -EIGHT_WAY_THRESHOLD,
+    right: x > EIGHT_WAY_THRESHOLD,
+    up: z < -EIGHT_WAY_THRESHOLD,
+    down: z > EIGHT_WAY_THRESHOLD,
   };
 }
 
@@ -152,10 +189,24 @@ function loop(now: number): void {
   lastTime = now;
 
   if (mode === "bedroom") {
-    bedroomState = stepBedroom(bedroomState, readBedroomInput(), dt);
-    syncBedroomSceneToState(bedroomScene, bedroomState, dt);
+    // Q/E spin the room, the wheel zooms. Wheel notches are consumed once
+    // per frame.
+    const cameraInput = {
+      rotate:
+        (heldKeys.has("KeyE") ? 1 : 0) - (heldKeys.has("KeyQ") ? 1 : 0),
+      zoomSteps: wheelSteps,
+    };
+    wheelSteps = 0;
+    bedroomState = stepBedroom(
+      bedroomState,
+      readBedroomInput(bedroomScene.orbit.azimuth),
+      dt,
+    );
+    syncBedroomSceneToState(bedroomScene, bedroomState, dt, cameraInput);
     renderBedroom(bedroomScene);
   } else {
+    // Scrolling does nothing on the slope — drop it so it can't pile up.
+    wheelSteps = 0;
     skiState = stepSkiing(skiState, readSkiInput(), dt);
     syncSkiSceneToState(skiScene, skiState, dt);
     render(skiScene);
