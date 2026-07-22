@@ -1285,6 +1285,86 @@ physics, gear style + longer skis, always-on feet, or the parked
 angulation round 3 + boot-containment fix. Then music (still deliberately
 last), then the end-of-M2 tuning pass.
 
+## 2026-07-22 — M2: cat hug + hair physics — the big character-life item
+
+Director's pick from the round-2 list: the cat now genuinely **hugs your
+back** — belly against it, front legs reaching around, head craned up to
+peek over your shoulder with its red scarf showing — and the character's
+**hair finally moves**: it trails back at speed, swings through carves and
+crashes, gusts in the wind, and physically pushes away from the cat instead
+of swallowing it. All rendering-side (`catModel.ts`, `skierModel.ts`,
+`skiRender.ts`); no `/shared` changes, test count stays at 55.
+
+- **The mount is now the actual back.** The old cat mount was a fixed point
+  floating in space behind the skier; it's now a live frame glued every
+  frame to the spine bones themselves (built from the Abdomen→Neck line, so
+  it doesn't depend on the pack's bone-axis conventions — those have burned
+  this project twice). The cat folds with the crouch automatically: upright
+  hug while braking, lying flat along the folded back in a full tuck, and
+  it banks through carves and tips over in crashes with zero slope code.
+  Verified: the cat's head holds a constant position *in the back's frame*
+  across the whole brake↔tuck range (±4mm), exactly what "attached to the
+  back" should measure.
+- **The cling is a real pose.** No CC0 cat has a hug animation, so the
+  cling is posed procedurally on the cat's own skeleton — front legs
+  spread into the hug, back legs folded for grip, head craned to peek, tail
+  swept round — over a frozen base frame, with a small life layer (slow
+  breathing, lazy tail sway, tiny head adjustments at incommensurate
+  frequencies) so the clinging cat reads alive, not taxidermied.
+- **Hair is real geometry with real spring physics.** Every roster
+  character's hair turned out to be a single mesh piece 100%-attached to
+  the head bone (checked across all 11 files) — so it was lifted off the
+  skeleton into its own swinging mesh, pivoted at the crown (roots stay
+  put, tips do the swinging — and stay tucked under hats, which
+  deliberately don't flap; hatted characters swing at half amplitude). A
+  damped spring drives it from the head's real motion through the air —
+  saturating, so slope speed leans the hair back convincingly without
+  pinning it flat — plus wind gusts that scale with speed, and it works in
+  the bedroom too (a gentle trail when you walk). The bald character simply
+  has no hair to split; recoloring with **H** still works on the swinging
+  hair.
+- **Hair reacts against the cat.** The spring is pushed away from a sphere
+  where the cat's head rides, probed against the hair's actual extent — so
+  the hair rests *against* the peeking cat instead of the cat sitting
+  halfway inside it. Measured: with the cat mounted, the hair rides
+  measurably further from the cat's head than without the repulsor, and
+  the two never interpenetrate at the mesh-box level.
+- **Four real bugs caught by verification, none by the compiler:** (1) the
+  first hair bake rendered double-sized — the exact skinning math was
+  verified against the real renderer until the rigid copy matched the
+  skinned original *bit-exactly* (max error 0.000000 across sampled
+  vertices); (2) the first cling implementation nudged bones relatively on
+  top of a playing clip and the cat slowly tumbled off the back — the same
+  mixer gotcha the skier's crouch hit, fixed the same way (absolute
+  overwrite from a captured base frame; drift now 8mm over a minute of
+  hard driving, which is the breathing, not drift); (3) the first
+  cat-repulsor probed the hair's *center* and never fired — the boots
+  taught this exact lesson last session (containment lives in the mesh
+  extent, not center distances) and probing the hair's closest point fixed
+  it; (4) the cat floated off the back at the hips — caught by ASCII
+  silhouette reads, closed by flattening the lay until the belly line
+  touches the coat.
+- Teleport guard: a checkpoint respawn moves the world 30 units in one
+  frame — the hair spring explicitly ignores it (no whip on respawn),
+  same guard the carve layer needed. `npm run check` (55 tests) and
+  `npm run build` pass; the real game boots and runs the slope with zero
+  console errors.
+
+**What to playtest:** `npm run dev`, Enter to ski. The headline: does the
+cat finally read as *hugging* you — belly on your back, head peeking over
+your right shoulder, scarf visible? Watch it through brake → tuck: does it
+lie down along your back as you fold? Then watch the hair at speed: does
+it trail and swing like hair (brake hard and swerve — does the follow-
+through feel right)? Crash on purpose — the hair should whip with the
+flop. Press **C** in the bedroom: check a hatted character (does hair
+clipping under the hat bother you?) and the bald one. And the taste
+question: is the hair's amount of motion right — too floaty, too stiff?
+
+**Next:** remaining round-2 list by director's pick — momentum/pole
+push-off (the `/shared` gameplay session), jump anticipation, gear style +
+longer skis, always-on feet, or angulation round 3 + the boot-containment
+fix. Then music (still deliberately last), then the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

@@ -147,19 +147,25 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   skier.setFacing(Math.PI); // both bases are authored facing +z; downhill is -z
   player.add(skier.group);
 
-  // The cat rides on your back (DESIGN.md's core fantasy) — the same rig as
-  // the bedroom cat, sitting, parented onto the skier's mount so it turns
-  // and banks with the body through every carve (and still goes along for
-  // the crash tip-over). The mount is the character's own frame: they face
-  // local +z, so the back is -z, and facing downhill means no extra turn.
-  // Mounted on the upper back of the *crouched* pose (the old height was
-  // tuned against the taller retired bodies and landed in the roster's
-  // hair), facing downhill with the skier — the director's call; it used to
-  // face the camera so its scarf showed, and that read wrong.
+  // The cat rides on your back (DESIGN.md's core fantasy) — and it *hugs*
+  // now, rather than perching upright like a shelf ornament (director's
+  // playtest call). The skier rig's mount is a live back-anchor glued to
+  // the spine bones (+y up the spine, +z the character's forward, the back
+  // surface toward -z), so the cat folds with the crouch, swings through
+  // every carve, and tips over in a crash without any slope code here.
+  // Laid belly-to-the-back: rotated so its paws press against the back
+  // (like a cat clinging to a wall), body up along the spine, head craned
+  // over the right shoulder by the clinging pose in catModel.ts.
   const cat = createCatRig();
-  cat.setPose("sitting");
-  cat.group.position.set(0, 0.62, -0.3);
+  cat.setPose("clinging");
+  cat.group.position.set(0.06, -0.05, -0.06);
+  cat.group.rotation.set(-Math.PI / 2, 0, 0);
   skier.mount.add(cat.group);
+  // The hair spring pushes away from a sphere at the cat's head, so hair
+  // rests against the cat instead of swallowing it. The center is the cat
+  // head's measured mount-space position under the placement above (it
+  // holds constant brake↔tuck, because the mount IS the back frame).
+  skier.setHairRepulsor({ x: 0.06, y: 0.06, z: -0.3, radius: 0.26 });
 
   scene.add(player);
 

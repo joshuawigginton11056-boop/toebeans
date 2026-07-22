@@ -113,26 +113,23 @@ needs a round 2. Eight issues, with what each fix takes:
   the 1.6-unit character); the director wants longer. Real-skier
   proportion (~head height or a touch more) ≈ 1.7–1.8 units. One constant,
   but re-check the chasm-lip visual once longer.
-- **The cat should HUG the character's back and peek over the shoulder** —
-  not sit upright on it like a shelf ornament. That's a real redesign of
-  the mount, not an offset tweak: pitch the cat's body against the back's
-  slope (belly contact), place it higher and slightly off-center, head
-  coming over one shoulder. May want a custom clinging pose for the cat —
-  the ski-pose session proved the technique (procedural bone offsets over
-  a frozen base) works, and the cat has the same kind of rig. Interacts
-  with the two hair items below; settle together.
-- **Hair should move — real physics.** The hair is skinned mesh vertices
-  under the shared skeleton's Head bone (its own `Hair` material, so the
-  triangles are identifiable). Real cloth sim is out of scope for a web
-  game, but a credible middle exists: split the hair triangles into their
-  own mesh at load (by material), parent it to the Head bone, and drive it
-  with a cheap spring/pendulum sway from head motion + speed wind. That
-  same split is the prerequisite for hair-vs-cat collision below.
-- **Hair should react against the cat** (the cat still ends up inside the
-  hair on some characters). Once hair is a separate mesh with a spring
-  (above), pushing it away from a cat-proximity sphere is the same math.
-  Per-character mount offsets (hats and long hair change where the cat
-  fits) are the cheaper fallback if hair physics slips.
+- ~~**The cat should HUG the character's back and peek over the
+  shoulder**~~ **(RESOLVED 2026-07-22, cat-hug + hair-physics session):**
+  the mount is now a live back-frame glued to the spine bones, and the cat
+  clings to it — belly contact, front legs hugging, head peeking over the
+  right shoulder — via a procedural cling pose on the cat's own rig
+  (absolute overwrite over a frozen base, the skier-crouch technique; the
+  relative-nudge version tumbled, same mixer gotcha).
+- ~~**Hair should move — real physics.**~~ **(RESOLVED 2026-07-22, same
+  session):** exactly the planned split — the hair primitive (100%
+  head-weighted on every character, verified) became its own crown-pivoted
+  mesh under the Head bone, driven by a damped spring off real head motion
+  plus speed-scaled gusts. Bedroom walking gets a gentle trail for free;
+  hats don't flap and hatted characters swing at half amplitude.
+- ~~**Hair should react against the cat**~~ **(RESOLVED 2026-07-22, same
+  session):** the spring is repelled from a sphere at the cat's head,
+  probed against the hair's closest mesh-box point — probing the *center*
+  never fired (the boots' center-vs-extent lesson, hit again and applied).
 - **The character still reads as footless.** The boots fixed the slope but
   are gear, not feet: the bedroom still shows bare leg stumps, and boots
   read as equipment. Proper fix: simple code-built *shoes* attached to the
@@ -165,10 +162,8 @@ already-planned ski-pose session; two are independent.
 - ~~**No ski equipment**~~ **(RESOLVED 2026-07-22)** — skis, boots, and
   hand-following poles, built in code; see the ski-pose session in
   ROADMAP.md.
-- **Hair does not move / is rigid.** *(Escalated by the 2026-07-22 verdict
-  above: no longer a taste call — the director wants real hair physics,
-  including reacting against the cat. See that block for the
-  split-hair-mesh + spring approach.)*
+- ~~**Hair does not move / is rigid.**~~ **(RESOLVED 2026-07-22, cat-hug +
+  hair-physics session — see the 2026-07-22 block above.)**
 - ~~**Character can be changed while skiing.**~~ **(RESOLVED 2026-07-22,
   ski-pose session):** the C/K/H branch in `client/src/main.ts` is gated on
   `mode === "bedroom"`, matching what the HUD hints always claimed.

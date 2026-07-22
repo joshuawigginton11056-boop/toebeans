@@ -365,6 +365,153 @@ function createPole(material: THREE.Material): THREE.Group {
 }
 
 // ---------------------------------------------------------------------------
+// Hair physics.
+//
+// Every roster character's hair is a single glTF primitive with its own
+// "Hair" material, 100%-weighted to the Head bone (verified across all 11
+// .glbs — max and only weight is 1.0). That makes real hair motion cheap and
+// *exact*: lift that primitive out of the skinned mesh into a rigid mesh
+// parented to the Head bone (bit-identical at rest, because skinning with a
+// single weight-1 bone IS a rigid parent), pivot it at the crown, and swing
+// the pivot with a damped spring. The roots up top barely move — they stay
+// tucked under any hat, which is separate geometry with its own Hat material
+// and deliberately does not flap — while the lower hair does the swinging.
+//
+// What forces the spring: drag from the head's real motion through the air
+// (world-space velocity, saturating so slope speed leans the hair back
+// without pinning it flat), wind gusts while skiing, and a repulsor sphere
+// where the cat's head rides (setHairRepulsor) so the hair physically clears
+// the cat instead of clipping through it — the director's "hair must react
+// against the cat".
+
+/** Spring stiffness (rad/s² per rad of deflection) — ~1 Hz natural sway. */
+const HAIR_STIFFNESS = 40;
+/** ~0.35 of critical damping: a visible pendulum overshoot, no jitter. */
+const HAIR_DAMPING = 4.4;
+/** Hard clamp on the swing, radians — hair never folds inside the skull. */
+const HAIR_MAX_SWING = 0.42;
+/** Hatted characters swing less: their roots sit under a brim. */
+const HAIR_HAT_FACTOR = 0.5;
+/** Head speed (units/s) at which the drag tilt saturates. */
+const HAIR_DRAG_REF = 9;
+/** Drag tilt at full saturation, radians. */
+const HAIR_DRAG_MAX = 0.3;
+/** Wind-gust wobble while skiing, radians at full tuck. */
+const HAIR_GUST = 0.06;
+/** How hard the cat repulsor pushes at full penetration, radians. */
+const HAIR_PUSH = 0.8;
+/** A frame step this large is a respawn teleport, not motion — no impulse. */
+const HAIR_TELEPORT = 1.5;
+/** Spring integration clamp — hidden-tab dt spikes must not explode it. */
+const HAIR_DT_MAX = 1 / 30;
+
+interface HairRig {
+  /** Rotating this at the crown is the swing. Parented to the Head bone. */
+  readonly pivot: THREE.Object3D;
+  readonly head: THREE.Object3D;
+  /**
+   * Hair bounding box in pivot space. The repulsor probes the box's
+   * *closest point* to the cat, not the volume's center — the center of a
+   * hairdo rides half a unit from where the cat actually touches it (the
+   * boots taught this: containment failures live in the mesh extent,
+   * center distances look fine throughout).
+   */
+  readonly boxMin: THREE.Vector3;
+  readonly boxMax: THREE.Vector3;
+  readonly maxSwing: number;
+  prevHead: THREE.Vector3 | null;
+  swingX: number;
+  swingZ: number;
+  velX: number;
+  velZ: number;
+}
+
+/**
+ * Lift the hair primitive off the skeleton and hang it from the Head bone.
+ * Runs per instance, after bindMaterialRegions, so the rigid mesh reuses the
+ * instance's owned Hair material — runtime recoloring keeps working on it.
+ * Characters with no hair (the bald one) simply return null.
+ */
+function splitHair(
+  root: THREE.Object3D,
+  bones: Map<string, THREE.Object3D>,
+): HairRig | null {
+  const head = bones.get("Head");
+  if (!head) return null;
+  let source: THREE.SkinnedMesh | null = null;
+  let hasHat = false;
+  root.traverse((object) => {
+    if (!(object instanceof THREE.SkinnedMesh)) return;
+    // glTF splits primitives per material, so each mesh is single-material.
+    const material = Array.isArray(object.material)
+      ? object.material[0]
+      : object.material;
+    if (!material) return;
+    if (material.name === "Hair") source = object;
+    if (material.name.startsWith("Hat")) hasHat = true;
+  });
+  if (source === null) return null;
+  const skinned: THREE.SkinnedMesh = source;
+  const headIndex = skinned.skeleton.bones.indexOf(head as THREE.Bone);
+  if (headIndex < 0) return null;
+
+  // Bake the geometry into Head-bone space. Because every weight is 1.0,
+  // the shader's whole skinning chain for these vertices is ONE matrix —
+  //   meshWorld ∘ bindMatrixInverse ∘ headWorld ∘ headInverseBind ∘ bind
+  // — so conjugating it back into the head bone's frame gives an exact
+  // bake. (A first attempt used just headInverseBind ∘ bind and rendered
+  // the hair double-sized: the model-normalization scale lives in
+  // meshWorld, and skipping the conjugation skips it.) The clone matters:
+  // the template and its other instances share the source geometry.
+  root.updateMatrixWorld(true);
+  const geometry = skinned.geometry.clone();
+  geometry.applyMatrix4(
+    new THREE.Matrix4()
+      .copy(head.matrixWorld)
+      .invert()
+      .multiply(skinned.matrixWorld)
+      .multiply(skinned.bindMatrixInverse)
+      .multiply(head.matrixWorld)
+      .multiply(skinned.skeleton.boneInverses[headIndex]!)
+      .multiply(skinned.bindMatrix),
+  );
+  geometry.deleteAttribute("skinIndex");
+  geometry.deleteAttribute("skinWeight");
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox!;
+
+  const crown = new THREE.Vector3(
+    (box.min.x + box.max.x) / 2,
+    box.max.y,
+    (box.min.z + box.max.z) / 2,
+  );
+  const mesh = new THREE.Mesh(
+    geometry,
+    Array.isArray(skinned.material) ? skinned.material[0] : skinned.material,
+  );
+  mesh.castShadow = true;
+  mesh.position.copy(crown).negate();
+  const pivot = new THREE.Object3D();
+  pivot.position.copy(crown);
+  pivot.add(mesh);
+  head.add(pivot);
+  skinned.visible = false; // the rigid copy replaces it
+
+  return {
+    pivot,
+    head,
+    boxMin: box.min.clone().sub(crown),
+    boxMax: box.max.clone().sub(crown),
+    maxSwing: HAIR_MAX_SWING * (hasHat ? HAIR_HAT_FACTOR : 1),
+    prevHead: null,
+    swingX: 0,
+    swingZ: 0,
+    velX: 0,
+    velZ: 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
 
 export interface SkiMotion {
   /**
@@ -386,13 +533,22 @@ export interface SkierRig {
   /** Parent this into a scene and position it — the model loads into it. */
   readonly group: THREE.Group;
   /**
-   * Turns (and banks) with the character. Parent riders and props here —
-   * the cat mounts on the skier's back through this, so it comes along
-   * through every turn instead of hovering in place while the body yaws
-   * out from under it. Coordinates are the character's own frame: the
-   * character faces local +z, so "behind the back" is local -z.
+   * The skier's back, as a live frame: glued every update to the spine
+   * bones (origin on the upper back, +y up along the spine, +z the
+   * character's forward — so the back surface itself lies toward -z).
+   * Parent riders here — the cat hugs the back through this, so it folds
+   * with the crouch, swings through every carve, and tips over in a crash,
+   * all without knowing anything about the pose underneath it.
    */
   readonly mount: THREE.Group;
+  /**
+   * A sphere (in mount space) the hair is pushed away from — where the
+   * riding cat's head is. The hair physically clearing the cat is what
+   * finally kills the cat-in-the-hair overlap. Null disables it (bedroom).
+   */
+  setHairRepulsor(
+    repulsor: { x: number; y: number; z: number; radius: number } | null,
+  ): void;
   /** Switch clips. Cheap to call every frame; repeats are ignored. */
   setPose(pose: SkierPose): void;
   /**
@@ -429,6 +585,8 @@ interface Instance {
   /** Game units per source unit — converts pose offsets into bone space. */
   readonly scale: number;
   applyColor(region: CharacterRegion, color: THREE.Color): void;
+  /** The split-off swinging hair, or null for the bald character. */
+  readonly hair: HairRig | null;
   pose: SkierPose | null;
   /**
    * Base transforms for every bone the ski pose touches, captured off the
@@ -545,6 +703,9 @@ function createInstance(
   root.traverse((object) => {
     if (object instanceof THREE.Bone) bones.set(object.name, object);
   });
+  // Order matters: splitHair reuses the owned materials bindMaterialRegions
+  // just created, so recoloring reaches the rigid hair too.
+  const applyColor = bindMaterialRegions(root);
   return {
     root,
     mixer,
@@ -552,7 +713,8 @@ function createInstance(
     bones,
     pelvis: bones.get("Hips")?.parent ?? null,
     scale: root.children[0]?.scale.x ?? 1,
-    applyColor: bindMaterialRegions(root),
+    applyColor,
+    hair: splitHair(root, bones),
     pose: null,
     skiRest: null,
   };
@@ -566,6 +728,10 @@ function lerp(a: number, b: number, t: number): number {
 const scratchEuler = new THREE.Euler();
 const scratchQuaternion = new THREE.Quaternion();
 const scratchVector = new THREE.Vector3();
+const scratchVectorB = new THREE.Vector3();
+const scratchVectorC = new THREE.Vector3();
+const scratchVectorD = new THREE.Vector3();
+const scratchMatrix = new THREE.Matrix4();
 
 /** Where one foot (and its ski + boot) belongs this frame, in game units. */
 interface FootPlacement {
@@ -732,6 +898,12 @@ export function createSkierRig(): SkierRig {
   const carve = new THREE.Group();
   facing.add(carve);
 
+  // The rider's mount — glued to the spine every update (see updateMount),
+  // so whatever is parented here rides the actual back through crouch,
+  // carve, and crash. It lives in the carve group like the model does.
+  const mount = new THREE.Group();
+  carve.add(mount);
+
   // Ski gear rides in the carve group so it turns AND banks with the
   // character — carving happens on the ski edges, so the skis tilting into
   // the turn with the body is the point. Only visible in the skiing pose —
@@ -815,6 +987,108 @@ export function createSkierRig(): SkierRig {
       });
   }
 
+  let hairRepulsor: {
+    x: number;
+    y: number;
+    z: number;
+    radius: number;
+  } | null = null;
+
+  // Glue the mount to the spine: origin on the upper back between the
+  // Abdomen and Neck bones, +y up along the spine, +z the character's
+  // forward. Derived from bone positions rather than copying one bone's
+  // orientation, so it doesn't depend on the pack's bone-axis conventions
+  // (which have burned this file before — the spine-counter sign, the
+  // pelvis name collision). Runs every update, all poses: the bedroom just
+  // has nothing mounted.
+  function updateMount(): void {
+    if (active === null) return;
+    const abdomen = active.bones.get("Abdomen");
+    const neck = active.bones.get("Neck");
+    if (!abdomen || !neck) return;
+    carve.updateWorldMatrix(true, false);
+    const a = carve.worldToLocal(abdomen.getWorldPosition(scratchVector));
+    const n = carve.worldToLocal(neck.getWorldPosition(scratchVectorB));
+    const up = scratchVectorC.copy(n).sub(a).normalize();
+    // Right-handed basis around the spine, referenced to character-forward.
+    const side = scratchVectorD.set(0, 0, 1).cross(up).negate().normalize();
+    mount.position.copy(a).lerp(n, 0.55);
+    mount.quaternion.setFromRotationMatrix(
+      scratchMatrix.makeBasis(side, up, side.clone().cross(up)),
+    );
+  }
+
+  // The hair spring — see the hair-physics section above for the model.
+  function updateHair(dt: number): void {
+    const hair = active?.hair;
+    if (!hair || dt <= 0) return;
+
+    hair.head.getWorldPosition(scratchVector);
+    if (hair.prevHead === null) {
+      hair.prevHead = scratchVector.clone();
+      return;
+    }
+    const step = scratchVectorB.copy(scratchVector).sub(hair.prevHead);
+    const distance = step.length();
+    hair.prevHead.copy(scratchVector);
+    // World → head-local, for drag directions and the repulsor push alike.
+    hair.head.getWorldQuaternion(scratchQuaternion).invert();
+
+    let targetX = 0;
+    let targetZ = 0;
+    // Drag: the hair tilts away from the head's motion through the air.
+    // tanh saturates it — slope speed leans the hair back convincingly
+    // without pinning it flat, and a bedroom stroll gives a gentle trail.
+    // A respawn-teleport step is not motion and gets no impulse (the same
+    // guard the carve layer needed).
+    if (distance < HAIR_TELEPORT) {
+      step.divideScalar(dt).applyQuaternion(scratchQuaternion);
+      targetX = HAIR_DRAG_MAX * Math.tanh(step.z / HAIR_DRAG_REF);
+      targetZ = -HAIR_DRAG_MAX * Math.tanh(step.x / HAIR_DRAG_REF);
+    }
+
+    // Wind gusts on the slope, scaling with speed like the audio's wind
+    // layer. Incommensurate frequencies, same reasoning as SKI_WOBBLE.
+    if (pose === "skiing") {
+      const gust = HAIR_GUST * (0.4 + 0.6 * tuckCurrent);
+      targetX += gust * Math.sin(2.1 * poseTime + 0.5);
+      targetZ += gust * 0.6 * Math.sin(1.7 * poseTime + 2.9);
+    }
+
+    // The cat: push the hair out of the repulsor sphere, proportional to
+    // penetration — so the hair rests *against* the cat instead of inside.
+    // The probe point is the hair box's closest point to the cat, not the
+    // volume's center: a hairdo's center rides half a unit from where the
+    // cat actually touches it.
+    if (hairRepulsor !== null) {
+      const cat = mount.localToWorld(
+        scratchVectorB.set(hairRepulsor.x, hairRepulsor.y, hairRepulsor.z),
+      );
+      const closest = hair.pivot
+        .worldToLocal(scratchVectorC.copy(cat))
+        .clamp(hair.boxMin, hair.boxMax);
+      const away = hair.pivot.localToWorld(closest).sub(cat);
+      const gap = away.length();
+      if (gap > 1e-5 && gap < hairRepulsor.radius) {
+        const push =
+          HAIR_PUSH * ((hairRepulsor.radius - gap) / hairRepulsor.radius);
+        away.normalize().applyQuaternion(scratchQuaternion);
+        targetX += -away.z * push;
+        targetZ += away.x * push;
+      }
+    }
+
+    // Damped spring toward the target, clamped so it can never fold the
+    // hair inside the skull (and less swing under a hat brim).
+    const h = Math.min(dt, HAIR_DT_MAX);
+    hair.velX += (HAIR_STIFFNESS * (targetX - hair.swingX) - HAIR_DAMPING * hair.velX) * h;
+    hair.velZ += (HAIR_STIFFNESS * (targetZ - hair.swingZ) - HAIR_DAMPING * hair.velZ) * h;
+    const limit = hair.maxSwing;
+    hair.swingX = Math.max(-limit, Math.min(limit, hair.swingX + hair.velX * h));
+    hair.swingZ = Math.max(-limit, Math.min(limit, hair.swingZ + hair.velZ * h));
+    hair.pivot.rotation.set(hair.swingX, 0, hair.swingZ);
+  }
+
   // Glue each pole's grip to its fist. Runs after the pose is applied, so
   // the poles follow the hands through the brake↔tuck blend for free.
   function updatePoles(): void {
@@ -834,13 +1108,16 @@ export function createSkierRig(): SkierRig {
 
   return {
     group,
-    mount: carve,
+    mount,
     setPose(next: SkierPose): void {
       pose = next;
       applyPose();
     },
     setFacing(radians: number): void {
       facing.rotation.y = radians;
+    },
+    setHairRepulsor(repulsor): void {
+      hairRepulsor = repulsor;
     },
     setSkiMotion(motion: SkiMotion): void {
       tuckTarget = Math.min(1, Math.max(0, motion.tuck));
@@ -910,6 +1187,10 @@ export function createSkierRig(): SkierRig {
         carve.rotation.y = 0;
         carve.rotation.z = 0;
       }
+      // After the pose has settled the bones: glue the mount to the spine,
+      // then run the hair spring (it reads the head's settled position).
+      updateMount();
+      updateHair(dt);
     },
   };
 }
