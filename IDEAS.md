@@ -165,14 +165,17 @@ the unlock tree. Open question for the director: does the *house itself*
 also upgrade with levels (rundown → renovated — see the next entry), or
 only its contents?
 
-## (bedroom) Rundown house + the no-texture rule challenged (director, 2026-07-22) — house half SUPERSEDED, texture half STILL LIVE
+## (bedroom) ~~Rundown house + the no-texture rule challenged~~ — texture half RESOLVED 2026-07-22 (direction session)
 
-**(Half-superseded 2026-07-22, lobby session: the rundown *house* has no
-stage now — the bedroom is scrapped. But the second call below — "I don't
-like the flat graphics. And there's no texture." — is game-wide and
-STANDS: it challenges the Art Style Bible for the slope, the characters,
-and the new lobby vignette alike. The direction session it asks for is
-still owed.)** Original entry:
+**(RESOLVED 2026-07-22, restructure/direction session: the director called
+it — *Omno* stays the reference target, and texture happens within it via
+**both** option (a) stylized painted textures and option (b) procedural
+surface detail, with palette discipline kept. Recorded in the Art Style
+Bible's "in transition" note in
+[DESIGN.md → Art Style Bible](DESIGN.md#art-style-bible), which now
+governs. First build slice: a side-by-side tree + snow test on the real
+slope, slope-visuals session. The rundown-*house* half remains superseded —
+no stage until the parked progression question lands.)** Original entry:
 
 Two art calls from the same playtest, recorded together because the
 second decides how the first can be built:

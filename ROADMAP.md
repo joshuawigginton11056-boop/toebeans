@@ -2717,6 +2717,71 @@ always-on feet, angulation round 3 + the boot-containment fix,
 hair-roots + cat-tail), then music (still deliberately last), then the
 end-of-M2 tuning pass.
 
+## (slope-vis) 2026-07-22 — Texture direction called + the sessions restructure
+
+Two connected director calls, one session: the game is getting **texture**,
+and the parallel-session setup was rebuilt so texture work and gameplay
+work can run side by side without stepping on each other.
+
+**The art-direction call** (the session owed since the "I don't like the
+flat graphics" verdict): *Omno* stays the reference — mood, dawn light,
+haze, palette all stand — but surfaces stop being flat. Approved approach
+is **both** of: stylized painted textures on the existing low-poly models
+(visible bark, dappled foliage, snow grain — hand-painted feel, never
+photoreal) **and** procedural surface detail (shader grain/sparkle, carved
+ski trails, baked lighting variation). Palette discipline stays: texture
+colors live inside a palette color's family. The Art Style Bible's ⚠ note
+in [DESIGN.md](DESIGN.md#art-style-bible) now records this as binding; the
+bible's full rewrite waits for an approved test look. First build slice
+(next chunk): a **side-by-side test on the real slope** — retextured trees
+and a snow patch next to the current flat versions, so the director judges
+with eyeballs before the whole asset pipeline converts.
+
+**The restructure** (director call this session): the bedroom/slope pair
+became three sessions — see the rewritten [PARALLEL.md](PARALLEL.md):
+
+- **lobby** (renamed from `bedroom` — branch, folder, and launch config
+  now match what the scene became), port 5301.
+- **slope-mechanics** (renamed from `slope`): owns the sim
+  (`shared/skiing.ts`) and the state→presentation wiring
+  (`skiRender.ts`), port 5302.
+- **slope-visuals** (new, this session): owns how the slope looks and
+  sounds — `skiScene.ts`, `skierModel.ts`, `audio.ts`, `assets/`,
+  `tools/` — port 5303.
+
+To make that split real, `client/src/skiRender.ts` was cut in two:
+everything about the slope's *look* (palette, lighting math, sky dome, sun
+billboard, snowfield, decor scatter, hazard/checkpoint mesh styles) moved
+to a new **`client/src/skiScene.ts`**, leaving `skiRender.ts` as the
+camera plus the per-frame `SkiState`→rig wiring. A pure mechanical move —
+no behavior change, nothing on screen should look different. The seam
+between them (`setSkiMotion`, `syncEnvironment`, the mesh factories) and
+the cross-territory etiquette are written into PARALLEL.md. Old branches
+`bedroom`/`slope` are renamed on GitHub too; `.claude/launch.json` carries
+the three new configs.
+
+- `npm run check` (77 tests) and `npm run build` pass in the new
+  worktree; live-verified on the slope-visuals dev server (5303).
+- Retired a leftover dev server that an earlier slope chat left holding
+  port 5302, per the restructure.
+
+**What to playtest:** nothing new this session — the split is invisible by
+design (worth one glance that the slope still looks exactly right). The
+real playtest comes next chunk: the texture side-by-side.
+
+**Next:** *(slope-vis)* the texture test — pick 2–3 trees + a snow patch,
+texture them in the approved style, place them beside their flat originals
+on the real slope for the director's verdict. *(slope-mech)* turning
+round 5 (the boost × turnaround fix, options in IDEAS.md), then the rest
+of the round-2 list. *(lobby)* per the director — progression question or
+lobby polish. Music still deliberately last, then the end-of-M2 tuning
+pass.
+
+*(Merge note, same day: turning round 5 landed in parallel with the
+restructure — the entry above this one. Its "(slope)" tag and this
+entry's "slope-mech next: round 5" line crossed in flight; round 5 is
+done.)*
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
