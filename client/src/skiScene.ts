@@ -118,6 +118,23 @@ export function createEnvironment(scene: THREE.Scene): SlopeEnvironment {
   slope.receiveShadow = true;
   scene.add(slope);
 
+  // TEXTURE TEST: a painted snow patch spanning the lane just past the
+  // start — ski straight over it and compare against the flat snow on
+  // either side. Sits above the snowfield like the checkpoint stripes do.
+  const painted = getPaintedTextures();
+  const patch = new THREE.Mesh(
+    new THREE.PlaneGeometry(SLOPE_WIDTH, 12),
+    new THREE.MeshStandardMaterial({
+      map: painted.snowAlbedo,
+      bumpMap: painted.snowBump,
+      bumpScale: 0.35,
+    }),
+  );
+  patch.rotation.x = -Math.PI / 2;
+  patch.position.set(0, 0.015, -11);
+  patch.receiveShadow = true;
+  scene.add(patch);
+
   return { sun, skyDome, sunBillboard, slope };
 }
 
@@ -354,4 +371,306 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
       place(model, x, z, 1.2 + random() * 0.6);
     }
   }
+
+  // TEXTURE TEST pairs: the same model at the same distance, mirrored
+  // across the lane — LEFT stays the flat original, RIGHT gets the painted
+  // detail. Identical rotation and scale so the only difference is the
+  // surface. Hugging the lane edge, just proud of the treeline.
+  const pairs: ReadonlyArray<readonly [string, number]> = [
+    ["BirchTree_Snow_1", -9],
+    ["PineTree_Snow_1", -14],
+    ["Rock_Snow_1", -18],
+  ];
+  for (const [name, z] of pairs) {
+    const template = templates.get(name)!;
+    for (const side of [-1, 1]) {
+      const copy = template.clone();
+      copy.position.set(side * (LANE_EDGE + 0.4), 0, z);
+      copy.scale.setScalar(1.15);
+      if (side === 1) applyPaintedDetail(copy);
+      scene.add(copy);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TEXTURE TEST (2026-07-22, direction session) — remove or promote after
+// the director's verdict. The Art Style Bible's no-texture rule is amended
+// (see DESIGN.md): stylized painted + procedural surface detail, palette
+// family kept. Everything below is generated in code — no image files, no
+// license rows.
+//
+// The converted GLBs carry NO UV coordinates (the OBJ→GLB palette tool
+// dropped them), so the trees can't wear an image texture the normal way.
+// Instead the painted canvases are sampled *triplanar* — by object-space
+// position, blended across the three axes by the surface normal — which
+// needs no UVs and keeps the paint glued to each tree. The snow patch is a
+// plane (planes have UVs), so it samples its canvas the normal way.
+
+interface PaintedTextures {
+  readonly snowAlbedo: THREE.CanvasTexture;
+  readonly snowBump: THREE.CanvasTexture;
+  readonly bark: THREE.CanvasTexture;
+  readonly dapple: THREE.CanvasTexture;
+  readonly grain: THREE.CanvasTexture;
+}
+
+let paintedTextures: PaintedTextures | null = null;
+
+function getPaintedTextures(): PaintedTextures {
+  if (paintedTextures) return paintedTextures;
+
+  // Everything is stamped through a 3×3 wrap so the canvases tile
+  // seamlessly, and placement comes from the seeded PRNG so every load
+  // paints the identical snow.
+  const makeTexture = (
+    size: number,
+    draw: (ctx: CanvasRenderingContext2D) => void,
+    color: boolean,
+  ): THREE.CanvasTexture => {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    draw(ctx);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    if (color) texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  };
+  const tiled = (
+    ctx: CanvasRenderingContext2D,
+    size: number,
+    x: number,
+    y: number,
+    stamp: (x: number, y: number) => void,
+  ): void => {
+    for (const dx of [-size, 0, size])
+      for (const dy of [-size, 0, size]) stamp(x + dx, y + dy);
+  };
+  const blob = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    r: number,
+    squish: number,
+  ): void => {
+    ctx.beginPath();
+    ctx.ellipse(x, y, r, r * squish, 0, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  const random = makeRandom(20260722);
+
+  // Painted snow: sunlit-snow base, soft value dapple, the palette's blue
+  // creeping into micro-hollows, and sparse near-sun-glow sparkle. All
+  // inside the two snow colors' family.
+  const snowAlbedo = makeTexture(
+    256,
+    (ctx) => {
+      ctx.fillStyle = "#f8f5ef";
+      ctx.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 70; i++) {
+        const x = random() * 256;
+        const y = random() * 256;
+        const r = 10 + random() * 20;
+        const squish = 0.45 + random() * 0.4;
+        ctx.fillStyle = random() < 0.5 ? "#ebe5da" : "#fffdf8";
+        ctx.globalAlpha = 0.5;
+        tiled(ctx, 256, x, y, (px, py) => blob(ctx, px, py, r, squish));
+      }
+      for (let i = 0; i < 40; i++) {
+        const x = random() * 256;
+        const y = random() * 256;
+        const r = 4 + random() * 8;
+        ctx.fillStyle = "#d3dff0";
+        ctx.globalAlpha = 0.42;
+        tiled(ctx, 256, x, y, (px, py) => blob(ctx, px, py, r, 0.55));
+      }
+      ctx.globalAlpha = 1;
+      for (let i = 0; i < 90; i++) {
+        const x = random() * 256;
+        const y = random() * 256;
+        ctx.fillStyle = random() < 0.6 ? "#ffffff" : "#fff4da";
+        ctx.fillRect(x, y, 1 + random(), 1 + random());
+      }
+    },
+    true,
+  );
+  // The bump is its own soft blob field — height data, not color.
+  const snowBump = makeTexture(
+    256,
+    (ctx) => {
+      ctx.fillStyle = "#808080";
+      ctx.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 70; i++) {
+        const x = random() * 256;
+        const y = random() * 256;
+        const r = 5 + random() * 14;
+        const v = random() < 0.5 ? 104 : 152;
+        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        ctx.globalAlpha = 0.4;
+        tiled(ctx, 256, x, y, (px, py) =>
+          blob(ctx, px, py, r, 0.5 + random() * 0.3),
+        );
+      }
+      ctx.globalAlpha = 1;
+    },
+    false,
+  );
+
+  // The triplanar canvases are value-MODULATION maps, painted around
+  // neutral gray (128 ≈ ×1.0 in the shader) — strokes darker and lighter
+  // than neutral become paint-stroke value variation on whatever palette
+  // color the material already has.
+  const bark = makeTexture(
+    128,
+    (ctx) => {
+      ctx.fillStyle = "#808080";
+      ctx.fillRect(0, 0, 128, 128);
+      for (let i = 0; i < 42; i++) {
+        const x = random() * 128;
+        const y = random() * 128;
+        const w = 1 + random() * 3;
+        const h = 18 + random() * 60;
+        const v = random() < 0.55 ? 102 + random() * 14 : 140 + random() * 14;
+        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        ctx.globalAlpha = 0.65;
+        tiled(ctx, 128, x, y, (px, py) => ctx.fillRect(px, py - h / 2, w, h));
+      }
+      // Birch lenticels: short dark horizontal dashes.
+      for (let i = 0; i < 16; i++) {
+        const x = random() * 128;
+        const y = random() * 128;
+        ctx.fillStyle = "rgb(88,88,88)";
+        ctx.globalAlpha = 0.8;
+        tiled(ctx, 128, x, y, (px, py) =>
+          ctx.fillRect(px, py, 4 + random() * 6, 1.5),
+        );
+      }
+      ctx.globalAlpha = 1;
+    },
+    false,
+  );
+  const dapple = makeTexture(
+    128,
+    (ctx) => {
+      ctx.fillStyle = "#808080";
+      ctx.fillRect(0, 0, 128, 128);
+      // Posterized foliage dapple: hard-edged blobs at a few fixed values
+      // reads as paint strokes, not noise.
+      const values = [100, 114, 142, 156];
+      for (let i = 0; i < 48; i++) {
+        const x = random() * 128;
+        const y = random() * 128;
+        const r = 5 + random() * 12;
+        const v = values[Math.floor(random() * values.length)]!;
+        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        tiled(ctx, 128, x, y, (px, py) =>
+          blob(ctx, px, py, r, 0.6 + random() * 0.4),
+        );
+      }
+    },
+    false,
+  );
+  const grain = makeTexture(
+    128,
+    (ctx) => {
+      ctx.fillStyle = "#808080";
+      ctx.fillRect(0, 0, 128, 128);
+      for (let i = 0; i < 340; i++) {
+        const x = random() * 128;
+        const y = random() * 128;
+        const v = 108 + random() * 40;
+        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        ctx.fillRect(x, y, 1 + random(), 1 + random());
+      }
+      for (let i = 0; i < 26; i++) {
+        const x = random() * 128;
+        const y = random() * 128;
+        ctx.fillStyle = "rgb(150,150,150)";
+        blob(ctx, x, y, 2 + random() * 3, 0.7);
+      }
+    },
+    false,
+  );
+
+  // The snow patch tiles ~3 units per repeat across the lane.
+  snowAlbedo.repeat.set(8, 4);
+  snowBump.repeat.set(8, 4);
+
+  paintedTextures = { snowAlbedo, snowBump, bark, dapple, grain };
+  return paintedTextures;
+}
+
+// Which painted canvas each palette material wears, how big the strokes
+// are (repeats per unit), and how hard they press (0..1).
+const DETAIL_BY_MATERIAL: Record<
+  string,
+  { map: keyof Omit<PaintedTextures, "snowAlbedo" | "snowBump">; scale: number; strength: number }
+> = {
+  White: { map: "bark", scale: 1.6, strength: 0.85 }, // birch trunk
+  Black: { map: "bark", scale: 1.6, strength: 0.85 }, // birch trunk bands
+  Wood: { map: "bark", scale: 1.6, strength: 0.85 }, // pine trunk
+  Green: { map: "dapple", scale: 1.1, strength: 0.85 }, // foliage (amber)
+  DarkGreen: { map: "dapple", scale: 1.1, strength: 0.85 },
+  Snow: { map: "grain", scale: 1.4, strength: 0.7 },
+  Rock: { map: "grain", scale: 1.2, strength: 0.9 },
+};
+
+// Clones a model's materials and injects triplanar painted detail into
+// each — object-space position + normal come along as varyings, and the
+// modulation texture multiplies the material's palette color in the
+// fragment shader. No UVs involved anywhere.
+function applyPaintedDetail(object: THREE.Object3D): void {
+  const textures = getPaintedTextures();
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const materials = Array.isArray(child.material)
+      ? child.material
+      : [child.material];
+    const patched = materials.map((material) => {
+      if (!(material instanceof THREE.MeshStandardMaterial)) return material;
+      const detail = DETAIL_BY_MATERIAL[material.name] ?? {
+        map: "grain" as const,
+        scale: 1.2,
+        strength: 0.5,
+      };
+      const clone = material.clone(); // templates share materials — never mutate
+      clone.onBeforeCompile = (shader) => {
+        shader.uniforms.detailMap = { value: textures[detail.map] };
+        shader.uniforms.detailScale = { value: detail.scale };
+        shader.uniforms.detailStrength = { value: detail.strength };
+        shader.vertexShader =
+          "varying vec3 vObjPos;\nvarying vec3 vObjNormal;\n" +
+          shader.vertexShader.replace(
+            "#include <begin_vertex>",
+            "#include <begin_vertex>\nvObjPos = position;\nvObjNormal = normal;",
+          );
+        shader.fragmentShader =
+          "varying vec3 vObjPos;\nvarying vec3 vObjNormal;\nuniform sampler2D detailMap;\nuniform float detailScale;\nuniform float detailStrength;\n" +
+          shader.fragmentShader.replace(
+            "#include <color_fragment>",
+            `#include <color_fragment>
+{
+  vec3 w = abs(normalize(vObjNormal));
+  w = pow(w, vec3(3.0));
+  w /= (w.x + w.y + w.z);
+  vec3 p = vObjPos * detailScale;
+  vec3 tx = texture2D(detailMap, p.zy).rgb;
+  vec3 ty = texture2D(detailMap, p.xz).rgb;
+  vec3 tz = texture2D(detailMap, p.xy).rgb;
+  vec3 detailMod = (tx * w.x + ty * w.y + tz * w.z) * 2.0;
+  diffuseColor.rgb *= mix(vec3(1.0), detailMod, detailStrength);
+}`,
+          );
+      };
+      // All patched materials share one shader source; let them share the
+      // compiled program too instead of falling back to per-material keys.
+      clone.customProgramCacheKey = () => "painted-detail";
+      return clone;
+    });
+    child.material = Array.isArray(child.material) ? patched : patched[0]!;
+  });
 }

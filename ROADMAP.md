@@ -2782,6 +2782,62 @@ restructure — the entry above this one. Its "(slope)" tag and this
 entry's "slope-mech next: round 5" line crossed in flight; round 5 is
 done.)*
 
+## (slope-vis) 2026-07-22 — The texture test: painted snow + triplanar trees, side by side
+
+The first build under the amended Art Style Bible: the slope now carries a
+**judging aid** — textured versions of real slope pieces sitting right next
+to their flat originals, so the verdict on the new direction is one ski run.
+
+- **A painted snow patch spans the lane** just past the start (you ski
+  straight over it in the first two seconds): soft value dapple, the
+  palette's shadow-blue creeping into micro-hollows, sparse near-sun-glow
+  sparkle, and a subtle bump map so the dawn light catches the lumps. All
+  inside the two snow colors' family.
+- **Three mirrored pairs at the lane edges** — a birch (distance 9), a pine
+  (14), and a rock (18): the **left** flank keeps the flat original, the
+  **right** flank wears the painted detail. Same model, same distance, same
+  scale and rotation — the only difference is the surface. Trunks get
+  painted bark strokes (with birch lenticel dashes), foliage gets hard-edged
+  posterized dapple (paint strokes, not noise), snow caps and the rock get
+  fine grain.
+- **How, given a hard constraint found on the way in:** the converted GLBs
+  carry **no UV coordinates at all** (the OBJ→GLB palette tool dropped
+  them), so normal image texturing is impossible on the existing assets.
+  The trees instead sample their painted canvases *triplanar* — by
+  object-space position, blended by surface normal — injected into the
+  existing palette materials with a small shader patch. No UVs needed, and
+  the paint sticks to each tree. The snow patch is a plane (planes have
+  UVs), so it wears its canvas the normal way. **Everything is generated in
+  code at load** — zero image files, zero new CREDITS rows, and the whole
+  test is one clearly-marked section of `skiScene.ts`, trivially removed or
+  promoted.
+- `npm run check` (82 tests) and `npm run build` pass; zero console errors
+  live. Verified by A/B pixel measurement on the live page (screenshots
+  still time out — fifteenth session running): swapping the flat and
+  painted birch through the *same* spot changes ~25% of tree pixels; an
+  ASCII pixel-grid of the canopy shows clear organic dapple on the painted
+  side against a uniform flat side; the snow patch measures 3.5× the
+  luminance variation of plain snow with its mean still on palette
+  (within 4/255). What it *looks* like is — this time by design — entirely
+  the director's call.
+
+**What to playtest — this IS the direction verdict:** `npm run dev`, Enter
+to ski. You roll over the painted snow patch immediately; the three pairs
+are at the lane edges — **flat on your left, textured on your right**. The
+questions: does the painted side read as "the same game, with texture" or
+as a different game? Is the snow patch what you meant by texture, or too
+subtle / too noisy? Bark, foliage dapple, rock grain — which of the three
+works best? Too strong anywhere (this test is deliberately tuned a notch
+bold so you can see it — dialing back is easy)? Verdict options: promote
+(roll this look across all snow + all 24 slope models), adjust (say which
+knob), or reject (we go back to the drawing board with references).
+
+**Next:** the director's texture verdict decides: promote across the slope
+(+ eventually characters/lobby), tune, or rethink. After that, the parked
+slope-vis list (gear style + longer skis, always-on feet, angulation
+round 3 + boot fix, hair-roots + cat-tail), music (still last), then the
+end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
