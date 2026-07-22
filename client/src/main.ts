@@ -95,8 +95,11 @@ window.addEventListener("keydown", (event) => {
   // Appearance keys, all temporary stand-ins for the character picker and
   // customization UI (an M3 item) — the only way to see the roster and the
   // color seam working until then. C cycles through the character roster;
-  // K and H cycle skin and hair color.
+  // K and H cycle skin and hair color. Bedroom only, matching what the HUD
+  // hints already claimed — swapping your whole body mid-run on the slope
+  // was a playtest surprise (director, 2026-07-21).
   if (event.code === "KeyC" || event.code === "KeyK" || event.code === "KeyH") {
+    if (mode !== "bedroom") return;
     appearance =
       event.code === "KeyC"
         ? cycleCharacter(appearance)

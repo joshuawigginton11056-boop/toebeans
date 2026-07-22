@@ -1001,6 +1001,84 @@ crouched ski pose driven by the lean input, code-built skis/poles/**boots**
 fix can ride along. Then music (the deliberately **last** M2 item), then the
 end-of-M2 tuning pass.
 
+## 2026-07-22 — M2: ski pose, skis, boots, poles — the character finally skis
+
+The character no longer stands bolt upright sliding downhill in bare leg
+stumps. This is the ski-pose session the character-pass playtest asked for:
+a real crouch driven by the lean input, code-built ski gear, the cat
+re-mounted and faced downhill, plus the two small ride-alongs (the
+change-character-only-in-the-bedroom gate and bedroom turn smoothing).
+
+- **A real crouched ski pose, posed in code.** No CC0 pack has a skiing
+  clip, so the crouch is built directly on the pack's shared skeleton:
+  rotation offsets on the spine, neck, arms, and legs, applied every frame
+  on top of a frozen Idle base frame. Because it's built on the shared
+  skeleton, it works for all 11 roster characters (and any added later)
+  with zero per-character work. A rig quirk made the crouch natural: the
+  pack's foot bones are separate root-level bones (the animations use them
+  IK-style), so dropping the pelvis folds the knees while the feet stay
+  planted on the skis — exactly what skiing is.
+- **The lean input is finally visible on the body.** The pose blends
+  between two keyed extremes — *braking* (nearly upright, weight back) and
+  *full tuck* (deep crouch, folded torso, hands low) — driven by the run's
+  speed, which fully encodes the lean input (up = tuck, down = brake,
+  boost = deepest tuck). Going airborne adds a little extra tuck. The
+  blend is eased, so pose changes roll through the body instead of
+  snapping. This was playtest issue #5: "up/down produces no visible
+  change" — now it's the most visible thing on the character.
+- **Skis, boots, and poles, built in code** out of flat-shaded primitives
+  (the same approach as the cat's scarf — no assets exist to download, and
+  the bible likes visible facets). The chunky boot boxes are also the fix
+  for the roster's missing feet: the pack characters have no shoe
+  geometry, and now their leg stumps disappear into proper ski boots. The
+  poles glue to the fist bones every frame, so they follow the hands
+  through the brake↔tuck blend for free. Skis are birch amber — pale
+  bark-wood was tried first and measured near-invisible against sunlit
+  snow — which also ties the gear to the amber cat riding above it. Gear
+  only exists on the slope; nobody wears skis in the bedroom.
+- **The cat rides right, facing downhill** (director call — it used to
+  face the camera for scarf visibility, and that read wrong). The mount
+  dropped from head height (tuned against the old tall bodies) to the
+  upper back of the crouched pose, measured against the actual crouch
+  rather than guessed.
+- **Ride-alongs:** the C/K/H appearance keys are now bedroom-only (the HUD
+  hints already claimed they were — now it's true; no more swapping your
+  whole body mid-run), and the bedroom heading eases toward the movement
+  direction the shortest way round instead of snapping between the 8 input
+  angles — turning finally looks like turning.
+- `/shared` change is one additive export (`MIN_SPEED`, so the crouch can
+  map speed onto tuck depth without magic numbers) — no logic changes;
+  55 tests unchanged and passing, `npm run build` passes.
+- Verified in the live page by driving the real modules and pixel-reading
+  rendered frames into ASCII silhouettes (screenshots still time out —
+  thirteenth session). The verification caught four real bugs the code
+  alone hid: (1) the loader strips dots from bone names ("Foot.L" arrives
+  as "FootL"), so the entire pose was silently a no-op at first; (2) the
+  pelvis bone's name collides with a mesh node and gets renamed, so it's
+  now found structurally (as Hips' parent) instead of by name; (3) a
+  three.js optimization skips re-writing bones when a paused clip's values
+  don't change, which made relative pose offsets accumulate into a spin —
+  the pose now overwrites bones absolutely from a captured base frame;
+  (4) the first pole design was 0.78 units long and punched 0.25 units
+  through the snow — measured, shortened, and re-angled to hover just off
+  it. Final numbers: feet planted at ±0.13 exactly on the skis at every
+  tuck level, pole grips at 0.000 gap from the fists, the neck dropping
+  0.97 → 0.73 units from brake to full tuck, and brake/neutral/tuck ASCII
+  silhouettes that visibly read as three different skiing intensities.
+
+**What to playtest:** `npm run dev`, Enter to ski. The big question: does
+the character finally look like they're *skiing* — crouched, poles back,
+cat on the upper back facing ahead? Hold ↑ and ↓ while watching the body:
+does the tuck-vs-brake difference read at gameplay distance? Jump — does
+the extra mid-air tuck feel right? Check the boots and amber skis: do they
+read as ski gear, and is amber the right call for the skis? Then go home
+and walk circles in the bedroom: does turning feel smooth now instead of
+snapping? And confirm C/K/H do nothing on the slope but still work at home.
+
+**Next:** music — the deliberately **last** M2 item (timed per-slope songs
+à la Geometry Dash, see IDEAS.md) — then the end-of-M2 tuning pass (carve
+volume, parked visual tweaks, and any feel notes from this playtest).
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
@@ -1030,8 +1108,9 @@ sounds like the real game.
       pickable, chunky, customizable roster of 11 from Quaternius's Ultimate
       Animated Character Pack as of 2026-07-21 — this replaced the two
       rejected realistic bases and settled the art-style-match question.
-      Still to build on that body: the ski pose + skis. Slope surface detail
-      and hazard art are still gray-box)*
+      The ski pose + skis/boots/poles landed 2026-07-22, with the crouch
+      driven by the lean input. Slope surface detail and hazard art are
+      still gray-box)*
 - [x] Lighting pass for that area *(2026-07-21 — sun, palette-exact blue
       shadows, dawn-pink haze, visible sun disc)*
 - [x] Real UI (replace the plain-text HUD overlay) *(2026-07-21 —

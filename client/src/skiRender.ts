@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import type { SkiState } from "@toebeans/shared";
+import { BOOST_SPEED, MIN_SPEED, type SkiState } from "@toebeans/shared";
 import { createCatRig, type CatRig } from "./catModel";
 import { createSkierRig, type SkierRig } from "./skierModel";
 
@@ -142,14 +142,14 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   // The cat rides on your back (DESIGN.md's core fantasy) — the same rig as
   // the bedroom cat, sitting, parented to the skier so it goes along for the
   // ride including the crash tip-over.
-  // Sits against the skier's back rather than inside the torso — the old
-  // offset was tuned against a 1m box, and a real 1.6m person leaning
-  // downhill puts their back somewhere else entirely. Left facing +z (i.e.
-  // back up the hill, toward the camera) so the player can see the cat's
-  // face and its signal-red scarf while they ski.
+  // Mounted on the upper back of the *crouched* pose (the old height was
+  // tuned against the taller retired bodies and landed in the roster's
+  // hair), and turned to face downhill with the skier — the director's call;
+  // it used to face the camera so its scarf showed, and that read wrong.
   const cat = createCatRig();
   cat.setPose("sitting");
-  cat.group.position.set(0, 0.95, 0.16);
+  cat.group.position.set(0, 0.62, 0.3);
+  cat.group.rotation.y = Math.PI;
   player.add(cat.group);
 
   scene.add(player);
@@ -181,6 +181,13 @@ export function syncSkiSceneToState(
   state: SkiState,
   dt: number,
 ): void {
+  // The crouch depth reads straight off state.speed, which fully encodes
+  // the lean input (up = fast = tuck, down = slow = braking upright, boost
+  // beyond MAX_SPEED = deepest tuck) — so the speed control is finally
+  // legible on the body. Airborne adds a bit of extra tuck for the jump.
+  const tuck = (state.speed - MIN_SPEED) / (BOOST_SPEED - MIN_SPEED);
+  handle.skier.setTuck(tuck + (state.height > 0 ? 0.2 : 0));
+
   handle.cat.update(dt);
   handle.skier.update(dt);
   handle.player.position.set(state.lateral, state.height, -state.distance);

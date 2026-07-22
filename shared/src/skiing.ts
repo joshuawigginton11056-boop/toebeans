@@ -33,9 +33,12 @@ export interface SkiState {
 }
 
 const BASE_SPEED = 8;
-const MIN_SPEED = 4;
 // Exported for the client: audio scales wind/carve loudness off these
-// (speed / BOOST_SPEED, and "is this a boost" = speed > MAX_SPEED).
+// (speed / BOOST_SPEED, and "is this a boost" = speed > MAX_SPEED), and the
+// ski pose maps speed across [MIN_SPEED, BOOST_SPEED] onto the crouch depth —
+// speed fully encodes the lean input, so the body can read it back from
+// state alone.
+export const MIN_SPEED = 4;
 export const MAX_SPEED = 12;
 const LEAN_ACCEL = 6;
 export const BOOST_SPEED = 16;

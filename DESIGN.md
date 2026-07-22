@@ -406,9 +406,11 @@ realistic bases to keep. The whole **Ultimate Animated Character Pack**
 art family as the cat and the Nature-Pack scenery. Rather than dress one
 body, the player now **picks a character** from a curated roster (see
 *Characters & customization* above). Both old bases (`Skier_Modular.glb`,
-`Skier_Animated.glb`) were deleted. The ski pose, skis, and any hairstyle
-geometry still wait — but now they're built once against the shared
-skeleton and work for every character, so nothing gets built twice.
+`Skier_Animated.glb`) were deleted. The ski pose and ski gear landed
+July 22, 2026, built once against the shared skeleton so they work for
+every character: a code-posed crouch blending braking ↔ full tuck off the
+lean input, and code-built skis/boots/poles (no CC0 skiing clip or ski
+gear exists to download). Hairstyle geometry still waits in IDEAS.md.
 
 *(Aside worth remembering: this pack advertises only FBX/OBJ/Blend on the
 site, but the download's Google Drive folder carries a `glTF` subfolder —

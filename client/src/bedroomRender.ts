@@ -16,8 +16,13 @@ export interface BedroomSceneHandle {
    * its brain needs it, but the player's is pure presentation, derived here
    * from how the position moved between two frames. That keeps a rendering
    * concern out of the shared game state.
+   *
+   * `facing` is what's rendered; `target` is where the movement says it
+   * should point. The two differ because turning is eased: 8-way input
+   * snaps the target between eight fixed angles, and easing is what stops
+   * the character popping between them (director playtest, 2026-07-21).
    */
-  readonly walk: { lastX: number; lastZ: number; facing: number };
+  readonly walk: { lastX: number; lastZ: number; facing: number; target: number };
 }
 
 const WALL_HEIGHT = 1.2;
@@ -111,12 +116,17 @@ export function createBedroomScene(
     camera,
     player,
     cat,
-    walk: { lastX: state.player.x, lastZ: state.player.z, facing: 0 },
+    walk: { lastX: state.player.x, lastZ: state.player.z, facing: 0, target: 0 },
   };
 }
 
 /** Below this much movement in one frame, treat the player as standing still. */
 const WALK_EPSILON = 1e-4;
+
+/** How fast the rendered facing eases toward the movement direction
+ * (per second). High enough to feel responsive, low enough that 8-way
+ * input reads as turning rather than snapping. */
+const TURN_RATE = 10;
 
 // Only reads BedroomState to place the player and cat meshes — never
 // writes state.
@@ -135,8 +145,16 @@ export function syncBedroomSceneToState(
   if (moving) {
     // Keep the last heading when standing still, so stopping doesn't snap
     // the player back to facing the camera.
-    handle.walk.facing = Math.atan2(dx, dz);
+    handle.walk.target = Math.atan2(dx, dz);
   }
+  // Ease toward the target the shortest way round (the atan2 keeps the
+  // difference in [-π, π], so a 350° turn becomes a 10° one) — 8-way input
+  // now reads as the character *turning*, not popping between headings.
+  const diff = Math.atan2(
+    Math.sin(handle.walk.target - handle.walk.facing),
+    Math.cos(handle.walk.target - handle.walk.facing),
+  );
+  handle.walk.facing += diff * (1 - Math.exp(-TURN_RATE * dt));
 
   handle.player.setPose(moving ? "walking" : "idle");
   handle.player.update(dt);
