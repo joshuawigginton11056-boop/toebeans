@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "C:\\Users\\joshu\\Toebeans",
       "port": 5173
+    },
+    {
+      "name": "toebeans-bedroom",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5301", "--strictPort"],
+      "cwd": "C:\\Users\\joshu\\Toebeans-bedroom\\client",
+      "port": 5301
     }
   ]
 }

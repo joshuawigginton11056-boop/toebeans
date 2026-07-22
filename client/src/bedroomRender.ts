@@ -30,42 +30,67 @@ export interface BedroomSceneHandle {
    * and deliberately isn't saved.
    *
    * `azimuth` is the camera's angle around the room center (0 = the
-   * classic view from the +z side); `radius` is its distance from the
-   * center. Each has a `target` twin because both are eased, same reason
-   * as `walk.facing`: held keys and wheel notches snap the target, and
-   * easing is what makes the room feel like it's being swung round rather
-   * than teleported.
+   * classic view from the +z side); `elevation` is how far it's tilted up
+   * from the floor toward overhead; `radius` is its distance from the
+   * center. Each has a `target` twin because all three are eased, same
+   * reason as `walk.facing`: held keys, drags, and wheel notches snap the
+   * target, and easing is what makes the room feel like it's being swung
+   * round rather than teleported.
    */
   readonly orbit: {
     azimuth: number;
+    elevation: number;
     radius: number;
     targetAzimuth: number;
+    targetElevation: number;
     targetRadius: number;
   };
 }
 
 /** Per-frame camera controls, read from input by main.ts and passed in:
- * `rotate` is a held direction (-1, 0, or 1), `zoomSteps` is how many
- * wheel notches arrived since last frame (fractional on trackpads). */
+ * `rotate` and `tilt` are held directions (-1, 0, or 1) from the Q/E and
+ * R/F keys; `zoomSteps` is how many wheel notches arrived since last frame
+ * (fractional on trackpads); `dragX`/`dragY` are how many pixels the
+ * pointer dragged across the canvas since last frame. */
 export interface BedroomCameraInput {
   readonly rotate: number;
+  readonly tilt: number;
   readonly zoomSteps: number;
+  readonly dragX: number;
+  readonly dragY: number;
 }
 
 const WALL_HEIGHT = 1.2;
 const WALL_THICKNESS = 0.3;
 
-// The orbit's fixed downward tilt and its zoom range. Elevation and the
-// default radius are derived from the old fixed camera (position (0,11,8.5)
+// The orbit's default tilt and its zoom range. The default elevation and
+// radius are derived from the old fixed camera (position (0,11,8.5)
 // looking at the floor), so the game opens on exactly the view it always
-// had — rotation and zoom are additions, not a reframing.
-const ORBIT_ELEVATION = Math.atan2(11, 9);
+// had — rotation, tilt, and zoom are additions, not a reframing.
+const ORBIT_ELEVATION_DEFAULT = Math.atan2(11, 9);
 const ORBIT_RADIUS_DEFAULT = Math.hypot(11, 9);
 const ORBIT_RADIUS_MIN = 6;
 const ORBIT_RADIUS_MAX = 20;
 
+// The tilt's range. The floor stops just above where the room's low walls
+// (1.2 units, sized to be seen over from a *high* camera) would block the
+// view in; the ceiling stops just short of straight overhead, where
+// lookAt's up-vector flips.
+const ORBIT_ELEVATION_MIN = THREE.MathUtils.degToRad(15);
+const ORBIT_ELEVATION_MAX = THREE.MathUtils.degToRad(85);
+
 /** How fast holding Q/E swings the target angle (radians per second). */
 const ORBIT_ROTATE_SPEED = 2.0;
+
+/** How fast holding R/F tilts the target elevation (radians per second).
+ * Slower than Q/E because the whole tilt range is ~1.2 radians — this
+ * sweeps floor-to-ceiling in about a second. */
+const ORBIT_TILT_SPEED = 1.0;
+
+/** How many radians one dragged pixel moves the orbit targets. Sized so a
+ * drag across a ~900px window swings the room about a half-turn — big
+ * gestures do big things without a full-turn ever needing a re-grip. */
+const ORBIT_DRAG_SENSITIVITY = 0.0035;
 
 /** How much one wheel notch multiplies the target distance. Multiplicative
  * so zooming feels even: every notch changes the view by the same
@@ -101,7 +126,7 @@ export function createBedroomScene(
     0.1,
     100,
   );
-  placeOrbitCamera(camera, 0, ORBIT_RADIUS_DEFAULT);
+  placeOrbitCamera(camera, 0, ORBIT_ELEVATION_DEFAULT, ORBIT_RADIUS_DEFAULT);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -167,25 +192,28 @@ export function createBedroomScene(
     walk: { lastX: state.player.x, lastZ: state.player.z, facing: 0, target: 0 },
     orbit: {
       azimuth: 0,
+      elevation: ORBIT_ELEVATION_DEFAULT,
       radius: ORBIT_RADIUS_DEFAULT,
       targetAzimuth: 0,
+      targetElevation: ORBIT_ELEVATION_DEFAULT,
       targetRadius: ORBIT_RADIUS_DEFAULT,
     },
   };
 }
 
 /** Put the camera on its orbit: `azimuth` radians around the room center,
- * `radius` away from it, at the fixed elevation, always looking at the
- * middle of the room. */
+ * tilted `elevation` radians up from the floor, `radius` away from the
+ * center, always looking at the middle of the room. */
 function placeOrbitCamera(
   camera: THREE.PerspectiveCamera,
   azimuth: number,
+  elevation: number,
   radius: number,
 ): void {
-  const flat = radius * Math.cos(ORBIT_ELEVATION);
+  const flat = radius * Math.cos(elevation);
   camera.position.set(
     flat * Math.sin(azimuth),
-    radius * Math.sin(ORBIT_ELEVATION),
+    radius * Math.sin(elevation),
     flat * Math.cos(azimuth),
   );
   camera.lookAt(0, 0, 0);
@@ -208,9 +236,24 @@ export function syncBedroomSceneToState(
   cameraInput: BedroomCameraInput,
 ): void {
   // Camera first: move the targets by this frame's input, then ease the
-  // real angle/distance toward them.
+  // real angle/tilt/distance toward them. Keys and drags feed the same
+  // targets, so the two control styles feel identical — only how the
+  // target moves differs (keys by hold time, drags by pixels traveled).
+  //
+  // Drag signs follow the grab-the-world convention (and three.js's own
+  // OrbitControls): drag right pulls the room round to the right, drag
+  // down tips the camera up toward overhead.
   const orbit = handle.orbit;
-  orbit.targetAzimuth += cameraInput.rotate * ORBIT_ROTATE_SPEED * dt;
+  orbit.targetAzimuth +=
+    cameraInput.rotate * ORBIT_ROTATE_SPEED * dt -
+    cameraInput.dragX * ORBIT_DRAG_SENSITIVITY;
+  orbit.targetElevation = THREE.MathUtils.clamp(
+    orbit.targetElevation +
+      cameraInput.tilt * ORBIT_TILT_SPEED * dt +
+      cameraInput.dragY * ORBIT_DRAG_SENSITIVITY,
+    ORBIT_ELEVATION_MIN,
+    ORBIT_ELEVATION_MAX,
+  );
   orbit.targetRadius = THREE.MathUtils.clamp(
     orbit.targetRadius * Math.pow(ORBIT_ZOOM_STEP, cameraInput.zoomSteps),
     ORBIT_RADIUS_MIN,
@@ -218,8 +261,9 @@ export function syncBedroomSceneToState(
   );
   const ease = 1 - Math.exp(-ORBIT_EASE * dt);
   orbit.azimuth += (orbit.targetAzimuth - orbit.azimuth) * ease;
+  orbit.elevation += (orbit.targetElevation - orbit.elevation) * ease;
   orbit.radius += (orbit.targetRadius - orbit.radius) * ease;
-  placeOrbitCamera(handle.camera, orbit.azimuth, orbit.radius);
+  placeOrbitCamera(handle.camera, orbit.azimuth, orbit.elevation, orbit.radius);
 
   // Walking or standing, and which way — read off the movement since last
   // frame rather than from state (see the `walk` note on the handle).

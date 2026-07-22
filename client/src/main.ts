@@ -98,6 +98,57 @@ window.addEventListener(
   { passive: true },
 );
 
+// Dragging on the bedroom canvas orbits the camera — horizontal for spin,
+// vertical for tilt. Pixel deltas accumulate between frames (like the
+// wheel) and are consumed once per loop. Pointer events rather than mouse
+// events, so touch-dragging works the same way on the web portals' touch
+// devices (an M5 concern, nearly free here). Any mouse button drags:
+// left-drag is the convention players try first, and if M3's
+// click-to-interact furniture ever wants left-click to itself, a
+// click-vs-drag movement threshold keeps both.
+let dragPixelsX = 0;
+let dragPixelsY = 0;
+let dragPointerId: number | null = null;
+let dragLastX = 0;
+let dragLastY = 0;
+
+const bedroomCanvas = bedroomScene.renderer.domElement;
+// Without this, touch-dragging scrolls/zooms the page instead of sending
+// pointermove events.
+bedroomCanvas.style.touchAction = "none";
+// Right-drag orbits too, so the browser's right-click menu can't pop
+// mid-gesture. Canvas only — the rest of the page keeps its menu.
+bedroomCanvas.addEventListener("contextmenu", (event) =>
+  event.preventDefault(),
+);
+bedroomCanvas.addEventListener("pointerdown", (event) => {
+  if (dragPointerId !== null) return; // one drag at a time
+  dragPointerId = event.pointerId;
+  dragLastX = event.clientX;
+  dragLastY = event.clientY;
+  // Capture so the drag keeps working when the pointer leaves the canvas
+  // mid-gesture (or the window, for mice). Capture is a nicety, not a
+  // requirement — it can throw for a pointer that's already gone (or a
+  // synthetic event), and the drag still works without it.
+  try {
+    bedroomCanvas.setPointerCapture(event.pointerId);
+  } catch {
+    // no capture: the drag just ends at the canvas edge
+  }
+});
+bedroomCanvas.addEventListener("pointermove", (event) => {
+  if (event.pointerId !== dragPointerId) return;
+  dragPixelsX += event.clientX - dragLastX;
+  dragPixelsY += event.clientY - dragLastY;
+  dragLastX = event.clientX;
+  dragLastY = event.clientY;
+});
+const endDrag = (event: PointerEvent): void => {
+  if (event.pointerId === dragPointerId) dragPointerId = null;
+};
+bedroomCanvas.addEventListener("pointerup", endDrag);
+bedroomCanvas.addEventListener("pointercancel", endDrag);
+
 window.addEventListener("keydown", (event) => {
   if (event.code === "KeyM") {
     muted = audio.toggleMuted();
@@ -189,14 +240,19 @@ function loop(now: number): void {
   lastTime = now;
 
   if (mode === "bedroom") {
-    // Q/E spin the room, the wheel zooms. Wheel notches are consumed once
-    // per frame.
+    // Q/E spin the room, R/F tilt it, the wheel zooms, dragging the canvas
+    // orbits. Wheel notches and drag pixels are consumed once per frame.
     const cameraInput = {
       rotate:
         (heldKeys.has("KeyE") ? 1 : 0) - (heldKeys.has("KeyQ") ? 1 : 0),
+      tilt: (heldKeys.has("KeyR") ? 1 : 0) - (heldKeys.has("KeyF") ? 1 : 0),
       zoomSteps: wheelSteps,
+      dragX: dragPixelsX,
+      dragY: dragPixelsY,
     };
     wheelSteps = 0;
+    dragPixelsX = 0;
+    dragPixelsY = 0;
     bedroomState = stepBedroom(
       bedroomState,
       readBedroomInput(bedroomScene.orbit.azimuth),
@@ -205,8 +261,11 @@ function loop(now: number): void {
     syncBedroomSceneToState(bedroomScene, bedroomState, dt, cameraInput);
     renderBedroom(bedroomScene);
   } else {
-    // Scrolling does nothing on the slope — drop it so it can't pile up.
+    // Scrolling and dragging do nothing on the slope — drop them so they
+    // can't pile up and lurch the camera when you get home.
     wheelSteps = 0;
+    dragPixelsX = 0;
+    dragPixelsY = 0;
     skiState = stepSkiing(skiState, readSkiInput(), dt);
     syncSkiSceneToState(skiScene, skiState, dt);
     render(skiScene);

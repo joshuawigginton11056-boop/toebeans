@@ -1446,6 +1446,75 @@ and parked in [IDEAS.md](IDEAS.md) for the next bedroom session:
 orbit, details in IDEAS.md), unless the director redirects — real
 furniture assets and the bedroom lighting pass are still queued.
 
+## (bedroom) 2026-07-22 — Bedroom camera round 2: mouse drag + vertical tilt
+
+The two things the orbit-camera playtest asked for. **Drag the room with
+the mouse** — sideways to spin, up/down to tilt — and the camera can
+finally **orbit vertically**, from nearly eye-level (15°, just above where
+the low walls would block the view) up to nearly overhead (85°, stopping
+short of where the camera math flips). **R / F** tilt from the keyboard,
+for parity with Q/E. All presentation: no `/shared` changes, test count
+stays at 55.
+
+- **Drags and keys feed the same eased targets**, so the two control
+  styles feel identical — only how the target moves differs (keys by hold
+  time, drags by pixels traveled). Drag signs follow the grab-the-world
+  convention (and three.js's own OrbitControls): drag right pulls the room
+  round to the right, drag down tips the view toward overhead. Sensitivity
+  is sized so a drag across the window swings the room about a half-turn.
+- **Pointer events, not mouse events** — so touch-dragging works the same
+  way for free (the M5 web portals run on touch devices). The canvas gets
+  `touch-action: none` so a finger drag orbits instead of scrolling the
+  page.
+- **Any mouse button drags** (an in-session call — IDEAS.md left the
+  button choice open): left-drag is the Sims convention players try
+  first; right- and middle-drag also work, with the right-click menu
+  suppressed on the canvas only. If M3's click-to-interact furniture
+  wants left-click to itself later, a click-vs-drag movement threshold
+  keeps both.
+- Robustness details: one drag at a time (a second finger is ignored);
+  the pointer is captured so a drag survives leaving the canvas
+  mid-gesture, and capture failing (possible for a pointer that's already
+  gone) just means the drag ends at the canvas edge instead of erroring;
+  drag pixels accumulate between frames like wheel notches and are
+  drained on the slope so they can't pile up and lurch the camera when
+  you get home. Elevation joins azimuth/radius in the deliberately-
+  unsaved camera state — reopening the game still always starts from the
+  classic view, which is also unchanged (the tilt *default* is exactly
+  the old fixed angle).
+- Housekeeping: the worktree's `.claude/launch.json` gained the
+  `toebeans-bedroom` (port 5301) dev-server entry PARALLEL.md already
+  referenced — a small additive edit in shared territory; the slope
+  session can add its own the same way.
+- `npm run check` (55 tests) and `npm run build` pass. Verified in the
+  live page on this session's own dev server (screenshots still frozen —
+  seventeenth session running): the opening camera still lands on exactly
+  (0, 11, 9); a 100px right-drag moves the azimuth target by exactly
+  −0.35 rad and eases to it; a 100px down-drag moves elevation by exactly
+  +0.35; holding R/F clamps at exactly 85.000°/15.000° with the camera
+  height matching the trig at both ends; the camera stays pointed dead at
+  room center through everything (dot 1.000000) with radius invariant to
+  4 decimals; and the *shipped* drag-handler code (extracted from the
+  served source) accumulates exact pixel deltas, ignores second pointers
+  and wrong-pointer releases, survives a failed pointer capture, and
+  stops accumulating after release. Synthetic pointer events on the real
+  canvas run the real handlers with zero console errors. How dragging
+  *feels* (sensitivity, tilt range, easing) is the eyeballs item below.
+
+**What to playtest:** `npm run dev` — in the bedroom, **drag the room
+around with the mouse**: sideways to spin, up and down to tilt between
+nearly-overhead and nearly-eye-level. Try **R / F** for the same tilt on
+keys. The feel questions: is the drag sensitivity right (does a natural
+hand motion move the room the amount your hand expects)? Is the 15° floor
+low enough to feel like "looking into the room" without the walls getting
+in the way? Try a drag on a touchscreen/trackpad if you have one handy.
+And walking while tilted low — does camera-relative walking still feel
+intuitive near eye level?
+
+**Next (bedroom session):** director's pick — real bedroom furniture
+assets or the bedroom lighting pass (the room is still ~45% too dark next
+to the slope; both queued from earlier verdicts).
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

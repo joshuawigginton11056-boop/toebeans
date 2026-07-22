@@ -159,7 +159,9 @@ interface Hint {
 
 const BEDROOM_HINTS: readonly Hint[] = [
   { key: "WASD / ←↑↓→", label: "walk" },
-  { key: "Q / E", label: "spin room" },
+  { key: "drag", label: "orbit" },
+  { key: "Q / E", label: "spin" },
+  { key: "R / F", label: "tilt" },
   { key: "scroll", label: "zoom" },
   { key: "Enter", label: "go skiing" },
   { key: "M", label: "mute" },
