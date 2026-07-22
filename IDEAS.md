@@ -3,6 +3,63 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## Ski-pose playtest verdict (director, 2026-07-22)
+
+The crouch/gear session landed its mechanics (cat faces forward ✓, real
+ski equipment exists ✓, no more mid-run customization ✓) but the look
+needs a round 2. Eight issues, with what each fix takes:
+
+- **Skier never turns.** Steering is a pure sideways slide — the character
+  faces dead ahead regardless of input. Presentation-only fix in
+  `skiRender.ts`/`skierModel.ts`: derive lateral velocity (compare
+  `state.lateral` between frames, like the bedroom heading does), and feed
+  it into a yaw toward the movement direction plus a carving *bank* (body
+  rolls into the turn). Eased like the tuck so it flows.
+- **Legs and arms aren't independent — the body is a rigid block.** Two
+  causes: the pose is perfectly symmetric (both legs identical, both arms
+  identical), and the base frame is frozen (the Idle sway was deliberately
+  frozen so the poles wouldn't wave — see the paused-clip gotcha in the
+  ROADMAP entry). Fixes: stagger the pose (lead foot slightly forward,
+  arms at different heights — real skiers are never symmetric), and add
+  *small procedural motion* — speed-driven bob, a little independent arm
+  float — instead of unfreezing Idle (which swings arms too much for a
+  pole-holder).
+- **Ski equipment doesn't match the art style.** The gear is plain
+  primitives (sharp boxes, thin cylinders) against chunky rounded
+  characters. Wants a proportion-and-facet pass: chunkier boots, thicker
+  poles, skis with real upturned shovel tips and a bit of bevel — still
+  code-built, just styled to the bible's "faceted, chunky, cute" rules.
+- **Skis are too short.** Sized "short and cute" on purpose (1.35 units vs
+  the 1.6-unit character); the director wants longer. Real-skier
+  proportion (~head height or a touch more) ≈ 1.7–1.8 units. One constant,
+  but re-check the chasm-lip visual once longer.
+- **The cat should HUG the character's back and peek over the shoulder** —
+  not sit upright on it like a shelf ornament. That's a real redesign of
+  the mount, not an offset tweak: pitch the cat's body against the back's
+  slope (belly contact), place it higher and slightly off-center, head
+  coming over one shoulder. May want a custom clinging pose for the cat —
+  the ski-pose session proved the technique (procedural bone offsets over
+  a frozen base) works, and the cat has the same kind of rig. Interacts
+  with the two hair items below; settle together.
+- **Hair should move — real physics.** The hair is skinned mesh vertices
+  under the shared skeleton's Head bone (its own `Hair` material, so the
+  triangles are identifiable). Real cloth sim is out of scope for a web
+  game, but a credible middle exists: split the hair triangles into their
+  own mesh at load (by material), parent it to the Head bone, and drive it
+  with a cheap spring/pendulum sway from head motion + speed wind. That
+  same split is the prerequisite for hair-vs-cat collision below.
+- **Hair should react against the cat** (the cat still ends up inside the
+  hair on some characters). Once hair is a separate mesh with a spring
+  (above), pushing it away from a cat-proximity sphere is the same math.
+  Per-character mount offsets (hats and long hair change where the cat
+  fits) are the cheaper fallback if hair physics slips.
+- **The character still reads as footless.** The boots fixed the slope but
+  are gear, not feet: the bedroom still shows bare leg stumps, and boots
+  read as equipment. Proper fix: simple code-built *shoes* attached to the
+  Foot bones in BOTH scenes (they'd follow the walk animation for free),
+  with the ski boots replacing them on the slope. The pack characters have
+  no shoe geometry of their own — this closes that gap everywhere.
+
 ## Character-pass playtest verdict (director, 2026-07-21)
 
 Josh playtested the new pickable roster and flagged six issues. All parked
@@ -10,15 +67,17 @@ for a later session (his call — "we can get to them later"). Most are about
 how the character looks *on the slope*, so they cluster naturally with the
 already-planned ski-pose session; two are independent.
 
-- ~~**No feet.**~~ **(RESOLVED 2026-07-22, ski-pose session):** code-built
-  ski boots (chunky flat-shaded boxes, character-palette boot brown) — the
-  leg stumps now disappear into proper boots standing on the skis. The
-  roster characters still have no shoe geometry of their own, which only
-  matters if they're ever seen barefoot *off* the slope (the bedroom's
-  camera is far enough that it hasn't come up).
-- ~~**Cat sits halfway in the character's hair.**~~ **(RESOLVED
-  2026-07-22, ski-pose session):** re-mounted at `(0, 0.62, 0.30)` against
-  the measured crouched back, facing downhill.
+- ~~**No feet.**~~ **(Partially resolved 2026-07-22 — REOPENED by the
+  ski-pose verdict above):** code-built ski boots landed on the slope, but
+  the director says the character still reads as footless — the bedroom
+  still shows bare stumps and boots read as gear, not feet. See "still
+  reads as footless" in the 2026-07-22 block above for the everywhere-fix.
+- ~~**Cat sits halfway in the character's hair.**~~ **(Partially resolved
+  2026-07-22 — REOPENED by the ski-pose verdict above):** re-mounted lower
+  at `(0, 0.62, 0.30)` facing downhill, but the director still sees hair
+  overlap AND wants the mount redesigned entirely (hugging the back,
+  peeking over the shoulder, hair reacting physically). See the 2026-07-22
+  block above.
 - ~~**Character stands straight while skiing — no response to lean.**~~
   **(RESOLVED 2026-07-22, ski-pose session):** real crouched pose blending
   braking ↔ full tuck off the run's speed (which encodes the lean input);
@@ -26,14 +85,10 @@ already-planned ski-pose session; two are independent.
 - ~~**No ski equipment**~~ **(RESOLVED 2026-07-22)** — skis, boots, and
   hand-following poles, built in code; see the ski-pose session in
   ROADMAP.md.
-- **Hair does not move / is rigid.** The hair is part of the single skinned
-  mesh (via the Hair material), not a separate object, so it should follow
-  the head bone — verify it's actually weighted to `Head` and not to the
-  root (if it floats while the head turns, that's a weighting bug worth a
-  look). If it *is* head-weighted, "doesn't move" is just the low-poly
-  reality of no hair bones / no secondary motion, which is arguably fine for
-  this style — a taste call for the director, not necessarily a fix.
-  Lowest priority of the six.
+- **Hair does not move / is rigid.** *(Escalated by the 2026-07-22 verdict
+  above: no longer a taste call — the director wants real hair physics,
+  including reacting against the cat. See that block for the
+  split-hair-mesh + spring approach.)*
 - ~~**Character can be changed while skiing.**~~ **(RESOLVED 2026-07-22,
   ski-pose session):** the C/K/H branch in `client/src/main.ts` is gated on
   `mode === "bedroom"`, matching what the HUD hints always claimed.

@@ -1075,9 +1075,33 @@ read as ski gear, and is amber the right call for the skis? Then go home
 and walk circles in the bedroom: does turning feel smooth now instead of
 snapping? And confirm C/K/H do nothing on the slope but still work at home.
 
-**Next:** music — the deliberately **last** M2 item (timed per-slope songs
-à la Geometry Dash, see IDEAS.md) — then the end-of-M2 tuning pass (carve
-volume, parked visual tweaks, and any feel notes from this playtest).
+**Playtest verdict (director, 2026-07-22): needs a second pass.** What
+landed well: the cat facing forward, having real ski equipment at all, and
+the customization gate. But eight issues, honestly recorded — the through-
+line is that the *pose* works and the *life* is missing:
+
+1. **The skier always faces straight forward** — steering left/right slides
+   the character sideways with no turn or bank.
+2. **Legs and arms aren't independent** — the pose is symmetric and frozen,
+   so the body reads as one rigid block instead of a person balancing.
+3. **The ski equipment doesn't match the graphics** — the primitive
+   boxes/cylinders don't sit right against the chunky character style.
+4. **The skis aren't long enough.**
+5. **The cat floats on the back** — it should be *hugging* the character's
+   back, trying to peek over the shoulder.
+6. **The hair still doesn't move** — it should have real physics.
+7. **The cat still ends up halfway in the character's hair** — the hair
+   should react physically against the cat (ties into 5 and 6).
+8. **The character still reads as having no feet** — the boots are
+   slope-only gear, so the bedroom still shows bare leg stumps, and the
+   boots read as equipment rather than feet.
+
+All eight are parked in [IDEAS.md](IDEAS.md) with cause analysis and what
+each fix would take.
+
+**Next:** a **character-on-slope polish round 2** session working down that
+list (director's picks first), then music (still deliberately last), then
+the end-of-M2 tuning pass.
 
 ## Milestones
 
