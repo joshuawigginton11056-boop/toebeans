@@ -8,7 +8,6 @@ import {
 } from "./bedroom";
 import {
   BOOST_SPEED,
-  FALL_HEADING,
   LATERAL_LIMIT,
   RESPAWN_DELAY,
   STARTING_LIVES,
@@ -38,6 +37,10 @@ import {
 // Bumped to 4 (heading session): the ski run gained a heading — which way
 // the skis point. Old saves have no heading, and the discard costs the same
 // acceptable thing it did last time: a position and a run in progress.
+// Turning round 3 (no bump): the save *shape* is unchanged — speed is now
+// signed (negative = riding switch) and a heading past sideways is legal,
+// both of which old v4 saves trivially satisfy. flightHeading is transient
+// air state and deliberately not saved (a restore re-derives it below).
 export const SAVE_VERSION = 4;
 
 export type SceneMode = "bedroom" | "slope";
@@ -250,6 +253,10 @@ export function restoreSave(save: SaveData): RestoredGame {
     0,
   );
 
+  // Healed together because flightHeading below is derived from both.
+  const heading = downhillHeading(save.ski.heading);
+  const speed = clamp(save.ski.speed, -BOOST_SPEED, BOOST_SPEED);
+
   return {
     mode: save.mode,
     muted: save.muted,
@@ -273,12 +280,18 @@ export function restoreSave(save: SaveData): RestoredGame {
       lateral: clamp(save.ski.lateral, -LATERAL_LIMIT, LATERAL_LIMIT),
       // A stale heading is healed like a stale position: collapsed to its
       // downhill-equivalent (a save taken mid-air mid-spin can carry whole
-      // turns), then clamped into the still-standing range, so a restored
-      // save never falls over on frame 1.
-      heading: clamp(downhillHeading(save.ski.heading), -FALL_HEADING, FALL_HEADING),
+      // turns). No range clamp anymore — with the fall removed (turning
+      // round 3), every angle in (-π, π] is a legal place to stand.
+      heading,
+      // Not saved (transient air state): re-derive the travel direction the
+      // way the next grounded frame would. A save taken mid-air loses the
+      // spin offset and resumes flying the way it faces — an acceptable
+      // heal, same spirit as clamping a stale position.
+      flightHeading: downhillHeading(heading + (speed < 0 ? Math.PI : 0)),
       height: Math.max(0, save.ski.height),
       verticalVelocity: save.ski.verticalVelocity,
-      speed: clamp(save.ski.speed, 0, BOOST_SPEED),
+      // Signed: negative magnitude is riding switch, and clamps the same.
+      speed,
       status: save.ski.status,
       lives: save.ski.lives,
       respawnTimer: clamp(save.ski.respawnTimer, 0, RESPAWN_DELAY),

@@ -246,12 +246,14 @@ export function createAudio(initiallyMuted = false): AudioHandle {
     let carve = 0;
     let boost = 0;
     if (mode === "slope") {
-      const speedNorm = Math.min(1, state.speed / BOOST_SPEED);
+      // Magnitude: speed is signed now (negative = riding switch), and a
+      // fast switch run sounds as fast as it is.
+      const speedNorm = Math.min(1, Math.abs(state.speed) / BOOST_SPEED);
       const airborne = state.height > 0;
       if (state.status === "skiing") {
         wind = 0.04 + 0.1 * speedNorm + (airborne ? 0.05 : 0);
         carve = airborne ? 0 : 0.05 + 0.18 * speedNorm;
-        boost = state.speed > MAX_SPEED ? 0.12 : 0;
+        boost = Math.abs(state.speed) > MAX_SPEED ? 0.12 : 0;
       } else {
         // Crashed or forfeited: just a low ambient wind.
         wind = 0.04;

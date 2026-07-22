@@ -201,6 +201,21 @@ const ANGULATION_COUNTER: Record<string, number> = {
   Neck: 0.12,
 };
 /**
+ * Riding switch, the upper body twists to watch the hill over a shoulder —
+ * the body faces back up the slope and the travel is behind it (turning
+ * round 3). Per-bone radians at a full look, largest at the neck (eyes
+ * lead the spine, same idea as the angulation counter). Positive local y
+ * twists toward the lead (left) side — the same sign family as the baked
+ * pose's lead-side torso twist — so the glance goes over the left shoulder.
+ */
+const SWITCH_LOOK_TWIST: Record<string, number> = {
+  Abdomen: 0.25,
+  Torso: 0.4,
+  Neck: 0.55,
+};
+/** How fast the over-shoulder look turns on and off (per second). */
+const SWITCH_LOOK_EASE = 5;
+/**
  * The feet push laterally out from under the body toward the outside of the
  * turn, in game units per radian of eased steer — the "skis out from under
  * you" half of angulation. Capped so a braking swerve (steer ≈ 0.9 rad)
@@ -549,11 +564,25 @@ export interface SkiMotion {
    */
   readonly tuck: number;
   /**
-   * Steering angle in radians — atan2(sideways speed, downhill speed),
-   * positive when moving toward the character's right. The rig yaws the
-   * body toward the movement direction and rolls it into a carving bank.
+   * Body yaw in radians: the sim's full heading, positive turning right.
+   * The rig yaws the character to it — riding switch (heading ≈ ±π) the
+   * body genuinely faces back up the hill.
    */
   readonly steer: number;
+  /**
+   * The carving angle in radians — the *stance-relative* deviation the
+   * bank, angulation, and ski-edge roll lean into. The scene derives it
+   * (heading relative to whichever end of the skis leads, scaled by
+   * speed), so a clean switch run banks off its own straight-line, not off
+   * being "180° turned".
+   */
+  readonly carve: number;
+  /**
+   * 0..1: how hard the head and torso twist to look over the shoulder at
+   * where the body is actually going — riding switch you watch the hill
+   * behind you. Eased internally like everything else.
+   */
+  readonly switchLook: number;
   /** Mid-air bodies don't chatter against the snow. */
   readonly airborne: boolean;
   /**
@@ -823,6 +852,7 @@ function applySkiPose(
   time: number,
   airborne: boolean,
   bank: number,
+  switchLook: number,
   feet: Record<"L" | "R", FootPlacement>,
   push: number,
   pushSwing: number,
@@ -853,6 +883,11 @@ function applySkiPose(
     // roll does (measured live, not assumed) — so countering subtracts.
     const counter = ANGULATION_COUNTER[name];
     if (counter !== undefined) scratchEuler.z -= counter * bank;
+    // Riding switch: twist the upper body to watch the hill over the lead
+    // shoulder. Layered the same way as the angulation counter, so it
+    // composes with the crouch and wobble instead of replacing them.
+    const lookTwist = SWITCH_LOOK_TWIST[name];
+    if (lookTwist !== undefined) scratchEuler.y += lookTwist * switchLook;
     // The double-pole push: both arms swing together through the full
     // cycle on the adduction axis (forward reach ↔ backward drive), the
     // elbows straighten into the reach, and the trunk crunches into the
@@ -983,6 +1018,10 @@ export function createSkierRig(): SkierRig {
   let tuckCurrent = 0.5;
   let steerTarget = 0;
   let steerCurrent = 0;
+  let carveTarget = 0;
+  let carveCurrent = 0;
+  let switchLookTarget = 0;
+  let switchLookCurrent = 0;
   let airborne = false;
   let pushTarget = 0;
   let pushCurrent = 0;
@@ -1198,6 +1237,8 @@ export function createSkierRig(): SkierRig {
     setSkiMotion(motion: SkiMotion): void {
       tuckTarget = Math.min(1, Math.max(0, motion.tuck));
       steerTarget = motion.steer;
+      carveTarget = motion.carve;
+      switchLookTarget = Math.min(1, Math.max(0, motion.switchLook));
       airborne = motion.airborne;
       pushTarget = Math.min(1, Math.max(0, motion.push));
     },
@@ -1220,6 +1261,9 @@ export function createSkierRig(): SkierRig {
         steerCurrent +=
           2 * Math.PI * Math.round((steerTarget - steerCurrent) / (2 * Math.PI));
         steerCurrent += (steerTarget - steerCurrent) * ease(STEER_EASE);
+        carveCurrent += (carveTarget - carveCurrent) * ease(STEER_EASE);
+        switchLookCurrent +=
+          (switchLookTarget - switchLookCurrent) * ease(SWITCH_LOOK_EASE);
         pushCurrent += (pushTarget - pushCurrent) * ease(PUSH_EASE);
         pushSwing = Math.sin(PUSH_FREQ * poseTime);
         // Yaw toward the movement direction. The scene's facing is the
@@ -1227,26 +1271,28 @@ export function createSkierRig(): SkierRig {
         // (rightward) steer needs a negative local yaw to come out turned
         // right in the world.
         carve.rotation.y = -steerCurrent;
-        // …and roll into the turn. Positive local z-roll tips the head
-        // toward local -x, which the facing mirror maps to the character's
-        // right — so bank carries steer's sign directly. The spine
-        // counter-rotates against this roll inside applySkiPose, which is
-        // what turns a plank-tilt into angulation.
+        // …and roll into the turn — off the *stance-relative* carve angle,
+        // not the raw yaw (a clean switch run is straight-line skiing, not
+        // a permanently maxed-out 180° bank). Positive local z-roll tips
+        // the head toward local -x, which the facing mirror maps to the
+        // character's right — so bank carries carve's sign directly. The
+        // spine counter-rotates against this roll inside applySkiPose,
+        // which is what turns a plank-tilt into angulation.
         const bank = Math.max(
           -BANK_MAX,
-          Math.min(BANK_MAX, BANK_GAIN * steerCurrent),
+          Math.min(BANK_MAX, BANK_GAIN * carveCurrent),
         );
         carve.rotation.z = bank;
         // One placement per foot per frame, shared by the gear assemblies
         // and the foot pins so they can never disagree.
         const wobbleScale = 0.35 + 0.65 * tuckCurrent;
         const feet = {
-          L: footPlacement("L", steerCurrent, poseTime, wobbleScale),
-          R: footPlacement("R", steerCurrent, poseTime, wobbleScale),
+          L: footPlacement("L", carveCurrent, poseTime, wobbleScale),
+          R: footPlacement("R", carveCurrent, poseTime, wobbleScale),
         };
         const edge = Math.max(
           -EDGE_MAX,
-          Math.min(EDGE_MAX, EDGE_GAIN * steerCurrent),
+          Math.min(EDGE_MAX, EDGE_GAIN * carveCurrent),
         );
         // Skis stay ON the snow while the body rolls — that's the other
         // half of angulation. The carve roll happens at the body's center,
@@ -1272,6 +1318,7 @@ export function createSkierRig(): SkierRig {
           poseTime,
           airborne,
           bank,
+          switchLookCurrent,
           feet,
           pushCurrent,
           pushSwing,

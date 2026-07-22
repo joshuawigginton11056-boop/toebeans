@@ -3,7 +3,6 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   BASE_SPEED,
   BOOST_SPEED,
-  FALL_HEADING,
   MIN_SPEED,
   RESPAWN_DELAY,
   downhillHeading,
@@ -207,11 +206,14 @@ export function syncSkiSceneToState(
   state: SkiState,
   dt: number,
 ): void {
-  // The crouch depth reads straight off state.speed, which fully encodes
-  // the lean input (up = fast = tuck, down = slow = braking upright, boost
-  // beyond MAX_SPEED = deepest tuck) — so the speed control is finally
-  // legible on the body. Airborne adds a bit of extra tuck for the jump.
-  const tuck = (state.speed - MIN_SPEED) / (BOOST_SPEED - MIN_SPEED);
+  // The crouch depth reads straight off the speed magnitude, which fully
+  // encodes the lean input (up = fast = tuck, down = slow = braking upright,
+  // boost beyond MAX_SPEED = deepest tuck) — so the speed control is
+  // legible on the body. Magnitude, not the raw value: speed is signed now
+  // (negative = riding switch), and a fast switch run still tucks.
+  // Airborne adds a bit of extra tuck for the jump.
+  const pace = Math.abs(state.speed);
+  const tuck = (pace - MIN_SPEED) / (BOOST_SPEED - MIN_SPEED);
 
   // Steering: the sim carries a real heading now (0 = straight downhill,
   // out to fully sideways and past it), so the body just turns to it — no
@@ -224,36 +226,58 @@ export function syncSkiSceneToState(
   // body unwind while tipping over (turning round 2, playtest item 2).
   // On respawn the heading snaps to 0 and the model's easing rolls it out.
   const steer = state.heading;
+  // The carve angle drives the bank/angulation and is *stance-relative*:
+  // riding switch, the body leans off how far the skis are turned from
+  // straight-backwards, not from straight-downhill — otherwise a clean
+  // switch run would hold a maxed-out bank forever. Scaled down toward a
+  // standstill (banking comes from carving at speed; a stopped pivot
+  // stands upright — which also smooths the stance flip at the sideways
+  // pivot, where speed passes through zero), and zeroed in the air: no
+  // edge to lean against, and mid-spin the stance sign isn't settled yet.
+  const airborne = state.height > 0;
+  const stance = state.speed < 0 ? Math.PI : 0;
+  const carve = airborne
+    ? 0
+    : downhillHeading(state.heading - stance) * Math.min(1, pace / MIN_SPEED);
+  // Riding switch, the head and torso twist to look over a shoulder at
+  // where you're actually going. The small deadband keeps the sideways
+  // pivot (speed jittering around zero) from nodding the head back and
+  // forth.
+  const switchLook = state.speed < -0.5 ? 1 : 0;
   // The pole push-off: poles drive while the run is on the snow, below
   // cruise speed, and actually gaining — detected the same frame-diff way
   // as the steer above, so braking down to MIN_SPEED (speed falling or
   // parked at its floor) never pumps the arms. Fades out as the push-off
   // approaches cruise, where gravity has taken over from the poles.
+  // All magnitudes: a switch push-off pumps the arms the same way.
   const grounded = state.height <= 0;
   const gaining =
-    skiing && handle.steerMemory.skiing && state.speed > handle.steerMemory.speed;
+    skiing && handle.steerMemory.skiing && pace > handle.steerMemory.speed;
   const push =
     grounded && gaining
-      ? Math.max(0, Math.min(1, 1 - state.speed / (0.85 * BASE_SPEED)))
+      ? Math.max(0, Math.min(1, 1 - pace / (0.85 * BASE_SPEED)))
       : 0;
   handle.steerMemory.skiing = skiing;
-  handle.steerMemory.speed = state.speed;
+  handle.steerMemory.speed = pace;
 
   handle.skier.setSkiMotion({
     tuck: tuck + (state.height > 0 ? 0.2 : 0),
     steer,
-    airborne: state.height > 0,
+    carve,
+    switchLook,
+    airborne,
     push,
   });
 
   handle.cat.update(dt);
   handle.skier.update(dt);
   handle.player.position.set(state.lateral, state.height, -state.distance);
-  // The tip-over matches the fall (turning round 2, playtest item 2): an
-  // over-rotation tips you toward the side you turned, a chasm crash reads
-  // as a forward drop. Animated over the start of the crash pause — the
-  // respawn timer doubles as the clock (forfeit holds it at 0 = fully
-  // tipped) — and accelerating like a real topple, not a linear hinge.
+  // The crash tip-over: chasms are the game's only crash now (turning
+  // round 3 removed the fall-over), and a chasm always reads as a forward
+  // drop — downhill, the way you were traveling, whatever the stance.
+  // Animated over the start of the crash pause — the respawn timer doubles
+  // as the clock (forfeit holds it at 0 = fully tipped) — and accelerating
+  // like a real topple, not a linear hinge.
   if (state.status === "skiing") {
     handle.player.rotation.set(0, 0, 0);
   } else {
@@ -262,15 +286,7 @@ export function syncSkiSceneToState(
       (RESPAWN_DELAY - state.respawnTimer) / TIP_DURATION,
     );
     const tip = (Math.PI / 2) * progress * progress;
-    const landed = downhillHeading(state.heading);
-    if (Math.abs(landed) > FALL_HEADING) {
-      // Fell over from turning too far: tip to the side of the turn
-      // (positive heading = turned right = falls right = negative roll).
-      handle.player.rotation.set(0, 0, landed > 0 ? -tip : tip);
-    } else {
-      // Chasm crash: a forward drop, face-first downhill.
-      handle.player.rotation.set(-tip, 0, 0);
-    }
+    handle.player.rotation.set(-tip, 0, 0);
   }
 
   const checkpointMeshes = handle.checkpointMeshes as Map<number, THREE.Mesh>;
