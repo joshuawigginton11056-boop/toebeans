@@ -3,42 +3,53 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (slope) Turning round 2 — playtest verdict on real turning (director, 2026-07-22)
+## (slope) Air spin round 2 — held steer accidentally does a 360 (director, 2026-07-22)
 
-Three issues from the real-turning session's playtest, likely the next
-slope session's work:
+Playtest verdict on turning round 2: **the air spin rate is way faster
+than the ground rate, so jumping while already steering left whips you
+into an accidental 360.** The 9 rad/s air rate was sized so a full spin
+*fits* inside a jump's ~0.78s — but it applies to the same held key that
+was gently carving a moment before takeoff, so a routine jump-while-
+turning becomes an unwanted trick (and usually a crash: the spin rarely
+completes back to a clean equivalent). Options for the fix, director
+picks:
 
-1. **Can't spin or change direction mid-air.** Deliberate this session —
-   the heading freezes airborne, mirroring how speed freezes ("nothing to
-   carve against") — and the director doesn't like it: jumps should allow
-   spinning/re-aiming in the air. Fix sketch (`shared/src/skiing.ts`):
-   allow turn input while airborne, plausibly at a *faster* spin rate than
-   on snow (air has no ski-bite resistance — and it makes jumps a place
-   for style). Two design questions to settle in-session: (a) landing
-   past the fall threshold — currently the fall check is grounded-only,
-   so an over-rotated landing crashes on the first grounded frame, which
-   is arguably exactly right (botched landing = fall); confirm that's the
-   wanted rule. (b) If full 360° spins should be a legal trick, the fall
-   check needs to compare against the nearest downhill-equivalent angle
-   (a completed spin lands clean, a half-spin lands crashed) instead of
-   the raw accumulated heading.
-2. **The fall animation ignores the direction you fell in.** The crash
-   tip-over is a fixed sideways rotation (`player.rotation.z = π/2` in
-   `skiRender.ts`) — same world direction every time, whether you
-   over-rotated left, right, or skied into a chasm. The state still holds
-   the fatal heading during the whole crash pause (it only resets on
-   respawn), so the renderer has everything it needs: tip *along the
-   fall* — over-turning left tips you left, over-turning right tips
-   right, and a chasm crash could read as a forward drop instead of a
-   sideways flop. Renderer-only fix; note the renderer currently zeroes
-   the body's steer the moment status ≠ "skiing", which is also why the
-   body unwinds while tipping — pass the heading through the crash pause
-   as part of the same fix.
-3. **Turn rate is too slow.** `TURN_RATE` (1.2 rad/s, one line in
-   `shared/src/skiing.ts`). Director-called, so this one is sanctioned to
-   tune alongside the fixes above rather than waiting for the end-of-M2
-   tuning pass. Raising it shortens the margin-of-error window past
-   sideways (~0.3s at 1.2) — retune `FALL_HEADING` together with it.
+1. **A held key doesn't spin — a fresh press does.** Keys already down at
+   takeoff keep steering at the ground rate (intentional line adjustment);
+   pressing a steer key *after* leaving the snow spins at the fast rate.
+   Classic trick-game solution; needs the sim's input to distinguish
+   "held since takeoff" (one boolean carried in state, set on the jump
+   frame). Probably the recommended shape.
+2. **Ramp the air rate in** — air steering starts at the ground rate and
+   accelerates the longer the key is held airborne, so a carried-over hold
+   drifts a little but a deliberate full-jump hold still spins. No input
+   changes, but the 360 gets harder to time.
+3. **Dedicated trick input** — steer keys always re-aim at ~ground rate in
+   the air; a separate key (or double-tap) does the spin. Most explicit,
+   costs a control and a keycap hint.
+
+Whichever wins, the two un-ratified defaults from the build session below
+(spins-are-legal via downhill-equivalence, crash-on-first-grounded-frame)
+still stand until the director calls them.
+
+## (slope) ~~Turning round 2~~ — BUILT 2026-07-22, two design defaults to ratify
+
+**(BUILT 2026-07-22, turning-round-2 session.)** All three landed: air
+spins/re-aiming (9 rad/s in the air vs 1.8 on snow — a full 360 fits in a
+jump), the tip-over now matches the fall (over-turn left tips left, right
+tips right, chasm reads as a forward drop, animated over the pause's first
+0.35s, with the body holding its steer through the pause), and TURN_RATE
+went 1.2 → 1.8 with FALL_HEADING retuned 2.0 → 2.2 to keep the same
+~0.35s margin past sideways. The sketch's two design questions went to the
+director but got no answer in-session, so the recommended defaults went in
+— **both need a ratify-or-change at playtest:**
+
+- **Full 360° spins are a legal trick:** landing compares against the
+  nearest downhill-equivalent angle (a completed spin lands clean, a half
+  spin lands crashed). `downhillHeading()` in `shared/src/skiing.ts` is
+  the equivalence; flipping this call decides it.
+- **An over-rotated landing crashes on the first grounded frame** (botched
+  landing = fall) — no grace window to steer back after touchdown.
 
 ## (bedroom) ~~Follow camera + complete room~~ — BUILT 2026-07-22, two follow-ups remain
 

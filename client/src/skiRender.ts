@@ -1,6 +1,14 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { BASE_SPEED, BOOST_SPEED, MIN_SPEED, type SkiState } from "@toebeans/shared";
+import {
+  BASE_SPEED,
+  BOOST_SPEED,
+  FALL_HEADING,
+  MIN_SPEED,
+  RESPAWN_DELAY,
+  downhillHeading,
+  type SkiState,
+} from "@toebeans/shared";
 import { createCatRig, type CatRig } from "./catModel";
 import { createSkierRig, type SkierRig } from "./skierModel";
 
@@ -53,6 +61,9 @@ export interface SkiSceneHandle {
 
 const SLOPE_LENGTH = 100;
 const SLOPE_WIDTH = 10;
+// How long the crash tip-over takes to hit the ground, inside the
+// RESPAWN_DELAY pause — quick like a real balance loss, then it holds.
+const TIP_DURATION = 0.35;
 
 export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   const scene = new THREE.Scene();
@@ -208,7 +219,11 @@ export function syncSkiSceneToState(
   // couldn't tell "skiing sideways" from "drifting". The model eases toward
   // it internally, so a respawn's snap back to 0 rolls out smoothly.
   const skiing = state.status === "skiing";
-  const steer = skiing ? state.heading : 0;
+  // The steer follows the heading through the crash pause too — the state
+  // holds the fatal heading until respawn, and zeroing it here made the
+  // body unwind while tipping over (turning round 2, playtest item 2).
+  // On respawn the heading snaps to 0 and the model's easing rolls it out.
+  const steer = state.heading;
   // The pole push-off: poles drive while the run is on the snow, below
   // cruise speed, and actually gaining — detected the same frame-diff way
   // as the steer above, so braking down to MIN_SPEED (speed falling or
@@ -234,8 +249,29 @@ export function syncSkiSceneToState(
   handle.cat.update(dt);
   handle.skier.update(dt);
   handle.player.position.set(state.lateral, state.height, -state.distance);
-  // Fallen over sideways during the crash pause, upright otherwise.
-  handle.player.rotation.z = state.status === "crashed" ? Math.PI / 2 : 0;
+  // The tip-over matches the fall (turning round 2, playtest item 2): an
+  // over-rotation tips you toward the side you turned, a chasm crash reads
+  // as a forward drop. Animated over the start of the crash pause — the
+  // respawn timer doubles as the clock (forfeit holds it at 0 = fully
+  // tipped) — and accelerating like a real topple, not a linear hinge.
+  if (state.status === "skiing") {
+    handle.player.rotation.set(0, 0, 0);
+  } else {
+    const progress = Math.min(
+      1,
+      (RESPAWN_DELAY - state.respawnTimer) / TIP_DURATION,
+    );
+    const tip = (Math.PI / 2) * progress * progress;
+    const landed = downhillHeading(state.heading);
+    if (Math.abs(landed) > FALL_HEADING) {
+      // Fell over from turning too far: tip to the side of the turn
+      // (positive heading = turned right = falls right = negative roll).
+      handle.player.rotation.set(0, 0, landed > 0 ? -tip : tip);
+    } else {
+      // Chasm crash: a forward drop, face-first downhill.
+      handle.player.rotation.set(-tip, 0, 0);
+    }
+  }
 
   const checkpointMeshes = handle.checkpointMeshes as Map<number, THREE.Mesh>;
   for (const checkpoint of state.checkpoints) {

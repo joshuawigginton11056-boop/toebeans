@@ -13,6 +13,7 @@ import {
   RESPAWN_DELAY,
   STARTING_LIVES,
   createInitialSkiState,
+  downhillHeading,
   type RunStatus,
   type SkiState,
 } from "./skiing";
@@ -270,9 +271,11 @@ export function restoreSave(save: SaveData): RestoredGame {
       ...skiBase,
       distance: Math.max(0, save.ski.distance),
       lateral: clamp(save.ski.lateral, -LATERAL_LIMIT, LATERAL_LIMIT),
-      // A stale heading is healed like a stale position: clamped into the
-      // still-standing range, so a restored save never falls over on frame 1.
-      heading: clamp(save.ski.heading, -FALL_HEADING, FALL_HEADING),
+      // A stale heading is healed like a stale position: collapsed to its
+      // downhill-equivalent (a save taken mid-air mid-spin can carry whole
+      // turns), then clamped into the still-standing range, so a restored
+      // save never falls over on frame 1.
+      heading: clamp(downhillHeading(save.ski.heading), -FALL_HEADING, FALL_HEADING),
       height: Math.max(0, save.ski.height),
       verticalVelocity: save.ski.verticalVelocity,
       speed: clamp(save.ski.speed, 0, BOOST_SPEED),

@@ -24,7 +24,9 @@ export interface SkiState {
   // Which way the skis point, in radians. 0 = straight downhill, positive =
   // turned right, negative = turned left. Steering turns this and it STAYS
   // turned when the key is released (like real skiing — you steer back
-  // yourself); movement follows it. Turn past FALL_HEADING and you fall over.
+  // yourself); movement follows it. Turn past FALL_HEADING on the snow and
+  // you fall over. Mid-air it can accumulate whole spins; landing collapses
+  // it to the nearest downhill-equivalent (see downhillHeading).
   readonly heading: number;
   readonly height: number;
   readonly verticalVelocity: number;
@@ -64,8 +66,16 @@ const BRAKE_DECEL = 10;
 // too far to hold the edge and falls over — a normal crash: one life, the
 // tip-over pause, respawn at the checkpoint. FALL_HEADING is exported for
 // save.ts (restored headings clamp into the standing-up range).
-const TURN_RATE = 1.2;
-export const FALL_HEADING = 2.0;
+// Turning round 2: TURN_RATE 1.2 → 1.8 (director call — too slow) with
+// FALL_HEADING retuned alongside it (2.0 → 2.2) so the margin-of-error
+// window past sideways stays ~0.35s, same as before the speedup.
+const TURN_RATE = 1.8;
+export const FALL_HEADING = 2.2;
+// In the air there's no ski bite to resist a rotation, so spinning is much
+// faster than carving — fast enough to fit a full 360 inside a jump's
+// airtime (~0.78s at JUMP_VELOCITY/GRAVITY below), which makes jumps a
+// place for style, not just a way over chasms.
+const AIR_TURN_RATE = 9;
 // Exported for save.ts: restoring a save clamps lateral position into range.
 export const LATERAL_LIMIT = 4;
 const JUMP_VELOCITY = 7;
@@ -73,6 +83,15 @@ const GRAVITY = -18;
 const CHASM_CLEAR_HEIGHT = 0.4;
 export const STARTING_LIVES = 9;
 export const RESPAWN_DELAY = 1.5;
+
+// The heading a spin lands on: the nearest downhill-equivalent angle, in
+// (-π, π]. A completed 360 collapses back to ~0 and lands clean; a half
+// spin collapses to ~±π — well past FALL_HEADING — and lands crashed.
+// Exported for save.ts (healing a mid-spin heading) and the renderer
+// (telling a fall-over from a chasm crash during the tip-over).
+export function downhillHeading(heading: number): number {
+  return heading - 2 * Math.PI * Math.round(heading / (2 * Math.PI));
+}
 
 export function createInitialSkiState(): SkiState {
   return {
@@ -173,15 +192,23 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
           );
   }
   // Steering rotates the skis and the heading stays where you put it —
-  // steering back is on you. Authority still builds with speed (carving
-  // comes from the skis biting the snow, so a standstill can't spin on the
-  // spot; full authority from MIN_SPEED up), and like speed, the heading is
-  // frozen mid-air: no snow under the skis, nothing to carve against.
+  // steering back is on you. On the snow, authority builds with speed
+  // (carving comes from the skis biting, so a standstill can't spin on the
+  // spot; full authority from MIN_SPEED up). In the air the skis have
+  // nothing to bite — so spinning is *faster*, at full authority whatever
+  // your speed (turning round 2, director call: jumps allow spinning and
+  // re-aiming; the old airborne freeze read as a limitation, not physics).
   const steerAuthority = Math.min(1, speed / MIN_SPEED);
   let heading = state.heading;
   if (grounded) {
+    // A landed spin collapses to the direction the skis actually point —
+    // heading only accumulates whole turns while airborne.
+    heading = downhillHeading(heading);
     if (input.left) heading -= TURN_RATE * steerAuthority * dt;
     if (input.right) heading += TURN_RATE * steerAuthority * dt;
+  } else {
+    if (input.left) heading -= AIR_TURN_RATE * dt;
+    if (input.right) heading += AIR_TURN_RATE * dt;
   }
 
   // Movement follows the heading: turned sideways, all your speed is going
@@ -192,7 +219,9 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
 
   // Turned too far past sideways to hold the edge — the skier falls over.
   // Same crash flow as a chasm: costs a life, tips over, back to the
-  // checkpoint. Only possible on the snow (mid-air the heading is frozen).
+  // checkpoint. Only checked on the snow: mid-air any rotation is legal,
+  // and an over-rotated landing crashes on the first grounded frame —
+  // a botched landing IS a fall (director default, ratify at playtest).
   const fellOver = grounded && Math.abs(heading) > FALL_HEADING;
 
   const verticalVelocity =

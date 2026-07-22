@@ -1213,6 +1213,12 @@ export function createSkierRig(): SkierRig {
         poseTime += dt;
         const ease = (rate: number): number => 1 - Math.exp(-rate * dt);
         tuckCurrent += (tuckTarget - tuckCurrent) * ease(TUCK_EASE);
+        // Whole turns are visually identity: when the sim collapses a
+        // landed spin to its downhill-equivalent (heading 2π → 0), shift
+        // by the same full turns before easing, so the body settles out of
+        // the spin instead of visibly unwinding a whole rotation backward.
+        steerCurrent +=
+          2 * Math.PI * Math.round((steerTarget - steerCurrent) / (2 * Math.PI));
         steerCurrent += (steerTarget - steerCurrent) * ease(STEER_EASE);
         pushCurrent += (pushTarget - pushCurrent) * ease(PUSH_EASE);
         pushSwing = Math.sin(PUSH_FREQ * poseTime);
