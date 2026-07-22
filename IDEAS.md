@@ -3,6 +3,43 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (bedroom) Where does the progression loop live now? (parked by director call, 2026-07-22)
+
+The walkable bedroom is scrapped — the game opens on a **menu-style lobby**
+(see ROADMAP, lobby session). That leaves the earn-your-furniture direction
+(bare start → XP → furniture unlocks → decorate) without a stage, and the
+director's call was explicitly **"decide later"**. Options when it's
+picked up: transplant decorating to the lobby vignette (the diorama gains
+earned props), bring a walkable home back as a *later* environment unlock
+(the vision doc's bedroom → apartment → skyrise ladder starts one rung
+up), or rethink progression around slope/character/cat unlocks only. The
+`assets/bedroom/` furniture models and their CREDITS rows stay in the repo
+as the unlock pool for whichever wins. DESIGN.md carries matching ⚠ notes
+(Leveling & Unlocks, v1.0 scope).
+
+## (slope) AudioMode still says "bedroom" for the quiet scene
+
+`client/src/audio.ts` (slope territory) types its mode as
+`"bedroom" | "slope"`; the bedroom is now the lobby, and `main.ts` maps at
+the call site (`mode === "slope" ? "slope" : "bedroom"`). Behavior is
+identical — the quiet scene silences all layers either way. Whenever
+convenient, rename the type's `"bedroom"` to `"lobby"` and the call-site
+adapter in `main.ts` (shared territory) can drop to a straight
+pass-through.
+
+## (bedroom) Lobby polish candidates (noticed building it, 2026-07-22)
+
+Not built, deliberately — the session was the replacement itself:
+
+- **Sound in the lobby**: it's silent (the slope keeps its effects). A soft
+  wind bed or a purr when the cat sits would be cheap wins; music belongs
+  to the M2 music session's direction.
+- **A "pet the cat" click** on the vignette — pure charm, one raycast.
+- **Character cycling animation**: swapping models is a hard cut; a quick
+  turn-away/turn-back would sell it.
+- The bundled rounded display font (Fredoka/Baloo) parked below would suit
+  the title lettering especially — still needs the director yes/no.
+
 ## (slope) ~~Open up the skiable area~~ — BUILT 2026-07-22
 
 **(BUILT 2026-07-22 — see ROADMAP. `LATERAL_LIMIT` 4 → 12 (a 24-unit
@@ -101,7 +138,13 @@ and whether the heading collapse toward 0 also un-twists the renderer's
 over-shoulder look smoothly (it should — the look keys off the speed
 sign, which flips through the same continuous pivot).
 
-## (bedroom) Earn-your-furniture: bare rundown start, XP unlocks, unlock-tree UI (director, 2026-07-22)
+## (bedroom) ~~Earn-your-furniture: bare rundown start, XP unlocks, unlock-tree UI~~ — SUPERSEDED 2026-07-22 (bedroom scrapped)
+
+**(SUPERSEDED 2026-07-22, lobby session: the walkable bedroom is gone, so
+this direction has no stage. The progression question is deliberately
+parked — see "Where does the progression loop live now?" at the top of
+this file. The furniture models stay as the unlock pool.)** Original entry
+kept for the reasoning:
 
 Director redirect at the furniture playtest — three connected calls, now
 recorded in [DESIGN.md](DESIGN.md#leveling--unlocks):
@@ -122,7 +165,14 @@ the unlock tree. Open question for the director: does the *house itself*
 also upgrade with levels (rundown → renovated — see the next entry), or
 only its contents?
 
-## (bedroom) Rundown house: shaggy stained carpet, peeling wallpaper + the no-texture rule challenged (director, 2026-07-22)
+## (bedroom) Rundown house + the no-texture rule challenged (director, 2026-07-22) — house half SUPERSEDED, texture half STILL LIVE
+
+**(Half-superseded 2026-07-22, lobby session: the rundown *house* has no
+stage now — the bedroom is scrapped. But the second call below — "I don't
+like the flat graphics. And there's no texture." — is game-wide and
+STANDS: it challenges the Art Style Bible for the slope, the characters,
+and the new lobby vignette alike. The direction session it asks for is
+still owed.)** Original entry:
 
 Two art calls from the same playtest, recorded together because the
 second decides how the first can be built:
@@ -208,7 +258,13 @@ session and not a constant tweak):
   fall-over past FALL_HEADING costs a life) and get rewritten to assert
   the new physics instead.
 
-## (bedroom) Front door → slope select → that slope outside the window (director direction, 2026-07-22)
+## (bedroom) ~~Front door → slope select → that slope outside the window~~ — SUPERSEDED 2026-07-22 (bedroom scrapped)
+
+**(SUPERSEDED 2026-07-22, lobby session: no room, no door, no window. The
+useful kernel survives in menu form — when M3's "all 3 v1.0 slopes" item
+lands, slope select becomes a lobby menu item, and the chosen slope could
+drive the lobby vignette's backdrop the way it would have driven the
+window's.)** Original entry:
 
 From the interior-lighting playtest: **eventually, the bedroom gets a
 front door.** Exiting through it takes you to *choosing which slope to
@@ -311,7 +367,7 @@ director but got no answer in-session, so the recommended defaults went in
 - **An over-rotated landing crashes on the first grounded frame** (botched
   landing = fall) — no grace window to steer back after touchdown.
 
-## (bedroom) ~~Follow camera + complete room~~ — BUILT 2026-07-22, two follow-ups remain
+## (bedroom) ~~Follow camera + complete room~~ — BUILT 2026-07-22; whole area SCRAPPED later that day (lobby session), follow-ups moot
 
 **(BUILT 2026-07-22 in one chunk — the room and camera interlocked too
 tightly to split.)** Landed as sketched: full-height walls + ceiling,
@@ -725,19 +781,16 @@ already-planned ski-pose session; two are independent.
   [Ultimate Modular Men Pack](https://quaternius.com/packs/ultimatemodularcharacters.html).
   Its own session; revisit after the director sees the roster's built-in
   variety.
-- **Player facing lives in the renderer, not the state** (noticed
-  2026-07-21, skier session): `BedroomState` has a facing for the cat (its
-  brain needs one) but not for the player, so `bedroomRender.ts` derives
-  the player's heading from how their position moved between two frames.
-  That's fine while facing is pure presentation, but the moment anything in
-  `/shared` needs to know which way the player looks — interacting with
-  furniture, picking the cat up, an emote — it should become real state
-  with tests, like the cat's.
+- ~~**Player facing lives in the renderer, not the state**~~ (noticed
+  2026-07-21, skier session) — **moot 2026-07-22 (lobby session):**
+  `BedroomState` and `bedroomRender.ts` are gone; the lobby has no shared
+  state and no player-controlled walking at all. The principle stands if a
+  walkable home ever returns: presentation-only facing until `/shared`
+  needs it.
 - **Dynamic title screen** (director direction, 2026-07-21, sound
-  session): the game still drops you straight into the bedroom with no
-  framing — no game name, no "press Enter". The director's call: when it
-  gets built, it should be a *dynamic* title screen that showcases the
-  game world — landscape, enemies, rough terrain, animals, and other
-  objects — growing richer as those things are added to the game. Not
-  scheduled yet; revisit once there's more world to show off (snowballs,
-  tree limbs, critters are all still unbuilt).
+  session) — **base landed 2026-07-22 (lobby session):** the menu lobby
+  *is* the game's title screen now (name, Play, character + cat vignette,
+  dawn scenery). The *growing showcase* half of the idea stays live: as
+  the world gains snowballs, tree limbs, critters, and more slopes, the
+  vignette should grow richer with them — today it shows trees, the sun,
+  and the two characters, because that's what exists.

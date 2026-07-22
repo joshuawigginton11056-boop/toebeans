@@ -1,5 +1,4 @@
 export * from "./skiing";
-export * from "./bedroom";
 export * from "./save";
 export * from "./appearance";
 

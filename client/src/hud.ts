@@ -17,7 +17,7 @@ const BIRCH_AMBER = "#E9A960";
 const SLATE_DEEP = "#2E3548"; // slate rock, deep value shift — never black
 const SIGNAL_RED = "#C6473E";
 
-export type HudMode = "bedroom" | "slope";
+export type HudMode = "lobby" | "slope";
 
 export interface HudHandle {
   sync(mode: HudMode, state: SkiState): void;
@@ -157,23 +157,8 @@ interface Hint {
   readonly label: string;
 }
 
-const BEDROOM_HINTS: readonly Hint[] = [
-  { key: "WASD / ←↑↓→", label: "walk" },
-  { key: "drag", label: "orbit" },
-  { key: "Q / E", label: "spin" },
-  { key: "R / F", label: "tilt" },
-  { key: "scroll", label: "zoom" },
-  { key: "Enter", label: "go skiing" },
-  { key: "M", label: "mute" },
-  // Home is where you'd look at yourself, so the appearance keys live in
-  // the bedroom only. All three are temporary stand-ins for the character
-  // picker and customization UI (an M3 item): C cycles the character roster,
-  // K and H cycle skin and hair color.
-  { key: "C", label: "character" },
-  { key: "K", label: "skin" },
-  { key: "H", label: "hair" },
-];
-
+// The lobby has no hint bar: its menu (lobbyUi.ts) is buttons with their
+// keycaps printed on them, which is the hint bar's job done better.
 const SLOPE_HINTS: readonly Hint[] = [
   { key: "← →", label: "steer" },
   // W's full meaning is "downhill, faster" (turning round 4) — one word
@@ -185,7 +170,7 @@ const SLOPE_HINTS: readonly Hint[] = [
   { key: "Space", label: "hold to jump" },
   { key: "Shift", label: "boost" },
   { key: "M", label: "mute" },
-  { key: "Enter", label: "home" },
+  { key: "Enter", label: "lobby" },
 ];
 
 function buildHints(container: HTMLElement, hints: readonly Hint[]): void {
@@ -228,21 +213,16 @@ export function createHud(): HudHandle {
   bannerSub.className = "sub";
   bannerEl.append(bannerText, bannerSub);
 
-  const bedroomHintsEl = document.createElement("div");
-  bedroomHintsEl.className = "hud-hints";
-  buildHints(bedroomHintsEl, BEDROOM_HINTS);
-
   const slopeHintsEl = document.createElement("div");
   slopeHintsEl.className = "hud-hints";
   buildHints(slopeHintsEl, SLOPE_HINTS);
 
-  root.append(livesEl, bannerEl, bedroomHintsEl, slopeHintsEl);
+  root.append(livesEl, bannerEl, slopeHintsEl);
   document.body.appendChild(root);
 
   function sync(mode: HudMode, state: SkiState): void {
     const onSlope = mode === "slope";
     livesEl.classList.toggle("hud-hidden", !onSlope);
-    bedroomHintsEl.classList.toggle("hud-hidden", onSlope);
     slopeHintsEl.classList.toggle("hud-hidden", !onSlope);
 
     if (!onSlope) {
@@ -264,7 +244,7 @@ export function createHud(): HudHandle {
       bannerEl.classList.add("visible", "forfeit");
       bannerEl.classList.remove("crash");
       bannerText.textContent = "Out of lives — run forfeited";
-      bannerSub.textContent = "Press Enter to head home";
+      bannerSub.textContent = "Press Enter to head back to the lobby";
     } else {
       bannerEl.classList.remove("visible");
     }

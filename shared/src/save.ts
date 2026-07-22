@@ -1,12 +1,5 @@
 import { normalizeAppearance, type Appearance } from "./appearance";
 import {
-  CAT_RADIUS,
-  PLAYER_RADIUS,
-  createInitialBedroomState,
-  type BedroomState,
-  type CatMood,
-} from "./bedroom";
-import {
   BOOST_SPEED,
   LATERAL_LIMIT,
   RESPAWN_DELAY,
@@ -18,10 +11,10 @@ import {
 } from "./skiing";
 
 // Save/load (M2). A save is a JSON snapshot of the *dynamic* parts of the
-// game — where you are, the run in progress, whether sound is muted. The
-// static layout (room size, furniture, chasms, checkpoints) is deliberately
-// NOT saved: on load it always comes fresh from the createInitial* functions,
-// so tuning the slope later never leaves old layouts trapped inside saves.
+// game — the run in progress, whether sound is muted, who your character is.
+// The static layout (chasms, checkpoints) is deliberately NOT saved: on load
+// it always comes fresh from the createInitial* functions, so tuning the
+// slope later never leaves old layouts trapped inside saves.
 //
 // Bump SAVE_VERSION whenever the save shape changes incompatibly — old saves
 // are then discarded (decodeSave returns null) and the game starts fresh,
@@ -41,26 +34,21 @@ import {
 // signed (negative = riding switch) and a heading past sideways is legal,
 // both of which old v4 saves trivially satisfy. flightHeading is transient
 // air state and deliberately not saved (a restore re-derives it below).
+// Bumped to 5 (lobby session): the walkable bedroom was scrapped for a
+// menu-style lobby (director call, 2026-07-22), so the save's bedroom block
+// (player/cat positions) is gone and "bedroom" mode became "lobby". Old
+// saves are discarded — the usual acceptable cost, a run in progress.
 // Hold-to-charge jump (no bump): jumpCharge is transient input state and
 // deliberately not saved — a restore starts uncharged, same as flightHeading.
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
-export type SceneMode = "bedroom" | "slope";
+export type SceneMode = "lobby" | "slope";
 
 export interface SaveData {
   readonly version: number;
   readonly mode: SceneMode;
   readonly muted: boolean;
   readonly appearance: Appearance;
-  readonly bedroom: {
-    readonly player: { readonly x: number; readonly z: number };
-    readonly cat: {
-      readonly x: number;
-      readonly z: number;
-      readonly facing: number;
-      readonly mood: CatMood;
-    };
-  };
   readonly ski: {
     readonly distance: number;
     readonly lateral: number;
@@ -77,7 +65,6 @@ export interface SaveData {
 
 export function createSave(
   mode: SceneMode,
-  bedroom: BedroomState,
   ski: SkiState,
   muted: boolean,
   appearance: Appearance,
@@ -87,15 +74,6 @@ export function createSave(
     mode,
     muted,
     appearance,
-    bedroom: {
-      player: { x: bedroom.player.x, z: bedroom.player.z },
-      cat: {
-        x: bedroom.cat.x,
-        z: bedroom.cat.z,
-        facing: bedroom.cat.facing,
-        mood: bedroom.cat.mood,
-      },
-    },
     ski: {
       distance: ski.distance,
       lateral: ski.lateral,
@@ -137,7 +115,7 @@ export function decodeSave(json: string): SaveData | null {
   }
   if (!isRecord(parsed)) return null;
   if (parsed.version !== SAVE_VERSION) return null;
-  if (parsed.mode !== "bedroom" && parsed.mode !== "slope") return null;
+  if (parsed.mode !== "lobby" && parsed.mode !== "slope") return null;
   if (typeof parsed.muted !== "boolean") return null;
 
   // Appearance: reject the wrong *kind* of value, but leave out-of-range
@@ -152,23 +130,6 @@ export function decodeSave(json: string): SaveData | null {
     if (!isFinite(value)) return null;
     picked[field] = value;
   }
-
-  const bedroom = parsed.bedroom;
-  if (!isRecord(bedroom)) return null;
-  const player = bedroom.player;
-  if (!isRecord(player) || !isFinite(player.x) || !isFinite(player.z)) {
-    return null;
-  }
-  const cat = bedroom.cat;
-  if (
-    !isRecord(cat) ||
-    !isFinite(cat.x) ||
-    !isFinite(cat.z) ||
-    !isFinite(cat.facing)
-  ) {
-    return null;
-  }
-  if (cat.mood !== "sitting" && cat.mood !== "following") return null;
 
   const ski = parsed.ski;
   if (!isRecord(ski)) return null;
@@ -203,10 +164,6 @@ export function decodeSave(json: string): SaveData | null {
     mode: parsed.mode,
     muted: parsed.muted,
     appearance: normalizeAppearance(picked),
-    bedroom: {
-      player: { x: player.x, z: player.z },
-      cat: { x: cat.x, z: cat.z, facing: cat.facing, mood: cat.mood },
-    },
     ski: {
       distance,
       lateral,
@@ -226,7 +183,6 @@ export interface RestoredGame {
   readonly mode: SceneMode;
   readonly muted: boolean;
   readonly appearance: Appearance;
-  readonly bedroom: BedroomState;
   readonly ski: SkiState;
 }
 
@@ -239,13 +195,7 @@ function clamp(value: number, min: number, max: number): number {
 // numbers are clamped into today's legal ranges, so a save made before a
 // layout tweak lands somewhere sensible instead of somewhere impossible.
 export function restoreSave(save: SaveData): RestoredGame {
-  const bedroomBase = createInitialBedroomState();
   const skiBase = createInitialSkiState();
-
-  const playerHalfW = bedroomBase.roomWidth / 2 - PLAYER_RADIUS;
-  const playerHalfD = bedroomBase.roomDepth / 2 - PLAYER_RADIUS;
-  const catHalfW = bedroomBase.roomWidth / 2 - CAT_RADIUS;
-  const catHalfD = bedroomBase.roomDepth / 2 - CAT_RADIUS;
 
   // The saved checkpoint might not exist in the current layout (slope got
   // retuned). Snap down to the nearest checkpoint you'd genuinely passed.
@@ -263,19 +213,6 @@ export function restoreSave(save: SaveData): RestoredGame {
     mode: save.mode,
     muted: save.muted,
     appearance: normalizeAppearance(save.appearance),
-    bedroom: {
-      ...bedroomBase,
-      player: {
-        x: clamp(save.bedroom.player.x, -playerHalfW, playerHalfW),
-        z: clamp(save.bedroom.player.z, -playerHalfD, playerHalfD),
-      },
-      cat: {
-        x: clamp(save.bedroom.cat.x, -catHalfW, catHalfW),
-        z: clamp(save.bedroom.cat.z, -catHalfD, catHalfD),
-        facing: save.bedroom.cat.facing,
-        mood: save.bedroom.cat.mood,
-      },
-    },
     ski: {
       ...skiBase,
       distance: Math.max(0, save.ski.distance),

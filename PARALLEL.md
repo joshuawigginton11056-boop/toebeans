@@ -22,10 +22,11 @@ about missing packages, run `npm install` in **your own** folder.
 
 ## File ownership
 
-**Bedroom session owns** (edit freely):
-- `client/src/bedroomRender.ts`
-- `shared/src/bedroom.ts`, `shared/src/bedroom.test.ts`
-- `assets/bedroom/` (create it when the first bedroom asset lands)
+**Bedroom session owns** (edit freely) — the name is historical: the
+walkable bedroom was scrapped for the menu lobby on 2026-07-22, and this
+session owns the lobby now:
+- `client/src/lobbyRender.ts`, `client/src/lobbyUi.ts`
+- `assets/bedroom/` (the furniture models — kept as the future unlock pool)
 
 **Slope session owns** (edit freely):
 - `client/src/skiRender.ts`, `client/src/skierModel.ts`, `client/src/audio.ts`

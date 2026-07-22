@@ -49,6 +49,15 @@ interact with your space for more XP → repeat.
 - **Unlocks-by-level UI (director call, 2026-07-22):** a screen/panel
   showing furniture and decoration unlocks laid out by level, so players
   can see what they're skiing toward. In v1.0 scope (see below).
+- **⚠ Stage change (director call, 2026-07-22, later the same day):** the
+  walkable bedroom was **scrapped and replaced by a menu-style lobby**
+  (title, Play, character customization — with the character and cat in a
+  live vignette behind it). The earn-your-furniture loop above therefore
+  has no walkable stage right now; whether it transplants to the lobby,
+  returns with a future environment, or becomes something else is
+  **deliberately parked** ("decide later" — see IDEAS.md). The furniture
+  models in `assets/bedroom/` stay in the repo as the unlock pool either
+  way.
 - Leveling unlocks:
   - **New environments:** bedroom → apartment → skyrise → and beyond (space
     shuttle, laboratory, Mars, Heaven, jungle, and others).
@@ -453,12 +462,13 @@ above).
 
 - Character customization (basic options)
 - Cat customization (basic options)
-- One environment: the starting bedroom — a complete room (full-height
-  walls, ceiling) with a behind-the-character follow camera *(camera
-  direction changed by director call, 2026-07-22)*; **starts nearly bare
-  (a mattress at most) and rundown** — furniture is earned, not given
-  *(director call, 2026-07-22)*
-- Furniture/appliance placement system (place, move, store owned items)
+- ~~One environment: the starting bedroom~~ **superseded (director call,
+  2026-07-22): the bedroom is scrapped — the game opens on a menu-style
+  lobby instead** (title, Play, character customization over a live
+  character-and-cat vignette). The home/decorate items below are pending
+  the parked progression decision (see Leveling & Unlocks ⚠ note):
+- Furniture/appliance placement system (place, move, store owned items) —
+  *pending the parked stage decision*
 - **Unlocks-by-level UI** — furniture/decoration unlock tree laid out by
   level *(director call, 2026-07-22)*
 - **6–8 starter furniture/appliance items**: at least one timed-task item
