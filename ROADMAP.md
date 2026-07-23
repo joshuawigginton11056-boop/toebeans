@@ -3616,6 +3616,50 @@ chunk) and the refined snow (previous chunk) together, then the
 unblocked Art Style Bible rewrite (shape-language + asset-sourcing);
 the tree snow-cap check rides with that pass.
 
+## (slope-mech) 2026-07-23 — M2: the landing lockout — no instant re-jump
+
+The director's directive, verbatim: "after landing from a jump, the
+player should not be able to immediately jump." Before this, a key
+held (or tapped fast) through a touchdown started charging on the very
+next grounded frame — a pogo bounce off every landing.
+
+- New `LANDING_RECOVERY = 0.3` beat: touching down starts a lockout
+  timer, and until it runs out the jump key does nothing — no load, no
+  launch. A key held through the landing waits it out and *then*
+  starts its fresh load, so the soonest re-jump is lockout + tap.
+  Sized as a beat, not a penalty: ~⅓ of a tap jump's airtime, enough
+  to kill the instant pogo, short enough that deliberate
+  hop-hop-hop rhythm still flows. Tuning knob: higher = heavier, more
+  committal landings.
+- New transient `landingRecovery` on `SkiState`, same spirit as
+  `jumpCharge`: deliberately not saved (**no SAVE_VERSION bump** — the
+  save shape is unchanged; a restore resumes recovered), zeroed on
+  respawn, dropped on a crash.
+- Sim-only — zero renderer/audio changes. During the lockout no charge
+  accrues, so the crouch-load pose correctly doesn't show; the
+  round-8 landing slip and the spin's landing collapse are untouched.
+- Tests 94 → 95 (one extended): a tap right on touchdown launches
+  nothing and the same tap flies again once the beat passes; the
+  held-through-landing test now measures the lockout window
+  (~LANDING_RECOVERY) before the fresh load starts.
+- `npm run check` (95 tests) passes. Live-verified on this session's
+  own server (5302) with real key events driving the served client:
+  tap 1 sampled mid-flight (height 1.57), an immediate tap 2 after
+  touchdown sampled grounded (height 0 — the lockout holding), tap 3
+  after the beat sampled mid-flight again (height 1.61). Standing
+  caveat: the hidden pane suspends compositing (rAF frozen), so this
+  run used a timer-shimmed frame loop; feel is the playtest's call.
+
+**What to playtest:** `npm run dev`, Enter to ski. Jump, land, and
+immediately try to jump again — the second press should do nothing for
+a beat (~0.3s), then work normally. The feel questions: does the beat
+read as the legs absorbing the landing (good weight) or as the game
+eating your input (frustration)? And does rhythm hopping still feel
+possible when you *want* to chain jumps?
+
+**Next:** unchanged from round 10 — a finish line, tree limbs +
+crouch, or big jumps; music last, then the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

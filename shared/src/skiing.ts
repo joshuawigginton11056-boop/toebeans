@@ -77,6 +77,12 @@ export interface SkiState {
   // charge, higher jump. Transient input state, deliberately not saved: a
   // restore starts uncharged, same spirit as flightHeading above.
   readonly jumpCharge: number;
+  // Seconds left in the touchdown lockout (see LANDING_RECOVERY): set on the
+  // landing frame, ticks down on the snow, and while it's running the jump
+  // key neither loads nor launches. Transient input-adjacent state,
+  // deliberately not saved: a restore lands (or resumes) recovered, same
+  // spirit as jumpCharge above.
+  readonly landingRecovery: number;
   readonly status: RunStatus;
   readonly lives: number;
   readonly respawnTimer: number;
@@ -223,6 +229,17 @@ export const LATERAL_LIMIT = 12;
 export const MIN_JUMP_VELOCITY = 7;
 export const MAX_JUMP_VELOCITY = 11;
 export const JUMP_CHARGE_TIME = 0.6;
+// The landing lockout (director directive 2026-07-23: "after landing from a
+// jump, the player should not be able to immediately jump"). Touching down
+// starts this timer, and until it runs out the jump key does nothing — no
+// load, no launch. A key held through a landing waits out the lockout and
+// *then* starts its fresh load, so the soonest possible re-jump is lockout +
+// tap. Sized as a beat, not a penalty: about a third of a tap jump's airtime
+// (~0.78s), long enough to kill the instant pogo bounce, short enough that
+// deliberate hop-hop-hop rhythm play still flows. Exported for the tests
+// (they wait it out) and for the renderer/audio if the landing absorb ever
+// wants to read it. Tuning knob: higher = heavier, more committal landings.
+export const LANDING_RECOVERY = 0.3;
 const GRAVITY = -18;
 const CHASM_CLEAR_HEIGHT = 0.4;
 export const STARTING_LIVES = 9;
@@ -249,6 +266,7 @@ export function createInitialSkiState(): SkiState {
     // of the run, not something that happens before it.
     speed: 0,
     jumpCharge: 0,
+    landingRecovery: 0,
     status: "skiing",
     lives: STARTING_LIVES,
     respawnTimer: 0,
@@ -292,6 +310,7 @@ function respawnAtCheckpoint(state: SkiState): SkiState {
     // checkpoint, so momentum lost is part of the crash's cost.
     speed: 0,
     jumpCharge: 0,
+    landingRecovery: 0,
     status: "skiing",
     respawnTimer: 0,
   };
@@ -485,13 +504,19 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
 
   // Hold-to-charge: holding jump on the snow loads the crouch (charge only
   // ever accrues grounded — pressing mid-air does nothing, and a key still
-  // held through a landing starts a fresh load). Releasing launches, scaled
-  // by how full the load got; a quick tap launches at essentially the
-  // minimum — the old fixed jump.
+  // held through a landing waits out the landing lockout and then starts a
+  // fresh load). Releasing launches, scaled by how full the load got; a
+  // quick tap launches at essentially the minimum — the old fixed jump.
   let jumpCharge = state.jumpCharge;
+  let landingRecovery = state.landingRecovery;
   let verticalVelocity = state.verticalVelocity + GRAVITY * dt;
   if (grounded) {
-    if (input.jump) {
+    if (landingRecovery > 0) {
+      // The landing lockout (see LANDING_RECOVERY): fresh off a touchdown,
+      // the legs are absorbing the hit — the jump key does nothing until
+      // the timer runs out, so there's no instant pogo re-jump.
+      landingRecovery = Math.max(0, landingRecovery - dt);
+    } else if (input.jump) {
       jumpCharge = Math.min(JUMP_CHARGE_TIME, jumpCharge + dt);
     } else if (jumpCharge > 0) {
       verticalVelocity =
@@ -514,6 +539,8 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
       magnitude > 0 && Math.cos(heading - flightHeading) < 0
         ? -magnitude
         : magnitude;
+    // Touchdown starts the landing lockout — see LANDING_RECOVERY.
+    landingRecovery = LANDING_RECOVERY;
   }
 
   let lastCheckpoint = state.lastCheckpoint;
@@ -536,6 +563,7 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     speed,
     // A crash drops the load — the charge doesn't survive into the respawn.
     jumpCharge: crashed ? 0 : jumpCharge,
+    landingRecovery: crashed ? 0 : landingRecovery,
     status: crashed ? "crashed" : "skiing",
     lives: crashed ? state.lives - 1 : state.lives,
     respawnTimer: crashed ? RESPAWN_DELAY : 0,

@@ -40,6 +40,8 @@ import {
 // saves are discarded — the usual acceptable cost, a run in progress.
 // Hold-to-charge jump (no bump): jumpCharge is transient input state and
 // deliberately not saved — a restore starts uncharged, same as flightHeading.
+// Landing lockout (no bump): landingRecovery is transient too and not saved —
+// a restore resumes recovered, same spirit as jumpCharge.
 export const SAVE_VERSION = 5;
 
 export type SceneMode = "lobby" | "slope";

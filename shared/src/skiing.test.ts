@@ -5,6 +5,7 @@ import {
   createInitialSkiState,
   downhillHeading,
   JUMP_CHARGE_TIME,
+  LANDING_RECOVERY,
   LATERAL_LIMIT,
   MAX_JUMP_VELOCITY,
   MAX_SPEED,
@@ -38,6 +39,7 @@ const nearChasm: SkiState = {
   verticalVelocity: 0,
   speed: 8,
   jumpCharge: 0,
+  landingRecovery: 0,
   status: "skiing",
   lives: STARTING_LIVES,
   respawnTimer: 0,
@@ -201,14 +203,47 @@ describe("stepSkiing", () => {
     }
 
     // Ride it down with the key still held: no instant bounce on touchdown —
-    // the next grounded frame starts a fresh load instead.
+    // the landing lockout runs first, and only then does the still-held key
+    // start its fresh load.
     while (state.height > 0) {
       state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
     }
     expect(state.jumpCharge).toBe(0);
-    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    let lockedFrames = 0;
+    while (state.jumpCharge === 0 && lockedFrames < 60) {
+      state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+      lockedFrames++;
+      expect(state.height).toBe(0);
+    }
     expect(state.jumpCharge).toBeCloseTo(0.02, 5);
+    // The lockout held the key off for about LANDING_RECOVERY first.
+    expect(lockedFrames * 0.02).toBeGreaterThanOrEqual(LANDING_RECOVERY);
+    expect(lockedFrames * 0.02).toBeLessThan(LANDING_RECOVERY + 0.06);
+  });
+
+  it("locks out the jump for a beat after landing — no instant re-jump", () => {
+    // Tap jump and ride the flight down to the landing frame.
+    let state = stepSkiing(cruising, { ...noInput, jump: true }, 0.02);
+    state = stepSkiing(state, noInput, 0.02);
+    expect(state.height).toBeGreaterThan(0);
+    while (state.height > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+
+    // Tap again right on touchdown: the press loads nothing, so the release
+    // launches nothing — the skis stay on the snow.
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    expect(state.jumpCharge).toBe(0);
+    state = stepSkiing(state, noInput, 0.02);
     expect(state.height).toBe(0);
+
+    // Wait out the recovery, and the very same tap flies again.
+    for (let i = 0; i * 0.02 <= LANDING_RECOVERY; i++) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    state = stepSkiing(state, noInput, 0.02);
+    expect(state.height).toBeGreaterThan(0);
   });
 
   it("drops the charge on a crash — it doesn't survive to the respawn", () => {
