@@ -461,6 +461,7 @@ describe("stepSkiing", () => {
     let state: SkiState = { ...cruising, speed: BOOST_SPEED };
     let sawSwitch = false;
     let speedAtCrossing = Infinity;
+    let speedAfterCrossing = Infinity;
     for (let i = 0; i < 200; i++) {
       // Steer hard until pointing backwards-ish, then just hold boost.
       const steering = Math.abs(downhillHeading(state.heading)) < 2.8;
@@ -478,6 +479,7 @@ describe("stepSkiing", () => {
         speedAtCrossing === Infinity
       ) {
         speedAtCrossing = Math.abs(state.speed);
+        speedAfterCrossing = Math.abs(next.speed);
       }
       if (next.speed < 0) sawSwitch = true;
       state = next;
@@ -485,9 +487,13 @@ describe("stepSkiing", () => {
 
     expect(sawSwitch).toBe(true);
     expect(Math.abs(downhillHeading(state.heading))).toBeGreaterThan(Math.PI / 2);
-    // The scrub spent the run before the skis crossed sideways — even the
-    // boosted worst case arrives at a crawl (round 6).
-    expect(speedAtCrossing).toBeLessThan(1);
+    // The scrub drains the approach — but round 7's sin⁴ softening lets
+    // the boosted worst case outrun it and reach the crossing carrying a
+    // few u/s (~3.7 measured; sin² spent it to ~0.1) — far below the ~13
+    // that round 5 mirrored, and the backstop flip dumps it at the
+    // crossing, so the run is spent within a frame either way.
+    expect(speedAtCrossing).toBeLessThan(5);
+    expect(speedAfterCrossing).toBeLessThanOrEqual(1);
     // ...and boost then rebuilds it riding switch at boost speed.
     expect(state.speed).toBeLessThan(-MAX_SPEED);
   });
@@ -512,25 +518,32 @@ describe("stepSkiing", () => {
     expect(aligned.speed).toBeGreaterThan(BOOST_SPEED - 2 - 0.01);
   });
 
-  it("arrives at the sideways crossing spent — no jerk for the flip to mirror", () => {
-    // Round 5 died on this: the crossing used to mirror ~13 u/s of lateral
-    // drift in one frame. Now the scrub drains the run on the approach, so
-    // the lateral velocity never jumps — the largest one-frame change over
-    // the whole boosted pivot stays under a couple of frames of braking.
-    let state: SkiState = { ...cruising, speed: BOOST_SPEED };
-    let prevLateralVelocity: number | null = null;
-    let maxJump = 0;
-    for (let i = 0; i < 200; i++) {
-      const steering = Math.abs(downhillHeading(state.heading)) < 2.8;
-      state = stepSkiing(state, { ...noInput, right: steering, boost: true }, 0.02);
-      const lateralVelocity = state.speed * Math.sin(state.heading);
-      if (prevLateralVelocity !== null) {
-        maxJump = Math.max(maxJump, Math.abs(lateralVelocity - prevLateralVelocity));
+  it("keeps held pivots smooth — the jerk bound, per stance-change path", () => {
+    // Round 5 died on a ~13 u/s one-frame lateral mirror at the crossing.
+    // Round 6's sin² scrub made every held pivot arrive spent (max jump
+    // ~0.9); round 7's sin⁴ softening keeps that for plain pivots but lets
+    // the boosted worst case reach the crossing with a few u/s for the
+    // backstop dump to eat — a bounded bite (~4.4 measured), well under
+    // half of round 5's rejected jerk. Both bounds pinned here so a future
+    // scrub retune can't silently reopen the snap.
+    const maxLateralJump = (boost: boolean): number => {
+      let state: SkiState = { ...cruising, speed: boost ? BOOST_SPEED : BASE_SPEED };
+      let prevLateralVelocity: number | null = null;
+      let maxJump = 0;
+      for (let i = 0; i < 200; i++) {
+        const steering = Math.abs(downhillHeading(state.heading)) < 2.8;
+        state = stepSkiing(state, { ...noInput, right: steering, boost }, 0.02);
+        const lateralVelocity = state.speed * Math.sin(state.heading);
+        if (prevLateralVelocity !== null) {
+          maxJump = Math.max(maxJump, Math.abs(lateralVelocity - prevLateralVelocity));
+        }
+        prevLateralVelocity = lateralVelocity;
       }
-      prevLateralVelocity = lateralVelocity;
-    }
+      return maxJump;
+    };
 
-    expect(maxJump).toBeLessThan(2);
+    expect(maxLateralJump(false)).toBeLessThan(2);
+    expect(maxLateralJump(true)).toBeLessThan(6);
   });
 
   it("spends the run at a crossing the scrub never saw — the backstop flip dumps", () => {
@@ -578,18 +591,22 @@ describe("stepSkiing", () => {
     expect(boosted.heading / plain.heading).toBeCloseTo(1.4, 5);
   });
 
-  it("boosts the W-seek home too — one steering system, one multiplier", () => {
+  it("boosts the W-seek too — one steering system, one multiplier", () => {
+    // Riding switch, the seek's target is π (round 7) — boost eases toward
+    // it 1.4× faster, same multiplier as manual steering.
     const ridingSwitch: SkiState = { ...cruising, heading: 3.0, speed: -BASE_SPEED };
 
-    const plain = stepSkiing(ridingSwitch, { ...noInput, up: true }, 0.1);
+    // dt small enough that neither seek saturates onto π (at 0.1 even the
+    // plain turn covers the whole 0.14 rad to home, hiding the ratio).
+    const plain = stepSkiing(ridingSwitch, { ...noInput, up: true }, 0.02);
     const boosted = stepSkiing(
       ridingSwitch,
       { ...noInput, up: true, boost: true },
-      0.1,
+      0.02,
     );
 
-    expect(boosted.heading).toBeLessThan(plain.heading);
-    expect((3.0 - boosted.heading) / (3.0 - plain.heading)).toBeCloseTo(1.4, 5);
+    expect(boosted.heading).toBeGreaterThan(plain.heading);
+    expect((boosted.heading - 3.0) / (plain.heading - 3.0)).toBeCloseTo(1.4, 5);
   });
 
   it("bleeds to a stop held fully sideways — braking-by-turning is a hockey stop", () => {
@@ -617,18 +634,35 @@ describe("stepSkiing", () => {
     expect(state.speed).toBeGreaterThan(MIN_SPEED);
   });
 
-  it("returns from switch to forward running on W alone — never released", () => {
-    // The director's bar for turning round 4: turn backwards and come back
-    // forward without ever letting off W. Start riding switch; hold W.
-    let state: SkiState = { ...cruising, heading: Math.PI, speed: -BASE_SPEED };
+  it("stays riding switch on W — straightens backwards and speeds up", () => {
+    // The director's bar for turning round 7 ("I want to be able to turn
+    // around and continue down the slope backwards… when I go backwards I
+    // can only go base speed, and if I press W I flip forwards again"),
+    // which deliberately inverts round 4's return-on-W-alone bar: W in
+    // switch straightens the skis onto the backwards fall line and applies
+    // its speed lean there — full lean speed, tails-first, no flip.
+    let state: SkiState = { ...cruising, heading: 3.0, speed: -BASE_SPEED };
     for (let i = 0; i < 400; i++) {
       state = stepSkiing(state, { ...noInput, up: true }, 0.02);
       expect(state.status).toBe("skiing");
+      // Never leaves switch: the seek pulls toward ±π, not through it.
+      expect(Math.abs(downhillHeading(state.heading))).toBeGreaterThan(Math.PI / 2);
     }
 
-    expect(Math.abs(state.heading)).toBeLessThan(0.01);
-    expect(state.speed).toBeGreaterThan(MIN_SPEED);
+    expect(Math.abs(Math.abs(state.heading) - Math.PI)).toBeLessThan(0.01);
+    expect(state.speed).toBe(-MAX_SPEED);
     expect(state.lives).toBe(STARTING_LIVES);
+  });
+
+  it("boosts backwards too — switch is first-class at every speed", () => {
+    // The re-check the round-7 sketch asked for, pinned: Shift riding
+    // switch rebuilds to full boost speed tails-first.
+    let state: SkiState = { ...cruising, heading: 3.0, speed: -BASE_SPEED };
+    for (let i = 0; i < 400; i++) {
+      state = stepSkiing(state, { ...noInput, up: true, boost: true }, 0.02);
+    }
+
+    expect(state.speed).toBe(-BOOST_SPEED);
   });
 
   it("keeps W a pure speed lean when already pointing downhill", () => {
@@ -643,52 +677,60 @@ describe("stepSkiing", () => {
     expect(state.speed).toBeGreaterThan(BASE_SPEED);
   });
 
-  it("holds a stable diagonal on W plus a steer key", () => {
-    // W+right settles at the carve diagonal — from straight running it
-    // grows out to it, and from way past it W pulls back to the same
-    // angle. One target, approached from both sides.
+  it("keeps W a pure speed lean when already pointing dead backwards", () => {
+    // The switch twin: exactly backwards is the stable point of the switch
+    // seek (round 7 retired round 4's tie-break turn away from it) — the
+    // heading holds and the lean speeds the descent tails-first.
+    let state: SkiState = { ...cruising, heading: Math.PI, speed: -BASE_SPEED };
+    for (let i = 0; i < 50; i++) {
+      state = stepSkiing(state, { ...noInput, up: true }, 0.02);
+    }
+
+    // ±π are the same angle; the grounded normalization happens to settle
+    // on the −π representation — the magnitude is what's pinned here.
+    expect(Math.abs(state.heading)).toBe(Math.PI);
+    expect(state.speed).toBeLessThan(-BASE_SPEED);
+  });
+
+  it("holds a stable diagonal on W plus a steer key, in either stance", () => {
+    // W+right settles at the carve diagonal *of the stance you're in*
+    // (round 7): forward stances grow out to π/4; switch stances settle at
+    // the mirrored diagonal −3π/4 — the one that drifts the same screen
+    // side as the right key does riding switch.
     let fromStraight = cruising;
-    let fromSwitch: SkiState = { ...cruising, heading: 2.5 };
+    let fromSwitch: SkiState = { ...cruising, heading: 2.5, speed: -BASE_SPEED };
     for (let i = 0; i < 300; i++) {
       fromStraight = stepSkiing(fromStraight, { ...noInput, up: true, right: true }, 0.02);
       fromSwitch = stepSkiing(fromSwitch, { ...noInput, up: true, right: true }, 0.02);
     }
 
     expect(fromStraight.heading).toBeCloseTo(Math.PI / 4, 5);
-    expect(fromSwitch.heading).toBeCloseTo(Math.PI / 4, 5);
+    expect(fromSwitch.heading).toBeCloseTo((-3 * Math.PI) / 4, 5);
   });
 
-  it("seeks the fall line the shortest way around", () => {
-    // Riding switch turned right (heading just short of π): home is
-    // shorter backing out the way you came in — a left turn — and the
-    // mirror image turns right.
+  it("seeks the nearest fall-line alignment — never across sideways", () => {
+    // Round 7's seek is stance-aware: a forward stance eases home to 0 as
+    // ever, but riding switch W straightens *backwards* — heading 3.0
+    // eases up toward π, its mirror eases down toward −π. W never carries
+    // the skis across sideways; changing stance is a deliberate held steer.
+    const forward: SkiState = { ...cruising, heading: 1.2 };
     const turnedRight: SkiState = { ...cruising, heading: 3.0, speed: -BASE_SPEED };
     const turnedLeft: SkiState = { ...cruising, heading: -3.0, speed: -BASE_SPEED };
 
-    const leftward = stepSkiing(turnedRight, { ...noInput, up: true }, 0.02);
-    const rightward = stepSkiing(turnedLeft, { ...noInput, up: true }, 0.02);
+    const home = stepSkiing(forward, { ...noInput, up: true }, 0.02);
+    const toPi = stepSkiing(turnedRight, { ...noInput, up: true }, 0.02);
+    const toNegPi = stepSkiing(turnedLeft, { ...noInput, up: true }, 0.02);
 
-    expect(leftward.heading).toBeLessThan(3.0);
-    expect(rightward.heading).toBeGreaterThan(-3.0);
+    expect(home.heading).toBeLessThan(1.2);
+    expect(toPi.heading).toBeGreaterThan(3.0);
+    expect(toNegPi.heading).toBeLessThan(-3.0);
   });
 
-  it("breaks the exactly-backwards tie with a right turn", () => {
-    // Dead backwards, both ways home are equidistant — pick right, and
-    // keep picking it (no dithering across the boundary).
-    let state: SkiState = { ...cruising, heading: Math.PI, speed: -BASE_SPEED };
-
-    state = stepSkiing(state, { ...noInput, up: true }, 0.02);
-    const first = state.heading;
-    expect(first).toBeGreaterThan(-Math.PI);
-    expect(first).toBeLessThan(-3);
-
-    state = stepSkiing(state, { ...noInput, up: true }, 0.02);
-    expect(state.heading).toBeGreaterThan(first);
-  });
-
-  it("re-aims toward the fall line mid-air without bending the flight path", () => {
+  it("re-aims toward the nearest alignment mid-air without bending the flight path", () => {
     // W's seek is the same steering system as left/right, so it works in
-    // the air too — the body comes around for the landing while the
+    // the air too — and stance-aware (round 7), it squares the body up for
+    // the *nearest* landing: skis past sideways ease on toward backwards
+    // (the least rotation left to land clean, riding switch), while the
     // flight stays ballistic along the frozen takeoff direction.
     const spinning: SkiState = {
       ...cruising,
@@ -700,7 +742,8 @@ describe("stepSkiing", () => {
 
     const state = stepSkiing(spinning, { ...noInput, up: true }, 0.1);
 
-    expect(state.heading).toBeLessThan(3.0);
+    expect(state.heading).toBeGreaterThan(3.0);
+    expect(state.heading).toBeLessThanOrEqual(Math.PI);
     expect(state.flightHeading).toBe(0.5);
     expect(state.speed).toBe(BASE_SPEED);
     expect(state.lateral).toBeCloseTo(BASE_SPEED * Math.sin(0.5) * 0.1, 10);

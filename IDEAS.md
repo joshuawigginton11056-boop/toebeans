@@ -75,7 +75,19 @@ slope camera ever gets, so it's the natural inspection stage.
 - Keep the dawn-vignette lighting as is — the point is seeing the
   textures under the game's real light, up close.
 
-## (slope-mech) Turning round 7: riding switch first-class + soften the skid (playtest, 2026-07-23)
+## (slope-mech) ~~Turning round 7~~ — BUILT 2026-07-23 (stance-aware W + sin⁴)
+
+**(BUILT 2026-07-23 — see ROADMAP. Director-picked: fix option 1
+(stance-aware W — the seek targets the fall line in your current
+stance, which re-calls round 4's bar and retires the exactly-backwards
+tie-break) plus the sin⁴ softening. Measured results: W riding switch
+reaches −12, W+Shift −16, mirrored diagonals ±3π/4 exact; 45° carve
+bleed halved (24.5 → 14.25 u/s²), hockey stop unchanged ~0.36s. One
+sketch claim measured wrong: sin⁴ does NOT keep the *boosted* crossing
+spent — it arrives at ~3.7 u/s and the backstop dump eats it, a
+~4.4 u/s one-frame bite (unboosted still arrives spent at ~0.02).
+Raising the peak to fix it would undo the softening, so the bite
+shipped as the tuning knob — the headline playtest question.)**
 
 **The verdict (director, on round 6):** the round-5 jerk is gone, but
 "it feels abrupt" — and the real ask is bigger: **"I want to be able to

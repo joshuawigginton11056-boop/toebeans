@@ -3043,6 +3043,92 @@ the diagnosis above. The bible's transition note records round 1's
 verdict; realism snow remains unapproved, so the no-other-snow-work rule
 still holds.
 
+## (slope-mech) 2026-07-23 — M2: turning round 7 — riding switch first-class; sin⁴ skid
+
+Riding switch is a real way down the hill now. Director's picks from the
+parked round-7 sketch: **option 1 (stance-aware W) plus the sin⁴
+softening** — which also re-calls round 4's bar ("return from switch on
+W alone"): W no longer flips you forward from switch; coming back is a
+deliberate held carve through sideways.
+
+- **Stance-aware W** (`shared/src/skiing.ts`): W's seek now targets the
+  fall line *in your current stance* — forward it eases heading → 0
+  exactly as before; riding switch it eases → ±π, so W backwards means
+  "straighten out and go faster backwards." The director's exact ask
+  ("when I go backwards I can only go base speed, and if I press W I
+  flip forwards again") is now the measured behavior: W riding switch
+  reaches **−12** (full lean speed backwards, was capped at −8), and
+  W+Shift **−16** (boost was always stance-symmetric; now W doesn't
+  sabotage it). W+steer holds the mirrored carve diagonals in switch
+  (±3π/4 — each key keeps pulling toward its own screen side, matching
+  how plain steering already worked in switch). The seek's target is
+  always in the heading's own half, so W never carries the skis across
+  sideways — which retires round 4's exactly-backwards tie-break: dead
+  backwards is switch's *stable point* now, not a boundary to dither
+  across. Mid-air, W squares the body up for the nearest clean landing
+  (past sideways it eases on toward backwards — the least rotation left).
+- **The skid curve softened sin² → sin⁴**: full-sideways skid untouched
+  (hockey stop from boost still ~0.36s), but the mid-carve bleed roughly
+  halves — a 45° carve scrubs at 14.25 u/s² instead of 24.5, so held
+  diagonals and slalom swings keep their flow.
+- **One honest finding, measured, deliberately shipped:** the round-7
+  sketch claimed sin⁴ keeps crossings spent — that's true unboosted
+  (arrives at 0.02 u/s) but **wrong for the boosted worst case**, which
+  crosses the narrowed high-scrub zone too fast and arrives at ~3.7 u/s.
+  The round-6 backstop dump eats it (never uphill, never reversed — a
+  0.00s-uphill boosted pivot, same as round 6), but that's a ~4.4 u/s
+  one-frame lateral bite at a boosted crossing (round 6: 0.88; round 5's
+  rejected jerk: ~27). The alternative — raising SKID_SCRUB until the
+  boosted crossing dies — measures as undoing the softening entirely (at
+  peak 90 a 45° carve is back to sin² bleed) and sharpening the hockey
+  stop, the wrong trade against the "abrupt" verdict. So the bite stands
+  as a tuning knob; whether it reads as the new edge biting or as a snap
+  is the headline playtest question.
+- The slope hint chip `↑ · downhill` became `↑ · faster` — round 4's
+  label went stale the moment W stopped meaning "flip forward" (small
+  shared-territory edit in `hud.ts`). **No SAVE_VERSION bump** (no
+  state-shape change) and **zero renderer changes** — the rig's easing
+  reads the new targets for free.
+- Tests 84 → 85: the round-4 bar test is inverted into the round-7 bar
+  ("stays riding switch on W — straightens backwards and speeds up",
+  asserting it never leaves switch and lands at exactly −MAX_SPEED),
+  plus new tests for boost-backwards, the dead-backwards stable point,
+  and the per-stance-change-path jerk bounds (plain < 2, boosted < 6 —
+  pinned so a future scrub retune can't silently reopen the snap). The
+  tie-break test is retired; the seek/diagonal/mid-air tests re-target
+  to the stance-aware goals; all round-6 scrub/dump/never-uphill tests
+  survive, with the round-5 bar test now also asserting the
+  post-crossing speed is ≤ the flip epsilon.
+- `npm run check` (85 tests) and `npm run build` pass. Verified against
+  the real served modules on this session's own dev server (5302, fresh
+  start): W-switch −12 / W+boost-switch −16 at heading ±π exactly,
+  mirrored diagonals ±2.3562 exact, boosted pivot 0.00s uphill crossing
+  at 3.742 → −0.620 with max lateral jump 4.361 and ending −15.3 riding
+  switch, plain pivot crossing at 0.018 with max jump 0.286, 45° carve
+  keeping 5.66 u/s after 1s (sin² kept ~2.7), hockey stop 0.36s, aligned
+  coasting untouched at exactly 14.00, and the `↑ · faster` chip in the
+  DOM. Zero console errors. What switch *feels* like as a first-class
+  stance is the eyeballs item below.
+
+**What to playtest:** `npm run dev`, Enter to ski. Carve through
+sideways (the run dies into the pivot as before), then just… stay
+backwards: hold W — you should straighten out tails-first and build to
+full speed, no flip; add Shift for full boost backwards; steer keys
+still pull toward their screen sides. Come back forward with a held
+steer carve when *you* choose. The feel questions: does riding switch
+feel like a real stance now — would you take a whole section backwards
+on purpose? Does W-in-switch doing "faster backwards" match your
+instinct, or do you ever miss W-as-flip (returning forward now costs a
+deliberate carve through the skid)? Do 45° carves keep their flow with
+the softened bleed? And the honest-finding question: boost a pivot
+clear through sideways — the moment of crossing has a small bite now;
+edge-work or snap?
+
+**Next:** per the slope-mech queue — a finish line (prerequisite for
+XP, parked since 2026-07-20), tree limbs + the crouch control (the
+missing second hazard), or purpose-built big jumps (the 360 question).
+Music still deliberately last, then the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
