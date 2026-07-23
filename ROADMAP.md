@@ -4641,6 +4641,44 @@ crevasse art, and the rock-gate spires + visual lane following `laneHalfWidth`
 route-bending decision (#3) is the biggest remaining skeleton question; the
 tired-hop jump-gate follow-up and the `dt`-clamp are still queued in IDEAS.
 
+## (slope-vis) 2026-07-23 — Spray reads in the sun + a lens splash on the camera
+
+Director callout: "the snow spray is difficult to see, especially in the sun,
+and there's no splash in the camera to make it feel immersive." Both in
+`skiScene.ts`, still zero mechanics↔visuals seam — driven off the same
+anchor-motion speed/carve signals the spray already reads.
+
+- **Spray visibility.** White powder over sunlit-white snow has no contrast,
+  and it only worsens toward the sun glow (the brightest thing on screen). The
+  fix is a value break, not more white: the plume is **cooled to snow-shadow
+  blue** (palette #2 `#D3DFF0`) — real powder self-shadows to a cool blue-white,
+  exactly the tone that separates from warm sunlit snow — and made **denser**
+  (`SPRAY_PEAK_ALPHA` 0.38→0.52, `SPRAY_BASE_RATE` 1600→2200, pool 2800→4000 for
+  the headroom). Grain size left alone: enlarging it is what read as "orbs" last
+  pass (the parked density note's warning). Flurries stay white — only the
+  spray's material color changed. This is the "powder density look-pass" parked
+  in IDEAS after the loose-snow chunk, now cashed in with the sun-contrast fix.
+- **Lens splash.** A new 2D overlay `<canvas>` laid over the WebGL canvas (a
+  sibling in `#app`, `pointer-events:none` so camera clicks pass through,
+  default z so the body-level HUD still wins). Soft snow splats hit the "lens"
+  while you carve at speed — center-weighted toward the carve side, low in
+  frame where the plume erupts — then drip down, melt (spread + squash), and
+  fade. Keyed off the same speed × carve signal as the spray, gated by camera
+  closeness (immersion is a close-camera thing; zoomed out it barely splats).
+  A `MutationObserver` mirrors the ski canvas's `display` so a mid-melt splat
+  never freezes over the lobby, and the overlay skips its clear/repaint entirely
+  on an idle glide (zero fill when nothing's on the lens).
+
+`npm run check` passes (typecheck + 113 tests). Live-verification: the render
+loop pauses whenever the Browser pane is hidden (same wall as the loose-snow
+chunk), so the moving powder/splats couldn't be captured from this session —
+what *was* verified with the pane hidden: app boots, console clean through the
+lobby→slope switch, and the overlay canvas is correctly created, positioned,
+`pointer-events:none`, and visibility-mirrors the ski canvas both ways
+(none in the lobby, shown on the slope). The look itself — plume density and
+splat frequency/opacity — is the director's pane call; the knobs are all named
+constants at the top of the spray/lens tuning blocks.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

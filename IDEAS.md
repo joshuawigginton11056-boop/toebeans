@@ -154,12 +154,19 @@ this is the trick-landing flourish riding on top of it.)
 The ski-trail spray + screen flurries landed and merged. Open threads on
 them, all `skiScene.ts`:
 
-- **Powder density look-pass.** The merged spray reads as a light-to-moderate
-  mist; the director's reference images are near-opaque powder *walls* off a
-  hard carve. Denser is a knob away — the safe dials are `SPRAY_PEAK_ALPHA`
-  (0.38 now), `SPRAY_BASE_RATE` (1600/s), and pool size — but watch the ceiling:
-  the first pass over-shot into "white orbs" when grains were too big/opaque, so
-  push count and alpha before size. Await the director's pane call.
+- ~~**Powder density look-pass.**~~ **DONE 2026-07-23** (see ROADMAP: "Spray
+  reads in the sun + a lens splash"). Director callout "hard to see, especially
+  in the sun" cashed this in: plume cooled to snow-shadow blue for a value break
+  against sunlit white, plus denser (`SPRAY_PEAK_ALPHA` 0.52, `SPRAY_BASE_RATE`
+  2200, pool 4000). Count + alpha only — size still untouched (the "white orbs"
+  ceiling). Whether it now matches the near-opaque reference walls is the
+  director's pane call; the knobs are named constants if he wants more.
+- **Lens splash — LANDED 2026-07-23** (same ROADMAP entry). A 2D overlay canvas:
+  snow splats on the "lens" while carving at speed, dripping/melting/fading.
+  Open follow-ups if the director wants them: tie a heavier one-shot splat to
+  the **landing "poof"** below (share the impulse hook); and the splat tint
+  (`LENS_TINT`) / frequency (`LENS_SPLAT_RATE`, `LENS_PEAK_ALPHA`) are all his
+  pane call.
 - **Landing "poof" puff.** A one-shot outward burst of the same powder on
   touchdown from a jump (and on the trick-landing slide). The emitter's already
   there; it needs an impulse hook off the airborne→grounded transition (the

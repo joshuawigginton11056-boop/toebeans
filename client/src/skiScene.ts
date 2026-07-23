@@ -186,6 +186,9 @@ export function createEnvironment(
   // Loose snow: the rooster-tail spray off the skis and the ambient
   // screen flurries (see the VISUAL EFFECTS section below).
   createSnowEffects(scene);
+  // The camera lens splash — a 2D overlay over the canvas (needs the renderer
+  // to find its DOM parent and to mirror its visibility).
+  createLensSplash(renderer);
 
   return { sun, skyDome, sunBillboard, slope, trail };
 }
@@ -1141,10 +1144,19 @@ function updateSnowTrail(
 // "many, tiny, faint, slow": thousands of small low-alpha grains that expand
 // and hang like real powder rather than a few ballistic blobs. Speeds are
 // world units/sec; the sim cruises ~8, boosts ~16 (BASE_SPEED / BOOST_SPEED).
-const SPRAY_MAX = 2800; // big pool — a hard fast carve fills most of it
+//
+// VISIBILITY PASS (slope-vis, 2026-07-23 — director: "hard to see, especially
+// in the sun"). White powder over sunlit-white snow has no contrast, and it
+// only gets worse toward the sun glow (the brightest thing on screen). Two
+// levers, per the parked look-pass note (push count + alpha before size):
+// the plume is COOLED to snow-shadow blue (SPRAY_COLOR — real powder billows
+// self-shadow to a cool blue-white, which is exactly the value break that
+// reads against warm sunlit snow), and made denser (higher rate + peak alpha).
+// Grain size is left alone — enlarging it is what read as "orbs" last pass.
+const SPRAY_MAX = 4000; // big pool — headroom for the raised rate + carve boost
 const SPRAY_MIN_SPEED = 2.5; // below this the skis just glide — no kick-up
 const SPRAY_FULL_SPEED = 14; // spray saturates around here
-const SPRAY_BASE_RATE = 1600; // grains/sec at full spray, both skis
+const SPRAY_BASE_RATE = 2200; // grains/sec at full spray, both skis
 const SPRAY_LIFE = 0.7; // seconds — powder hangs before it settles
 const SPRAY_LIFE_VAR = 0.3;
 // Powder is light: weak gravity, strong air drag, so the plume decelerates
@@ -1153,7 +1165,10 @@ const SPRAY_GRAVITY = 2.6;
 const SPRAY_DRAG = 2.2; // per-second velocity damping (air resistance)
 const SPRAY_TURB = 2.0; // random roil that keeps the cloud from looking rigid
 const SPRAY_GROW = 2.4; // each grain expands to ~this× as it billows out
-const SPRAY_PEAK_ALPHA = 0.38; // faint per grain — density builds the body
+const SPRAY_PEAK_ALPHA = 0.52; // faint per grain — density builds the body
+// Snow-shadow blue #D3DFF0 (palette #2) — the cool cast that lets the plume
+// read against sunlit-white snow and the warm sun glow. Flurries stay white.
+const SPRAY_COLOR = new THREE.Vector3(0xd3 / 255, 0xdf / 255, 0xf0 / 255);
 // A respawn teleports the anchor a whole run in one frame — that reads as an
 // absurd speed. Anything past this is a jump, not skiing: emit nothing.
 const SPRAY_TELEPORT_SPEED = 40;
@@ -1167,6 +1182,26 @@ const FLURRY_UP = 5;
 const FLURRY_DOWN = 4;
 const FLURRY_FALL = 0.7; // world units/sec of gentle settling
 const FLURRY_WIND_X = 0.5;
+
+// Lens splash tuning (slope-vis, 2026-07-23 — director: "there's no splash in
+// the camera to make it feel immersive"). A 2D overlay canvas over the WebGL
+// canvas: soft snow splats that hit the "lens" while you carve at speed, slide
+// down, melt out, and fade — the you're-down-in-it read the 3D flurries can't
+// give (they're always at least a near-plane away). Pure screen space, keyed
+// off the same speed/carve signals as the spray, so no seam crosses. The
+// overlay is pointer-events:none (camera clicks pass through) and mirrors the
+// ski canvas's visibility so nothing lingers over the lobby.
+const LENS_SPLAT_MAX = 70; // hard cap on live splats (bounds fill cost)
+const LENS_SPLAT_RATE = 16; // splats/sec at full carve, before the closeness gate
+const LENS_BIG_CHANCE = 0.12; // fraction that are bigger, longer "direct hits"
+const LENS_LIFE = 0.5; // seconds a splat lingers before it's gone
+const LENS_LIFE_VAR = 0.5;
+const LENS_SLIDE = 55; // px/sec a splat drips down the lens
+const LENS_MELT = 70; // px/sec a splat spreads as it melts
+// Cool-white, same snow-shadow family as the plume — a splat is that powder
+// hitting glass. Kept subtly translucent so it never blocks the play read.
+const LENS_TINT = "233, 240, 250";
+const LENS_PEAK_ALPHA = 0.34;
 
 // Both systems draw as soft round sprites through this one shader. Point size
 // is world-radius attenuated to pixels; a near-camera fade keeps a flake from
@@ -1282,8 +1317,30 @@ interface FlurrySystem {
   readonly material: THREE.ShaderMaterial;
 }
 
+// One soft splat stuck to the lens: screen position (CSS px), current radius,
+// how far through its melt it is, and its drip velocity.
+interface LensSplat {
+  x: number;
+  y: number;
+  r: number;
+  vy: number; // downward drip, px/sec
+  grow: number; // melt spread, px/sec added to r
+  life: number;
+  maxLife: number;
+  alpha0: number;
+}
+
+interface LensSplashSystem {
+  readonly canvas: HTMLCanvasElement;
+  readonly ctx: CanvasRenderingContext2D;
+  readonly splats: LensSplat[];
+  emitAccum: number;
+  wasDrawn: boolean; // last frame left ink on the canvas (so we clear once)
+}
+
 let spray: SpraySystem | null = null;
 let flurry: FlurrySystem | null = null;
+let lensSplash: LensSplashSystem | null = null;
 
 // Per-frame skier/camera memory (module-level, like decorState/snowTextures).
 const effectsClock = new THREE.Clock();
@@ -1312,6 +1369,9 @@ function createSnowEffects(scene: THREE.Scene): void {
     new THREE.BufferAttribute(sAlpha, 1).setUsage(THREE.DynamicDrawUsage),
   );
   const sMat = createSnowParticleMaterial({ fogNear: 45, fogFar: 150 });
+  // The spray plume runs cool (snow-shadow blue) so it reads against sunlit
+  // snow; flurries keep the material's default white. See SPRAY_COLOR.
+  sMat.uniforms.color!.value.copy(SPRAY_COLOR);
   const sPoints = new THREE.Points(sGeo, sMat);
   sPoints.frustumCulled = false; // the shader places points; bounds are stale
   sPoints.renderOrder = 3;
@@ -1406,6 +1466,26 @@ function updateSnowEffects(
 
   if (spray) updateSpray(dt, anchor, speed, velX, velZ, trailInput);
   if (flurry) updateFlurries(dt, camera, anchor);
+  if (lensSplash) {
+    // Same signals the spray uses: how fast, how hard the carve, and how close
+    // the camera is (immersion is a close-camera thing — zoomed out, snow on
+    // the lens makes no sense, so the far view barely splats). Grounded only.
+    const grounded = trailInput?.grounded ?? false;
+    let intensity = 0;
+    let carveSide = 0;
+    if (grounded && speed > SPRAY_MIN_SPEED) {
+      const speedF = Math.min(
+        1,
+        (speed - SPRAY_MIN_SPEED) / (SPRAY_FULL_SPEED - SPRAY_MIN_SPEED),
+      );
+      const sideF = speed > 0.01 ? Math.min(1, Math.abs(velX) / speed) : 0;
+      const dist = camera.position.distanceTo(anchor);
+      const closeness = 1 - smoothstep01(10, 34, dist);
+      intensity = speedF * (0.4 + 0.6 * sideF) * closeness;
+      carveSide = velX >= 0 ? 1 : -1;
+    }
+    updateLensSplash(dt, intensity, carveSide);
+  }
 }
 
 function updateSpray(
@@ -1594,6 +1674,142 @@ function updateFlurries(
     positions[i * 3 + 2] = camPos.z + oz;
   }
   f.points.geometry.attributes.position!.needsUpdate = true;
+}
+
+// The lens-splash overlay: a 2D canvas laid over the WebGL canvas (a sibling
+// in the same container). pointer-events:none so camera clicks pass straight
+// through; z-index left default so the body-level HUD still paints on top. A
+// MutationObserver mirrors the ski canvas's `display` (main.ts toggles it on
+// scene switch) so a mid-melt splat never freezes over the lobby.
+function createLensSplash(renderer: THREE.WebGLRenderer): void {
+  const gl = renderer.domElement;
+  const parent = gl.parentElement;
+  if (!parent) return; // no DOM to overlay (e.g. headless) — spray still works
+  const canvas = document.createElement("canvas");
+  const style = canvas.style;
+  style.position = "absolute";
+  style.left = "0";
+  style.top = "0";
+  style.width = "100%";
+  style.height = "100%";
+  style.pointerEvents = "none";
+  style.display = gl.style.display; // start matched to the ski canvas
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  parent.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    parent.removeChild(canvas);
+    return;
+  }
+  lensSplash = { canvas, ctx, splats: [], emitAccum: 0, wasDrawn: false };
+
+  // Follow the ski canvas in and out (main.ts sets display:none in the lobby).
+  // Clear on hide so no splat is frozen on-screen behind the lobby.
+  const observer = new MutationObserver(() => {
+    canvas.style.display = gl.style.display;
+    if (gl.style.display === "none" && lensSplash) {
+      lensSplash.splats.length = 0;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      lensSplash.wasDrawn = false;
+    }
+  });
+  observer.observe(gl, { attributes: true, attributeFilter: ["style"] });
+
+  window.addEventListener("resize", () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  });
+}
+
+// Drive the lens splash. `intensity` is 0..1 (how hard snow is flying at the
+// lens right now — speed × carve × how close the camera is), `carveSide` biases
+// where the splats land toward the direction the spray is thrown.
+function updateLensSplash(
+  dt: number,
+  intensity: number,
+  carveSide: number,
+): void {
+  const ls = lensSplash!;
+  const { ctx, canvas, splats } = ls;
+  const w = canvas.width;
+  const h = canvas.height;
+  const minDim = Math.min(w, h);
+
+  // Emit — accumulate fractional splats so a low rate still lands them.
+  if (intensity > 0.02 && splats.length < LENS_SPLAT_MAX) {
+    ls.emitAccum += LENS_SPLAT_RATE * intensity * dt;
+    let n = Math.floor(ls.emitAccum);
+    ls.emitAccum -= n;
+    while (n-- > 0 && splats.length < LENS_SPLAT_MAX) {
+      const big = Math.random() < LENS_BIG_CHANCE;
+      // Triangular spread, center-weighted, nudged toward the carve side —
+      // that's where the plume is thrown across the fall line.
+      const tri = Math.random() + Math.random() - 1;
+      const x = w * 0.5 + tri * w * 0.42 + carveSide * w * 0.1 * Math.random();
+      // Spray erupts low and rises into frame: land splats across the lower
+      // band, then let them drip further down as they melt.
+      const y = h * (0.4 + Math.random() * 0.55);
+      const base = (0.02 + Math.random() * 0.045) * minDim;
+      splats.push({
+        x,
+        y,
+        r: big ? base * 2.1 : base,
+        vy: LENS_SLIDE * (0.5 + Math.random()),
+        grow: LENS_MELT * (0.5 + Math.random()) * (big ? 1.4 : 1),
+        life: (big ? LENS_LIFE * 1.6 : LENS_LIFE) +
+          (Math.random() - 0.5) * LENS_LIFE_VAR,
+        maxLife: 0, // set below
+        alpha0: (big ? LENS_PEAK_ALPHA : LENS_PEAK_ALPHA * 0.7) *
+          (0.6 + Math.random() * 0.4),
+      });
+      const s = splats[splats.length - 1]!;
+      s.maxLife = s.life;
+    }
+  }
+
+  // Integrate + reap.
+  for (let i = splats.length - 1; i >= 0; i--) {
+    const s = splats[i]!;
+    s.life -= dt;
+    if (s.life <= 0) {
+      splats.splice(i, 1);
+      continue;
+    }
+    s.y += s.vy * dt;
+    s.r += s.grow * dt;
+  }
+
+  // Draw. Skip the clear+repaint entirely when nothing's on screen and nothing
+  // was last frame (idle glide costs zero fill).
+  if (splats.length === 0) {
+    if (ls.wasDrawn) {
+      ctx.clearRect(0, 0, w, h);
+      ls.wasDrawn = false;
+    }
+    return;
+  }
+  ctx.clearRect(0, 0, w, h);
+  for (const s of splats) {
+    const t = s.life / s.maxLife; // 1 at birth → 0 at death
+    // Quick appear, long fade — a splat hits then melts off.
+    const alpha = s.alpha0 * Math.min(1, t * 3.5) * t;
+    if (alpha <= 0.003) continue;
+    const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r);
+    g.addColorStop(0, `rgba(${LENS_TINT}, ${alpha})`);
+    g.addColorStop(0.5, `rgba(${LENS_TINT}, ${alpha * 0.5})`);
+    g.addColorStop(1, `rgba(${LENS_TINT}, 0)`);
+    ctx.fillStyle = g;
+    // Slight vertical squash so a melting splat drips rather than stays a disc.
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.scale(1, 1.25);
+    ctx.beginPath();
+    ctx.arc(0, 0, s.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ls.wasDrawn = true;
 }
 
 // ---------------------------------------------------------------------------
