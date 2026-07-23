@@ -4366,7 +4366,13 @@ silhouettes). Rocks and filler props still fill the gaps in the near band.
 
 Art Style Bible updated with a **"Trees, cleanup"** amendment.
 
-## Milestones
+**Next:** *(slope-vis)* still awaiting the director's look-pass on the
+frosted-green pines (green hex + frost amount + the open-canopy "does light
+pass through enough" question). The new-tree *search* stays paused pending
+that call. The slope now shows only pines + rocks + filler — no birches —
+so the look-pass is against a clean tree set. Session is at a clean stopping
+point: `master` is green (`npm run check` passes), branch pushed and merged
+up, no work in progress.
 
 Tracking toward the v1.0 web launch scope in
 [DESIGN.md](DESIGN.md#scope-v10--v1x--steam). Check items off as sessions
