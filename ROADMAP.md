@@ -3741,7 +3741,28 @@ visible, or is subtle right? And does one attempt per landing feel
 correct when you mash, or do you expect each press to get its own little
 struggle?
 
-**Next:** the round-10 queue — a finish line (prerequisite for XP,
+**Playtest verdict (director, 2026-07-23): "too rapid and shallow —
+needs to be a slow and deep attempt."** The mechanism stands; the shape
+is wrong — the whole struggle currently fits in 0.3s with a 0.35 knee-
+dip, and it reads as a stutter rather than spent legs straining. Retune
+notes for the next session (all three knobs already exist, no new
+machinery): stretch `TIRED_HOP_DURATION` (shared/src/skiing.ts —
+something like 0.7–0.9s; the renderer's buckle/push phases are progress
+fractions, so they stretch with it for free) and deepen `TIRED_DIP`
+(client/src/skiRender.ts — toward a real labored crouch; `TIRED_LIFT`
+is taste, but the *hop* staying pathetic is the point — the effort goes
+into the slow deep buckle, not the air). Two interactions to keep true
+while retuning: the one-attempt-per-lockout guarantee only holds while
+`TIRED_HOP_DURATION ≥ LANDING_RECOVERY` (a longer cue keeps it, and
+also means the cue now visibly outlives the lockout — the existing
+real-launch cancel already covers a recovered press under a leftover
+cue, and there's a test pinning it); and at boost speeds the baseline
+tuck is already near full, so a deeper dip clamps invisible there — if
+the slow attempt must read while boosting too, the dip may need to
+express partly through the lift/settle instead of crouch alone.
+
+**Next:** retune the tired hop slow-and-deep (verdict above — its own
+session), then the round-10 queue — a finish line (prerequisite for XP,
 parked since 2026-07-20), tree limbs + the crouch control (the missing
 second hazard), or purpose-built big jumps (director call whether still
 wanted now that spins are a control). Music still deliberately last,

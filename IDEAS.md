@@ -6,9 +6,11 @@ land here instead of in code.
 ## (slope-vis) Dressing the tired hop (from the locked-out-jump cue, 2026-07-23)
 
 A jump press during the landing lockout now plays a "tired attempt" —
-`SkiState.tiredHop` is a 0.3s clock the mechanics renderer shapes into a
-weak knee-buckle and a few-centimeter bob (skiRender.ts, existing rig
-knobs only — no `skierModel.ts` change was needed). Two polish layers
+`SkiState.tiredHop` is a short clock (`TIRED_HOP_DURATION`; being
+retuned slower-and-deeper per the 2026-07-23 verdict) the mechanics
+renderer shapes into a weak knee-buckle and a few-centimeter bob
+(skiRender.ts, existing rig knobs only — no `skierModel.ts` change was
+needed). Two polish layers
 would sell it, both slope-vis territory: a sound (a soft effortful "hup"
 or ski-scuff that goes nowhere — `audio.ts` can frame-diff the clock
 starting, same trick as the jump whoosh), and a rig touch (a head-drop or
