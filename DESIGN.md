@@ -192,6 +192,23 @@ interact with your space for more XP → repeat.
 > The painted-detail rollout across all 24 slope models landed
 > 2026-07-23. Until the rewrite lands: no new *flat-shaded* assets;
 > everything else below still governs.
+>
+> **Trees (director verdict on the mystical-pines chunk, 2026-07-23):**
+> the sequoia-grove direction stands — the slope's trees are the
+> MegaKit stylized pines (giant colonnade + fill; see that ROADMAP
+> entry). Two amendments from the verdict:
+>
+> - **The old Ultimate Nature Pack trees are OUT** — birches, dead
+>   birches, and the amber-canopy pines all leave the slope, not just
+>   the pines. (The lobby still shows three `PineTree_Snow` models —
+>   swapping those and then deleting the files is tagged for the lobby
+>   session in IDEAS.md.)
+> - **Frosted foliage, not white:** pine canopies must read as frost
+>   over *visible green* — not the solid snow-white of the chunk's
+>   first pass. This adds a **pine-green family to the palette by
+>   director call** (the first green in the game; exact hex to be
+>   tuned on screen next session, then recorded here). The
+>   snow-shadow family stays the frost color on top of it.
 
 The binding reference for all art in the game. Written 2026-07-21 from the
 director's five *Omno* reference images and their notes on each. When

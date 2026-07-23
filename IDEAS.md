@@ -1084,3 +1084,12 @@ already-planned ski-pose session; two are independent.
   tree) rather than scatter. Needs the bible rewrite's word on decimation
   and on how far "set piece" stretches. Models inspected at
   https://poly.pizza/m/9aWlx82xUf (and 4 siblings, all CC0).
+- **(lobby) Swap the lobby's old pines for StylizedPine models** (director
+  call, 2026-07-23) — the slope's tree direction is now the MegaKit
+  stylized pines, and the old Ultimate Nature Pack trees are ordered off
+  the slope entirely. `lobbyRender.ts` still places
+  `PineTree_Snow_{1,4,2}.glb`; swap them to `StylizedPine_*` equivalents
+  (watch the height fields — the new pines are 7–10m at scale 1) so
+  slope-vis can delete every `PineTree_Snow`/`BirchTree_*` file and their
+  CREDITS rows. Note the frosted-green canopy retune (bible transition
+  note) may re-export the GLBs first — coordinate, don't race it.
