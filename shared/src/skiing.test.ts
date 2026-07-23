@@ -285,6 +285,15 @@ describe("stepSkiing", () => {
     expect(state.tiredHop).toBeCloseTo(started - 0.04, 5);
   });
 
+  it("keeps the tired-hop cue at least as long as the lockout", () => {
+    // The one-attempt-per-lockout guarantee above only holds while the cue
+    // outlasts the lockout (a shorter cue would hand a masher a second
+    // attempt inside one landing). Pinned so a future retune of either
+    // constant can't silently break it — the 2026-07-23 slow-and-deep
+    // retune (0.3 → 0.8s) leaned on exactly this ordering.
+    expect(TIRED_HOP_DURATION).toBeGreaterThanOrEqual(LANDING_RECOVERY);
+  });
+
   it("plays no tired hop outside the lockout — a free press just charges", () => {
     const state = stepSkiing(cruising, { ...noInput, jump: true }, 0.02);
     expect(state.jumpCharge).toBeCloseTo(0.02, 5);
