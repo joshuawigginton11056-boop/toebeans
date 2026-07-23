@@ -4242,6 +4242,34 @@ Art Style Bible shape-language + asset-sourcing rewrite (still queued;
 now with a third case to codify — alpha-silhouette masks repainted with
 a generated gradient).
 
+## (slope-vis) 2026-07-23 — Trees removed: clean slate before the next tree
+
+Director ask to open the next tree pass: **remove the previous trees.** The
+whole standing-tree scatter is gone — the frosted-green MegaKit pines, plus
+the `BirchTree_Snow` and `BirchTree_Dead_Snow` sets that were still rolling
+in the near/far mix despite the earlier "birches are out" verdict. The three
+tree bands (`giant` colonnade, mixed `near` treeline, far silhouettes)
+collapsed to a single `near` band that now scatters only rocks and small
+ground props (bushes, stump, log) to keep the lane-edge cue. `TREE_SCALE`
+retired with them.
+
+- **Files kept, not deleted:** every tree `.glb` stays in `assets/slope/`
+  so the replacement tree can reuse `loadSlopeDecor`'s loader/painted-detail
+  path. `DECOR_MODELS` just no longer lists them, so they no longer load.
+- **What this costs (flagged for the look-pass):** the flanks read flat and
+  treeless, and the far *depth* silhouettes are gone — the "read distance"
+  cue the bible prizes is muted until a new tree fills it back in. Palette
+  #13 (pine green) stays reserved for that tree.
+- Only `client/src/skiScene.ts` and the docs changed. `npm run check`
+  passes; verified live in the slope-vis dev server (flanks clear of trees,
+  rocks/props still present, no load errors).
+
+Art Style Bible updated with a **"Trees, removed"** amendment.
+
+**Next:** *(slope-vis)* the replacement tree — the paused open-canopy /
+"light passes through" search reopens here, now against a genuinely empty
+slope.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
