@@ -1114,6 +1114,10 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
             object.receiveShadow = true;
           }
         });
+        // Painted detail rollout (approved 2026-07-22, landed 2026-07-23):
+        // patch the template once — every scattered clone() shares the
+        // patched materials, so the whole slope pays for one material set.
+        applyPaintedDetail(gltf.scene);
         templates.set(name, gltf.scene);
       }),
     );
@@ -1126,6 +1130,11 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
   const random = makeRandom(20260721);
   const pick = (list: readonly string[]): THREE.Group =>
     templates.get(list[Math.floor(random() * list.length)]!)!;
+
+  // Trees read slightly larger than before (director ask, 2026-07-23) —
+  // applied as a multiplier on top of each band's scale roll so the PRNG
+  // sequence (and with it the whole scatter layout) stays identical.
+  const TREE_SCALE = 1.15;
 
   const place = (
     template: THREE.Group,
@@ -1147,6 +1156,7 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
   for (const side of [-1, 1]) {
     for (let z = -4; z > -(SLOPE_LENGTH + 30); z -= 2.5 + random() * 3) {
       const roll = random();
+      const isTree = roll < 0.75; // pines, birches, dead birches
       const model =
         roll < 0.3
           ? pick(DECOR_MODELS.pines)
@@ -1158,7 +1168,7 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
                 ? pick(DECOR_MODELS.rocks)
                 : pick(DECOR_MODELS.filler);
       const x = side * (LANE_EDGE + 0.8 + random() * 9);
-      place(model, x, z, 0.85 + random() * 0.5);
+      place(model, x, z, (0.85 + random() * 0.5) * (isTree ? TREE_SCALE : 1));
     }
   }
 
@@ -1171,38 +1181,23 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
           ? pick(DECOR_MODELS.pines)
           : pick(DECOR_MODELS.deadBirches);
       const x = side * (LANE_EDGE + 11 + random() * 16);
-      place(model, x, z, 1.2 + random() * 0.6);
+      place(model, x, z, (1.2 + random() * 0.6) * TREE_SCALE);
     }
   }
 
-  // TEXTURE TEST pairs: the same model at the same distance, mirrored
-  // across the lane — LEFT stays the flat original, RIGHT gets the painted
-  // detail. Identical rotation and scale so the only difference is the
-  // surface. Hugging the lane edge, just proud of the treeline.
-  const pairs: ReadonlyArray<readonly [string, number]> = [
-    ["BirchTree_Snow_1", -9],
-    ["PineTree_Snow_1", -14],
-    ["Rock_Snow_1", -18],
-  ];
-  for (const [name, z] of pairs) {
-    const template = templates.get(name)!;
-    for (const side of [-1, 1]) {
-      const copy = template.clone();
-      copy.position.set(side * (LANE_EDGE + 0.4), 0, z);
-      copy.scale.setScalar(1.15);
-      if (side === 1) applyPaintedDetail(copy);
-      scene.add(copy);
-    }
-  }
+  // The 2026-07-22 texture-test pairs (flat vs painted, mirrored across
+  // the lane) are retired — with the rollout above, the whole scatter
+  // wears the approved painted detail.
 }
 
 // ---------------------------------------------------------------------------
-// TEXTURE TEST (2026-07-22, direction session) — the 2026-07-22 verdict
-// split: painted detail on trees/rocks/props is APPROVED (rollout across
-// all 24 slope models is its own upcoming chunk); the painted *snow* patch
-// was rejected in favor of realism (now the REALISM SNOW section above),
-// and its canvases are gone from here. Everything below is generated in
-// code — no image files, no license rows.
+// PAINTED DETAIL (test 2026-07-22, promoted 2026-07-23) — the 2026-07-22
+// verdict split: painted detail on trees/rocks/props was APPROVED ("I like
+// the trees") and is now rolled across all 24 slope models (every decor
+// template gets it at load, in loadSlopeDecor above); the painted *snow*
+// patch was rejected in favor of realism (now the REALISM SNOW section
+// above), and its canvases are gone from here. Everything below is
+// generated in code — no image files, no license rows.
 //
 // The converted GLBs carry NO UV coordinates (the OBJ→GLB palette tool
 // dropped them), so the trees can't wear an image texture the normal way.
@@ -1372,7 +1367,9 @@ function applyPaintedDetail(object: THREE.Object3D): void {
       : [child.material];
     const patched = materials.map((material) => {
       if (!(material instanceof THREE.MeshStandardMaterial)) return material;
-      const detail = DETAIL_BY_MATERIAL[material.name] ?? {
+      // Strip Blender-style ".001" suffixes (Rock_Snow_2 has Rock.001 /
+      // Snow.001) so every model hits its intended detail row.
+      const detail = DETAIL_BY_MATERIAL[material.name.replace(/\.\d+$/, "")] ?? {
         map: "grain" as const,
         scale: 1.2,
         strength: 0.5,
