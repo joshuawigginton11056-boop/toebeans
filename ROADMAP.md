@@ -4177,9 +4177,44 @@ does the camera drift too eagerly during normal play — is the deadzone
 big enough, the squared ramp gentle enough? On a touchscreen: does pinch
 feel natural alongside the drag-look?
 
-**Next:** tired-hop retune round 2 (faster, an actual small hop — notes
-in that entry above), then the round-10 queue: a finish line, tree limbs
-+ crouch, or purpose-built big jumps.
+**Playtest verdict (director, 2026-07-23): both halves need a round 3.**
+Recorded for the next session (no code changed this turn):
+
+- **Zoom must be free — decouple the angle from the distance.** The
+  radius-driven framing blend was wrong for what he wants: because
+  elevation/aim slide with the radius, zooming *swings the angle* between
+  the low chase framing (zoomed in) and the high overhead framing (zoomed
+  out), and it reads as "it only zooms between the top angle and the close
+  one" rather than a free in/out. His call: **hold one fixed framing angle
+  and let the wheel move only the distance** — this settles the "should
+  the angle hold fixed as you zoom" open question in favor of *fixed*. So
+  `ZOOM_KNOTS` / `framingForRadius` come out; keep a single fixed
+  elevation + aim (the classic three-quarter is the natural pick, and
+  keeps the default look) and drive `radius` alone from the wheel/pinch
+  across a free — likely *wider* — range. (Range is now the only zoom
+  tuning knob; revisit MIN/MAX so "free" actually feels free.)
+- **Mouse look must not be capped by the cursor — go relative + hide the
+  cursor.** Mouse-*position* look tops out when the cursor reaches the
+  window edge, so "you can't look past the window." He wants to **look as
+  far as he keeps turning the mouse**, with the cursor ideally hidden.
+  That's option (b) from the round-1 verdict — **FPS-style relative
+  mouselook via Pointer Lock**: accumulate `mousemove` deltas, hide the
+  system cursor, escape the screen edges. Pointer Lock's click-to-engage
+  + Esc-to-release ceremony (the thing round 1's verdict wanted to avoid)
+  is now the accepted trade for unlimited look. Open design calls for the
+  session: does yaw go fully unbounded (wrap all the way around) now that
+  the cursor no longer bounds it, or keep a clamp; pitch still clamps
+  (`MIN/MAX_ELEVATION`) so you can't look under the snow or past straight
+  up; the `LOOK_EASE` smoothing and the touch drag/pinch path (touch has
+  no cursor problem) carry over unchanged. The no-click *position* mapping
+  and its deadzone/squared-ramp are superseded — mouse gets Pointer Lock
+  instead.
+
+**Next:** camera round 3 — free zoom (fixed angle, distance-only) +
+Pointer-Lock relative mouselook with a hidden cursor (verdict above).
+Then tired-hop retune round 2 (faster, an actual small hop — notes in
+that entry above), then the round-10 queue: a finish line, tree limbs +
+crouch, or purpose-built big jumps.
 
 ## (slope-vis) 2026-07-23 — Frosted-green pines: green needles, white frosted tips
 

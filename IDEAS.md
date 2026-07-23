@@ -28,6 +28,14 @@ back on release), so parked rather than fixed — if playtest catches it,
 the knob is `DECOR_BEHIND`, at whatever uphill reach the recycling
 window can afford.
 
+**Update (2026-07-23):** camera round 3 (verdict in ROADMAP) replaces
+the snap-back peek with Pointer-Lock relative mouselook — the look no
+longer snaps home, and yaw may go fully unbounded, so a player can rest
+the camera pointed straight uphill for as long as they like. That turns
+this from a brief self-correcting glimpse into a holdable view, which
+raises the priority: `DECOR_BEHIND` (and possibly the fog far plane on
+the uphill side) likely wants to reach as far back as the view can hold.
+
 ## (slope-vis) Dressing the tired hop (from the locked-out-jump cue, 2026-07-23)
 
 A jump press during the landing lockout now plays a "tired attempt" —
