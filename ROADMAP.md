@@ -3098,14 +3098,39 @@ way, which is what this round does, procedurally and free:
   displaced field if `normalBias` needs a bump; frame rate on Josh's GPU
   (~400k tris × main + shadow pass — `SNOW_X_STEP`/`SNOW_Z_STEP` in
   skiScene.ts are the dial if it chokes).
-- `npm run check` passes (84 tests). Live verification pending: the
-  in-app browser pane suspends when hidden (rAF never fires — same as
-  round 1), so the director opens `localhost:5303` themselves.
+- `npm run check` passes (84 tests). Live verification: the in-app
+  browser pane suspends when hidden (rAF never fires — same as round 1),
+  and this time `localhost:5303` wouldn't load for the director either
+  (a stale prior session's server holds the port), so verification went
+  through the merge to master and the director's own dev server (5173).
 
-**Next:** *(slope-vis)* director verdict on round 2. If it still falls
-short, the paid pack is *not* a fallback (Unity-only, above) — the next
-lever is CC0 photo snow textures layered onto this same displacement
-(ambientCG/Polyhaven, CREDITS rows per the bible's transition note).
+**Playtest verdict (director, 2026-07-23): "the snow finally has depth,
+and looks great."** Realism snow is APPROVED — displaced geometry is the
+direction. Two refinements asked in the same breath, landed same day:
+
+- **"Weird wavy/jagged effect when turning"** — diagnosis: straight
+  grooves run parallel to the grid's fine columns and the carve
+  texture's rows, but *turning* makes them diagonal, where the coarser
+  along-slope resolution staircased both the vertex displacement
+  (`SNOW_Z_STEP` 0.2 vs 0.09 across) and the carve texture's bilinear
+  lookup (5.4 cm texels vs 2.7 across). Both axes now sit near-isotropic:
+  `SNOW_Z_STEP` 0.2 → 0.12 (~305k vertices, from ~205k — the
+  step-size constants remain the dial if any GPU chokes) and the carve
+  map 4096 → 8192 rows (8 MB, matching 2.7 cm texels both ways).
+- **"More texture (random lumpiness)"** — the height field had big
+  smooth dunes and centimeter crust grain, nothing between. Added a
+  mid-scale lump octave (the smooth dune canvas re-sampled at a 4.3-unit
+  tile) in the *real geometry* — lumps sit in silhouettes, self-shadow,
+  and feed the hollow AO tint — subtle in the groomed lane (whose
+  surface must stay under the markers' 6 cm lift), strong on the flanks;
+  plus a second, chunkier shading-only grain octave at the half-meter
+  scale.
+
+**Next:** *(slope-vis)* the snow verdict unblocks the Art Style Bible's
+parked rewrite (shape-language + asset-sourcing sections, per the
+transition note) — and the approved painted-detail rollout across all 24
+slope models is still queued. Snow-cap check on the trees (IDEAS.md)
+belongs to the same look-reconciliation pass.
 
 ## (slope-mech) 2026-07-23 — M2: turning round 7 — riding switch first-class; sin⁴ skid
 

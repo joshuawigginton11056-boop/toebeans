@@ -152,9 +152,9 @@ interact with your space for more XP → repeat.
 >   dapple patch is *not* the snow direction. Snow should read as real
 >   snow: fine sparkle, soft relief, believable sunlit white — while
 >   keeping the two snow palette colors as its family and living under
->   the same dawn lighting. What "realism" means in practice (photo-based
->   CC0 textures vs. procedural sparkle/normal detail) is the next
->   slope-visuals test; it has not been seen or approved yet.
+>   the same dawn lighting. What "realism" means in practice was settled
+>   by round 2 below: **procedural displaced geometry, approved
+>   2026-07-23.**
 >   - **Round 1 (procedural bump + sparkle + canvas ski trails,
 >     2026-07-23): NOT approved** — "the snow is flat, the trails are
 >     too pixelated, there's no depth." (The ski trails themselves stay —
@@ -162,25 +162,29 @@ interact with your space for more XP → repeat.
 >     painted lines.) Round 2 goes to displaced geometry (see ROADMAP
 >     2026-07-23 for the full diagnosis). Realism snow remains
 >     unapproved.
->   - **Round 2 (displaced geometry, 2026-07-23): built, verdict
->     pending.** Real vertex-displaced dunes that cast their own
->     shadows, ski trails carved as actual depth into a GPU height map
->     (sunk core, pushed-up shoulders, sun-shaded walls). Built to match
->     the director's linked reference — the BruteForce Snow & Ice
->     shader's "interactive snow" (see the ROADMAP entry; note the pack
->     itself is Unity-only and can't be used in this engine, so the
->     technique is rebuilt natively). If this round falls short, the
->     next lever is CC0 photo snow textures layered onto the same
->     displacement (those need CREDITS rows).
+>   - **Round 2 (displaced geometry, 2026-07-23): APPROVED** — "the
+>     snow finally has depth, and looks great." Real vertex-displaced
+>     dunes that cast their own shadows, ski trails carved as actual
+>     depth into a GPU height map (sunk core, pushed-up shoulders,
+>     sun-shaded walls). Built to match the director's linked reference
+>     — the BruteForce Snow & Ice shader's "interactive snow" (see the
+>     ROADMAP entry; the pack itself is Unity-only and can't be used in
+>     this engine, so the technique is rebuilt natively, procedurally,
+>     zero image files). Two same-day refinements also landed: isotropic
+>     resolution so carved *turns* don't staircase, and mid-scale
+>     lumpiness in geometry + shading. **Realism snow is settled; the
+>     bible's shape-language and asset-sourcing rewrite (below) is now
+>     unblocked** and waits on its own session, along with the
+>     approved painted-detail rollout across the 24 slope models.
 >
 > The *Omno* references stay the target for mood, lighting, haze, and
-> palette. Signal red stays reserved. The bible's shape-language and
-> asset-sourcing sections get their full rewrite once the realistic
-> snow look is approved — that verdict decides sourcing/tooling rules
-> (image textures need CREDITS rows; painted tree detail is generated
-> in code and needs none). Until then: no new *flat-shaded* assets, and
-> no snow work that isn't the realism test; everything else below still
-> governs.
+> palette. Signal red stays reserved. With the snow verdict in
+> (approved, procedural — zero image files, so no new sourcing/tooling
+> rules were forced), the bible's shape-language and asset-sourcing
+> rewrite is **unblocked but not yet done** — it's its own session,
+> together with the painted-detail rollout across all 24 slope models.
+> Until that rewrite lands: no new *flat-shaded* assets; everything
+> else below still governs.
 
 The binding reference for all art in the game. Written 2026-07-21 from the
 director's five *Omno* reference images and their notes on each. When
