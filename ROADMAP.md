@@ -4472,6 +4472,12 @@ hazard) or purpose-built big jumps. The `dt`-clamp fix (IDEAS, background tabs
 teleport the run) is a separate small shared-`main.ts` chunk worth taking
 soon.
 
+**Follow-up parked immediately after this fix (director, 2026-07-23):** the
+tired-hop *animation* should finish before the next jump is allowed — right
+now the 0.3s lockout ends ~0.2s before the 0.5s cue does, so a jump can fire
+(and cancel the bob) while it's still playing. Gate the jump on `tiredHop` too;
+full routes in IDEAS.md. Its own session.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
