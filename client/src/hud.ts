@@ -170,6 +170,10 @@ const SLOPE_HINTS: readonly Hint[] = [
   // Hold-to-charge: the hold is the half of the control a player can't
   // guess from "jump" alone.
   { key: "Space", label: "hold to jump" },
+  // The air trick (turning round 8) — a gesture nobody would discover
+  // unprompted. "×2" reads as double-tap; a second double stacks a 360,
+  // which the chip leaves for players to find.
+  { key: "Space ×2", label: "air 180" },
   { key: "Shift", label: "boost" },
   { key: "M", label: "mute" },
   { key: "Enter", label: "lobby" },

@@ -5,6 +5,16 @@ export interface SkiInput {
   readonly down: boolean;
   readonly jump: boolean;
   readonly boost: boolean;
+  // The air 180 (turning round 8, director directive 2026-07-23: "I want to
+  // double-Space while in air to do a full 180"): ±1 for exactly one frame
+  // spins the airborne heading a half turn toward that side; 0 otherwise.
+  // The *client* owns the double-tap detection (two Space presses within a
+  // window, both airborne) and the spin side (the last steered direction) —
+  // the sim stays pure and just takes the trick as an input. A second flip
+  // in the same jump stacks to a 360 (director call, 2026-07-23), because
+  // mid-air heading accumulates whole spins. Grounded, flip is deliberately
+  // nothing — the charge system keeps its meaning clean.
+  readonly flip: -1 | 0 | 1;
 }
 
 export interface Chasm {
@@ -35,19 +45,27 @@ export interface SkiState {
   // mid-air it can accumulate whole spins, and landing collapses it (see
   // downhillHeading).
   readonly heading: number;
-  // The direction of travel while airborne, frozen on the takeoff frame —
-  // flight is ballistic (nothing to carve against), so spinning mid-air
-  // turns the body, not the path. While grounded it just tracks the current
-  // travel direction, which is what makes the takeoff freeze automatic.
-  // Transient air state, deliberately not saved: a restore re-derives it
-  // from heading + stance the way the next grounded frame would.
+  // The direction the run is actually traveling, everywhere. Airborne it's
+  // frozen on the takeoff frame — flight is ballistic (nothing to carve
+  // against), so spinning mid-air turns the body, not the path. Grounded it
+  // *grips* onto the ski axis at GRIP_RATE instead of snapping (turning
+  // round 8): ordinary carving turns slower than the grip closes, so on the
+  // snow this equals the ski axis exactly — but a landing can put the skis
+  // a wide angle off the flight direction, and then you keep sliding the
+  // way you were flying for a beat while the skis bite into the new line.
+  // Transient state, deliberately not saved: a restore re-derives it from
+  // heading + stance (a restore mid-slip grips instantly — same spirit as
+  // a mid-air restore losing its spin).
   readonly flightHeading: number;
   readonly height: number;
   readonly verticalVelocity: number;
-  // Signed speed along the ski axis: positive = traveling toward the ski
-  // tips, negative = tails-first, riding switch (turning round 3 — landing
-  // backwards is a stance, not a crash). Magnitude is how fast; sign is
-  // which end of the skis leads.
+  // Signed travel speed: magnitude is how fast the run is moving (along
+  // flightHeading), sign is the stance — positive = traveling toward the
+  // ski tips, negative = tails-first, riding switch (turning round 3 —
+  // landing backwards is a stance, not a crash). Gripped (the usual case)
+  // travel follows the ski axis, so this is "speed along the skis"; during
+  // a landing slip the skis are off the travel line and the magnitude is
+  // the slide itself.
   readonly speed: number;
   // How long the jump key has been held while grounded, in seconds, capped
   // at JUMP_CHARGE_TIME. Jumping is hold-to-charge (director call,
@@ -140,6 +158,21 @@ const BOOST_TURN_MULTIPLIER = 1.4;
 // spending the run IS the round-6 model). So a crossing is never faster
 // than a crawl, whichever path reached it.
 const PIVOT_FLIP_MIN_SPEED = 1;
+// The landing grip window (turning round 8, director directive 2026-07-23:
+// "I feel like there's not enough slippage when I land… I should slide
+// forward a bit before going perfectly diagonal"). Grounded travel eases
+// onto the ski axis at this rate (rad/s) instead of snapping — so a landing
+// keeps sliding along the flight direction while the skis bite into the new
+// line, and a bigger landing angle slides visibly longer for free (rate-
+// based, no timer). The value is deliberately above the fastest possible
+// steer (TURN_RATE × BOOST_TURN_MULTIPLIER = 2.52 rad/s), so gripped
+// grounded play can never fall behind the skis: rounds 5–7 physics are
+// bit-for-bit unchanged outside a landing. The worst legal landing slip is
+// π/2 (the landing stance rule picks the sign that keeps travel within a
+// quarter turn of the skis), which grips in ~0.45s; the director's repro
+// (~1.44 rad off) takes ~0.41s. Tuning knob: lower = longer, driftier
+// slides.
+const GRIP_RATE = 3.5;
 // W means "faster, in the stance you're in" (turning round 7, director call
 // 2026-07-23: "I want to be able to turn around and continue down the slope
 // backwards" — riding switch is a first-class way down the hill, not just
@@ -319,6 +352,15 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     if (input.left) heading -= maxTurn;
     if (input.right) heading += maxTurn;
   }
+  // The air 180 (turning round 8): a half turn, on top of whatever fine
+  // re-aim this frame's held steering added — airborne only, and additive,
+  // so a second flip in the same jump stacks to a full 360 (mid-air heading
+  // accumulates whole spins; the landing collapse and stance rule below
+  // already know what to do with either). The sign is the visual spin side;
+  // the rig's easing rolls the body through it.
+  if (!grounded && input.flip !== 0) {
+    heading += Math.PI * input.flip;
+  }
 
   // Speed is signed along the ski axis; the target is the input magnitude
   // projected onto the downhill direction. Pointed downhill that's the full
@@ -353,8 +395,18 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     // hardest. The skid scrub ramps from plain drag on the fall line to a
     // hard hockey-stop skid at full sideways (see SKID_SCRUB).
     const gainingMagnitude = (stepUp ? speed : -speed) >= 0;
-    const skidScrub =
-      COAST_DRAG + (SKID_SCRUB - COAST_DRAG) * Math.sin(heading) ** 4;
+    // The scrub angle is the *worse* of two misalignments: the skis off
+    // the fall line (rounds 6–7 — turning is braking), and the skis off
+    // the travel direction (round 8 — the landing slip: skis sideways to
+    // your motion plow, so a hard diagonal landing bleeds while it slides,
+    // which is what makes the grip read as the skis biting in). Gripped,
+    // the second term is zero in either stance (sin is π-symmetric under
+    // the fourth power), so grounded-only play is rounds 6–7 exactly.
+    const misalignment = Math.max(
+      Math.sin(heading) ** 4,
+      Math.sin(heading - flightHeading) ** 4,
+    );
+    const skidScrub = COAST_DRAG + (SKID_SCRUB - COAST_DRAG) * misalignment;
     const rate = gainingMagnitude
       ? input.boost
         ? BOOST_ACCEL
@@ -363,18 +415,35 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     speed = stepUp
       ? Math.min(target, speed + rate * dt)
       : Math.max(target, speed - rate * dt);
-    // Track the travel direction while grounded, so the takeoff frame
-    // freezes exactly the direction you left the snow moving in.
-    flightHeading = downhillHeading(heading + (speed < 0 ? Math.PI : 0));
+    // The grip (turning round 8): grounded travel eases onto the ski axis
+    // at GRIP_RATE instead of snapping to it. Steering can't outrun the
+    // grip (see GRIP_RATE), so this is a hard lock in ordinary play and a
+    // slide only where a real angle gap exists — a landing. A stance
+    // change (the backstop flip, or speed easing through zero) snaps
+    // instead: the travel direction of ~zero speed is meaningless, and
+    // easing across the half-turn jump would swing the slide through
+    // angles nobody traveled.
+    const motionDirection = downhillHeading(
+      heading + (speed < 0 ? Math.PI : 0),
+    );
+    if (Math.sign(speed) !== Math.sign(state.speed)) {
+      flightHeading = motionDirection;
+    } else {
+      const gap = downhillHeading(motionDirection - flightHeading);
+      const step = GRIP_RATE * dt;
+      flightHeading = downhillHeading(
+        flightHeading + Math.max(-step, Math.min(step, gap)),
+      );
+    }
   }
 
-  // Movement: on the snow it follows the skis (the signed speed makes
-  // switch come out right); in the air it's ballistic along the frozen
-  // takeoff direction — spinning turns the body, not the path.
-  const travelHeading = grounded ? heading : flightHeading;
-  const travelSpeed = grounded ? speed : Math.abs(speed);
-  const distance = state.distance + travelSpeed * Math.cos(travelHeading) * dt;
-  let lateral = state.lateral + travelSpeed * Math.sin(travelHeading) * dt;
+  // Movement: |speed| along the travel direction, everywhere — grounded
+  // that's the gripped (or still-sliding) direction, airborne the frozen
+  // takeoff direction; flightHeading is both. Spinning mid-air turns the
+  // body, not the path.
+  const travelSpeed = Math.abs(speed);
+  const distance = state.distance + travelSpeed * Math.cos(flightHeading) * dt;
+  let lateral = state.lateral + travelSpeed * Math.sin(flightHeading) * dt;
   lateral = Math.max(-LATERAL_LIMIT, Math.min(LATERAL_LIMIT, lateral));
 
   // Hold-to-charge: holding jump on the snow loads the crouch (charge only

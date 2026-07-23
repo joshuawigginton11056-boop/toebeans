@@ -129,6 +129,18 @@ let autosaveTimer = 0;
 
 const heldKeys = new Set<string>();
 
+// The air 180's double-tap detection (turning round 8): two Space presses
+// within the window, both airborne, fire a one-frame flip in the next
+// SkiInput — the sim stays pure and just takes the trick as an input. The
+// spin side is the last steered direction (director call, 2026-07-23),
+// defaulting right before any steer. Grounded presses never count toward a
+// pair (they mean jump), and auto-repeat is ignored — a held Space is a
+// charge, not a drumroll.
+const FLIP_WINDOW_MS = 250;
+let lastAirSpaceAt = -Infinity;
+let lastSteerSide: -1 | 1 = 1;
+let pendingFlip: -1 | 0 | 1 = 0;
+
 window.addEventListener("keydown", (event) => {
   if (event.code === "KeyM") {
     muted = audio.toggleMuted();
@@ -149,11 +161,29 @@ window.addEventListener("keydown", (event) => {
     else backToLobby();
     return;
   }
+  if (event.code === "ArrowLeft" || event.code === "KeyA") lastSteerSide = -1;
+  if (event.code === "ArrowRight" || event.code === "KeyD") lastSteerSide = 1;
+  if (event.code === "Space" && !event.repeat && mode === "slope") {
+    if (skiState.height > 0) {
+      if (performance.now() - lastAirSpaceAt < FLIP_WINDOW_MS) {
+        pendingFlip = lastSteerSide;
+        lastAirSpaceAt = -Infinity; // pair consumed — a third press starts fresh
+      } else {
+        lastAirSpaceAt = performance.now();
+      }
+    } else {
+      lastAirSpaceAt = -Infinity; // a grounded press is a jump, not half a trick
+    }
+  }
   heldKeys.add(event.code);
 });
 window.addEventListener("keyup", (event) => heldKeys.delete(event.code));
 
 function readSkiInput(): SkiInput {
+  // The flip is one-frame: whatever the keydown handler detected since the
+  // last frame fires exactly once, then clears.
+  const flip = pendingFlip;
+  pendingFlip = 0;
   return {
     left: heldKeys.has("ArrowLeft") || heldKeys.has("KeyA"),
     right: heldKeys.has("ArrowRight") || heldKeys.has("KeyD"),
@@ -161,6 +191,7 @@ function readSkiInput(): SkiInput {
     down: heldKeys.has("ArrowDown") || heldKeys.has("KeyS"),
     jump: heldKeys.has("Space"),
     boost: heldKeys.has("ShiftLeft") || heldKeys.has("ShiftRight"),
+    flip,
   };
 }
 

@@ -3223,6 +3223,101 @@ second hazard), or purpose-built big jumps (the 360 question, possibly
 mooted if 180s stack). Music still deliberately last, then the
 end-of-M2 tuning pass.
 
+## (slope-mech) 2026-07-23 — M2: turning round 8 — the landing grip window + the air 180/360
+
+Landings slide now, and the air trick exists. Director's picks from the
+round-8 sketch: **option 1 (the landing grip window)** for the slippage,
+and for the 180 — held A/D air steering **stays** as fine re-aim under the
+discrete trick, the spin side follows the **last steered direction**, a
+second double-tap **stacks to a 360**, and a grounded double-tap stays
+deliberately nothing.
+
+- **The grip window** (`shared/src/skiing.ts`): `flightHeading`'s grounded
+  meaning is promoted to "the direction the run is actually traveling" —
+  it eases onto the ski axis at a new `GRIP_RATE` (3.5 rad/s) instead of
+  snapping. The rate is chosen *above* the fastest possible steer (boosted
+  turn = 2.52 rad/s), so ordinary grounded carving can never fall behind
+  the skis: rounds 5–7 physics are bit-for-bit unchanged outside a
+  landing (measured, below). A landing is where a real angle gap exists —
+  touch down with the skis turned off the flight line and you keep
+  sliding the way you were flying while the skis bite in; a bigger angle
+  slides longer for free (rate-based, no timer). Stance changes (the
+  backstop flip, speed easing through zero) snap instead of easing — the
+  travel direction of ~zero speed is meaningless, and easing across the
+  half-turn jump would swing the slide through angles nobody traveled.
+- **The slip bleeds.** The round-6 skid scrub's misalignment is now the
+  *worse* of two angles: skis off the fall line (rounds 6–7, unchanged)
+  and skis off the travel direction (new — skis sideways to your motion
+  plow). So a hard diagonal landing slides *and* sheds speed, which is
+  what makes the grip read as the skis biting in rather than ice.
+- **The air 180/360**: `SkiInput` gains a one-frame `flip: -1 | 0 | 1`.
+  The *client* (`main.ts`) owns the gesture — two Space presses within
+  250ms, both airborne (grounded presses reset the pair; auto-repeat
+  ignored, so holding a charge can't drumroll), spin side from the last
+  steer key pressed, default right. The sim just adds π to the airborne
+  heading: stacking works because mid-air heading accumulates whole
+  spins, and the existing landing collapse + stance rule do the rest — a
+  single 180 lands riding switch at full speed (the compound the
+  directives asked for), a stacked 360 lands clean and fast. **This
+  answers the parked 360 question with control design** — big jumps are
+  now purely an airtime question, not a trick-enabler one.
+- One new hint chip (`hud.ts`, shared territory): `Space ×2 · air 180`.
+  The 360 stack is left for players to discover.
+- **No SAVE_VERSION bump** (no state-shape change — `flip` is input, not
+  state) and **zero renderer changes**: the rig's existing heading easing
+  rolls the 180 as a visible spin (the sign picks the direction), and
+  skis-pointing-one-way-while-sliding-another falls out of the pose
+  wiring for free. A restore mid-slip grips instantly (save.ts comment
+  updated) — same transient-state spirit as losing a mid-air spin.
+- Tests 85 → 90: the director's exact repro pinned (tap-jump holding
+  right lands ~1.48 rad off the flight line; first grounded frame's
+  lateral velocity < 2, vs the 7.96 the hard lock measured), a
+  hand-built hard landing (rate-limited redirect with max one-frame
+  lateral change < 1, never-uphill through the whole slide, speed bled
+  below 3, grip completing), the flip (±π toward its sign, airborne
+  only, grounded reserved as nothing), the 360 stack (accumulates to 2π,
+  lands clean at full speed), and the 180-lands-switch compound. Two
+  hand-built fixtures gained a matching `flightHeading` (it has grounded
+  meaning now; the takeoff-freeze and sideways-descent tests assumed the
+  old snap).
+- `npm run check` (90 tests) and `npm run build` pass. Verified against
+  the real served modules on this session's own dev server (5302;
+  screenshots still time out — seventeenth session running): the repro
+  lands at 1.476 off flight 0.036 and the first grounded frame's lateral
+  velocity is **0.752 u/s (was 7.96)**, max one-frame change 0.752, the
+  slide lasts 0.42s with **zero uphill frames**, speed bleeding to 0.76;
+  flip → π exactly, stacked → 2π, landing clean at speed 8; a single
+  flip lands at −8 riding switch and descends; grounded flip does
+  nothing; and the regression set is *identical to round 7's live
+  measurements* — aligned coast exactly 14.00, boosted pivot crossing
+  3.742 → −0.620 with max lateral jump 4.361 ending −15.3. Zero console
+  errors; the `Space ×2` chip is in the DOM. **The one piece live
+  verification couldn't reach:** the double-tap *timing* detection runs
+  off real keydown events + the rAF loop, and the preview pane suspends
+  rAF — the handler dispatches without throwing, but whether 250ms feels
+  right is a hands-on item below.
+
+**What to playtest:** `npm run dev`, Enter to ski. First the director's
+own repro: jump and hold A or D — you should now slide along your flight
+line for a beat while the skis bite onto the diagonal, shedding some
+speed as they do, instead of snapping. Then the trick: double-tap Space
+mid-air for a 180 (it spins toward the side you last steered), land
+switch, keep riding; double-tap twice in one big jump for a 360. The
+feel questions: is 0.4s of slide on a hard landing the right "bit" (one
+number — GRIP_RATE — dials it); does bleeding speed during the slide
+read as skis biting or as punishment; do 180s come out when you want
+them and never by accident (the 250ms window is the knob); and does
+spin-toward-last-steer match your instinct? Round 7's questions went
+unremarked last playtest and stay open: switch as a stance, W-as-faster
+backwards, and the boosted-crossing bite (unchanged this round).
+
+**Next:** the slope-mech queue — a finish line (prerequisite for XP,
+parked since 2026-07-20), tree limbs + the crouch control (the missing
+second hazard), or purpose-built big jumps (now purely an airtime/level-
+design question — the 360 got answered by controls; director call
+whether big jumps are still wanted). Music still deliberately last, then
+the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
