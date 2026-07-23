@@ -5,6 +5,7 @@ import {
   JUMP_CHARGE_TIME,
   MIN_SPEED,
   RESPAWN_DELAY,
+  TIRED_HOP_DURATION,
   downhillHeading,
   type SkiState,
 } from "@toebeans/shared";
@@ -53,6 +54,15 @@ export interface SkiSceneHandle {
 // How long the crash tip-over takes to hit the ground, inside the
 // RESPAWN_DELAY pause — quick like a real balance loss, then it holds.
 const TIP_DURATION = 0.35;
+
+// The tired hop's shape (the sim's TIRED_HOP_DURATION clock drives it): a
+// jump press eaten by the landing lockout buckles the spent legs into a
+// weak extra crouch (TIRED_DIP, in tuck units), then a feeble push lifts
+// the whole rig a few centimeters (TIRED_LIFT, world units — a real tap
+// jump flies ~1.4, so this reads as pathetic on purpose) and drops it
+// back. Both are knobs: deeper dip = wearier legs, more lift = more hop.
+const TIRED_DIP = 0.35;
+const TIRED_LIFT = 0.07;
 
 export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   const scene = new THREE.Scene();
@@ -204,8 +214,34 @@ export function syncSkiSceneToState(
   jump.envelope -= jump.envelope * Math.min(1, dt * 7);
   const load = state.jumpCharge / JUMP_CHARGE_TIME;
 
+  // The tired hop (director directive 2026-07-23): a jump press eaten by
+  // the landing lockout gets a visible answer — the spent legs buckle
+  // (extra tuck through the first half of the cue), then push a feeble
+  // little lift that barely clears the snow before dropping back. Pure
+  // presentation shaped off the sim's tiredHop clock: the sim's height
+  // never leaves the ground, so the lift is a rig-local offset — physics,
+  // hazards, and the camera (which reads state) never feel it.
+  let tiredTuck = 0;
+  let tiredLift = 0;
+  if (state.tiredHop > 0) {
+    const attempt = 1 - state.tiredHop / TIRED_HOP_DURATION;
+    if (attempt < 0.45) {
+      // The buckle: knees give under the press.
+      tiredTuck = TIRED_DIP * Math.sin((Math.PI * attempt) / 0.45);
+    } else if (attempt < 0.85) {
+      // The feeble push: legs extend weakly, the rig lifts a few
+      // centimeters, and gravity wins.
+      const push = Math.sin((Math.PI * (attempt - 0.45)) / 0.4);
+      tiredTuck = -0.2 * push;
+      tiredLift = TIRED_LIFT * push;
+    }
+  }
+  // Set every frame (0 when the cue is idle) so the rig always lands back
+  // exactly on the snow.
+  handle.skier.group.position.y = tiredLift;
+
   handle.skier.setSkiMotion({
-    tuck: Math.max(tuck, load) + (airborne ? 0.2 : 0) + jump.envelope,
+    tuck: Math.max(tuck, load) + (airborne ? 0.2 : 0) + jump.envelope + tiredTuck,
     steer,
     carve,
     switchLook,

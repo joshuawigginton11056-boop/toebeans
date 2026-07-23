@@ -3,6 +3,19 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope-vis) Dressing the tired hop (from the locked-out-jump cue, 2026-07-23)
+
+A jump press during the landing lockout now plays a "tired attempt" —
+`SkiState.tiredHop` is a 0.3s clock the mechanics renderer shapes into a
+weak knee-buckle and a few-centimeter bob (skiRender.ts, existing rig
+knobs only — no `skierModel.ts` change was needed). Two polish layers
+would sell it, both slope-vis territory: a sound (a soft effortful "hup"
+or ski-scuff that goes nowhere — `audio.ts` can frame-diff the clock
+starting, same trick as the jump whoosh), and a rig touch (a head-drop or
+arm slump reading "legs are spent" beats what tuck alone can say —
+`skierModel.ts`). The clock and `TIRED_HOP_DURATION` are already exported
+from `@toebeans/shared` for exactly this.
+
 ## (slope-vis) Ski-trick flourishes for the air spin (from turning rounds 8–9, 2026-07-23)
 
 The slope has an air trick now: hold Space mid-air and the body spins at

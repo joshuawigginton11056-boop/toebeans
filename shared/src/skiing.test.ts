@@ -14,6 +14,7 @@ import {
   RESPAWN_DELAY,
   STARTING_LIVES,
   stepSkiing,
+  TIRED_HOP_DURATION,
   type SkiInput,
   type SkiState,
 } from "./skiing";
@@ -40,6 +41,7 @@ const nearChasm: SkiState = {
   speed: 8,
   jumpCharge: 0,
   landingRecovery: 0,
+  tiredHop: 0,
   status: "skiing",
   lives: STARTING_LIVES,
   respawnTimer: 0,
@@ -244,6 +246,84 @@ describe("stepSkiing", () => {
     state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
     state = stepSkiing(state, noInput, 0.02);
     expect(state.height).toBeGreaterThan(0);
+  });
+
+  it("answers a locked-out press with the tired-hop cue — presentation only", () => {
+    // Tap jump and ride the flight down to the landing frame.
+    let state = stepSkiing(cruising, { ...noInput, jump: true }, 0.02);
+    state = stepSkiing(state, noInput, 0.02);
+    while (state.height > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    expect(state.tiredHop).toBe(0);
+
+    // Press into the lockout: the cue starts at full, and while it winds
+    // down the skis never leave the snow and no charge loads — the hop
+    // belongs to the renderer, not the physics.
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    expect(state.tiredHop).toBe(TIRED_HOP_DURATION);
+    while (state.tiredHop > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+      expect(state.height).toBe(0);
+      expect(state.jumpCharge).toBe(0);
+    }
+  });
+
+  it("fits one tired attempt per lockout — a second press can't restart it", () => {
+    let state = stepSkiing(cruising, { ...noInput, jump: true }, 0.02);
+    state = stepSkiing(state, noInput, 0.02);
+    while (state.height > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+
+    // First press starts the cue; release and press again mid-lockout —
+    // the clock keeps falling, it never snaps back to full.
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    const started = state.tiredHop;
+    state = stepSkiing(state, noInput, 0.02);
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    expect(state.tiredHop).toBeCloseTo(started - 0.04, 5);
+  });
+
+  it("plays no tired hop outside the lockout — a free press just charges", () => {
+    const state = stepSkiing(cruising, { ...noInput, jump: true }, 0.02);
+    expect(state.jumpCharge).toBeCloseTo(0.02, 5);
+    expect(state.tiredHop).toBe(0);
+  });
+
+  it("cancels a leftover cue on a real launch — takeoff owns the body", () => {
+    let state = stepSkiing(cruising, { ...noInput, jump: true }, 0.02);
+    state = stepSkiing(state, noInput, 0.02);
+    while (state.height > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    // Let most of the lockout pass, then press: this cue outlives the
+    // lockout's tail.
+    for (let i = 0; i * 0.02 < LANDING_RECOVERY - 0.04; i++) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    expect(state.tiredHop).toBeGreaterThan(0);
+
+    // Wait out the lockout remainder, then tap-and-release a real jump
+    // while the cue is still winding down: the launch flies and clears it.
+    while (state.landingRecovery > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    expect(state.tiredHop).toBeGreaterThan(0);
+    state = stepSkiing(state, noInput, 0.02);
+    expect(state.height).toBeGreaterThan(0);
+    expect(state.tiredHop).toBe(0);
+  });
+
+  it("drops the tired-hop cue on a crash — the tip-over owns the body", () => {
+    const state = skiUntilCrash({
+      ...nearChasm,
+      landingRecovery: 0.25,
+      tiredHop: 0.25,
+    });
+    expect(state.tiredHop).toBe(0);
   });
 
   it("drops the charge on a crash — it doesn't survive to the respawn", () => {

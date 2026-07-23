@@ -83,6 +83,15 @@ export interface SkiState {
   // deliberately not saved: a restore lands (or resumes) recovered, same
   // spirit as jumpCharge above.
   readonly landingRecovery: number;
+  // Seconds left in the tired-hop cue (see TIRED_HOP_DURATION): set when the
+  // jump key presses into the landing lockout, so the renderer can show the
+  // locked-out attempt — the skier's legs are spent, and the eaten input
+  // should read as *their* failure, not the game ignoring the key. The sim
+  // itself does nothing with it: height never leaves the snow, no physics
+  // change — it's a clock the renderer shapes the tired little bob from.
+  // Transient presentation cue, deliberately not saved: a restore resumes
+  // with nothing to apologize for, same spirit as landingRecovery above.
+  readonly tiredHop: number;
   readonly status: RunStatus;
   readonly lives: number;
   readonly respawnTimer: number;
@@ -240,6 +249,20 @@ export const JUMP_CHARGE_TIME = 0.6;
 // (they wait it out) and for the renderer/audio if the landing absorb ever
 // wants to read it. Tuning knob: higher = heavier, more committal landings.
 export const LANDING_RECOVERY = 0.3;
+// The tired hop (director directive 2026-07-23, riding the lockout's
+// acceptance): a locked-out jump press gets a visual response — "a small hop
+// that looks like a tired attempt" — instead of nothing. This is a *pure
+// presentation cue*, deliberately not a real sim hop: a real hop would make
+// the skier airborne (opening the air spin mid-lockout), restart the lockout
+// on its own touchdown (chained lockouts), and hand the eaten input the very
+// gameplay effect the lockout exists to deny. So the sim just starts this
+// clock when a press lands during the lockout, and the renderer shapes the
+// weak knee-dip and feeble lift from it — the skis never actually leave the
+// snow. Sized to LANDING_RECOVERY so one lockout fits at most one attempt:
+// a second press finds the cue still running and does nothing. A *real*
+// launch cancels any leftover cue — the legs evidently recovered. Exported
+// for the renderer (it normalizes the clock into animation progress).
+export const TIRED_HOP_DURATION = 0.3;
 const GRAVITY = -18;
 const CHASM_CLEAR_HEIGHT = 0.4;
 export const STARTING_LIVES = 9;
@@ -267,6 +290,7 @@ export function createInitialSkiState(): SkiState {
     speed: 0,
     jumpCharge: 0,
     landingRecovery: 0,
+    tiredHop: 0,
     status: "skiing",
     lives: STARTING_LIVES,
     respawnTimer: 0,
@@ -311,6 +335,7 @@ function respawnAtCheckpoint(state: SkiState): SkiState {
     speed: 0,
     jumpCharge: 0,
     landingRecovery: 0,
+    tiredHop: 0,
     status: "skiing",
     respawnTimer: 0,
   };
@@ -509,13 +534,23 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   // quick tap launches at essentially the minimum — the old fixed jump.
   let jumpCharge = state.jumpCharge;
   let landingRecovery = state.landingRecovery;
+  // The tired-hop cue winds down on its own — it's an animation clock, and
+  // the bob should finish even if the lockout ends under it.
+  let tiredHop = Math.max(0, state.tiredHop - dt);
   let verticalVelocity = state.verticalVelocity + GRAVITY * dt;
   if (grounded) {
     if (landingRecovery > 0) {
       // The landing lockout (see LANDING_RECOVERY): fresh off a touchdown,
-      // the legs are absorbing the hit — the jump key does nothing until
-      // the timer runs out, so there's no instant pogo re-jump.
+      // the legs are absorbing the hit — the jump key neither loads nor
+      // launches until the timer runs out, so there's no instant pogo
+      // re-jump. The press isn't *silent*, though: it starts the tired-hop
+      // cue (see TIRED_HOP_DURATION), so the renderer can show the spent
+      // legs trying and failing. At most one attempt per lockout — a
+      // second press finds the cue still running.
       landingRecovery = Math.max(0, landingRecovery - dt);
+      if (input.jump && tiredHop === 0) {
+        tiredHop = TIRED_HOP_DURATION;
+      }
     } else if (input.jump) {
       jumpCharge = Math.min(JUMP_CHARGE_TIME, jumpCharge + dt);
     } else if (jumpCharge > 0) {
@@ -523,6 +558,10 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
         MIN_JUMP_VELOCITY +
         (MAX_JUMP_VELOCITY - MIN_JUMP_VELOCITY) * (jumpCharge / JUMP_CHARGE_TIME);
       jumpCharge = 0;
+      // A real launch cancels a leftover tired-hop cue (a press late in the
+      // lockout outlives it) — the legs evidently recovered, and the
+      // takeoff pose owns the body now.
+      tiredHop = 0;
     }
   }
   const height = Math.max(0, state.height + verticalVelocity * dt);
@@ -564,6 +603,8 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     // A crash drops the load — the charge doesn't survive into the respawn.
     jumpCharge: crashed ? 0 : jumpCharge,
     landingRecovery: crashed ? 0 : landingRecovery,
+    // The tip-over owns the body during a crash — no tired bob under it.
+    tiredHop: crashed ? 0 : tiredHop,
     status: crashed ? "crashed" : "skiing",
     lives: crashed ? state.lives - 1 : state.lives,
     respawnTimer: crashed ? RESPAWN_DELAY : 0,
