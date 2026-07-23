@@ -36,6 +36,65 @@ interact with your space for more XP → repeat.
   XP — faster pays more, slower pays less. Crashing carries no penalty
   beyond a lost cat life and the time lost restarting at the checkpoint.
 
+### The handcrafted slopes — Slope 1: "The Overlook" (scenic showcase)
+
+The first of the three v1.0 handcrafted slopes. **Identity (director call,
+2026-07-23): a scenic showcase** — built around one signature moment (a
+vista reveal + a dramatic cliff jump), moderate hazard density. Because the
+three slopes escalate, Slope 1 is the *medium* one, not the easy one —
+Slopes 2–3 sit harder, so the most punishing biomes and densest hazards are
+reserved for them.
+
+Everything here is palette-legal (snow whites, dawn haze, slate rock #9,
+glacial ice #10, frosted-green pines #13) and lives under the one dawn sun.
+
+**Beat sheet (top → bottom)** — the shared map both ski sessions build
+against; mechanics places the layout at these beats, visuals dresses them:
+
+1. **Drop-in (start).** A groomed shelf with a start gate/banner, pines
+   tight on both sides — enclosed before it opens. The push-off point.
+2. **Warm-up pitch.** Pines thin; one easy chasm to learn the jump.
+   Checkpoint just after.
+3. **The reveal (the scenic beat).** The right treeline falls away to
+   rolling hazy hills and a distant slate ridge — wide, bright negative
+   space. The postcard.
+4. **The signature cliff jump.** A wide glacial-ice crevasse at the lip of
+   the opening, where the land drops toward the vista — the jump *is* the
+   payoff. Checkpoint after the landing.
+5. **The rock gate.** Slate spires pinch the lane briefly — tension and
+   framing before the end.
+6. **The finish.** Opens up again; a finish arch/banner readable from far
+   off; crossing it completes the run.
+
+**Skeleton parameters** — recommended starting values (director/mechanics
+tune when built; the concrete build list is the `(slope-mech)` entry in
+[IDEAS.md](IDEAS.md)):
+
+- **Length / finish:** ~800 units (≈ 75–90 s of skiing). Today the run is
+  *endless* with only ~70 units of real content (~8 s) — this is the single
+  biggest gap between the sandbox and a real slope. A fixed length also
+  unlocks the timed per-slope song (the Geometry-Dash music direction).
+- **Route:** *open decision.* A showcase wants to **bend** (curve around the
+  vista, dogleg past the rock gate) so the mountain reveals itself instead
+  of being visible whole from the top. That's the largest mechanics addition
+  — the sim models distance as a straight axis today, so bending needs a
+  curved centerline — so it's split out: build the finite *straight*
+  skeleton first, decide bends as a follow-on. Slope-vis lean: yes, gentle.
+- **Grade:** keep the current flat-underneath model for v1 (the downhill
+  read comes from motion + framing, not real elevation change) — real
+  terrain grade is a big change for little gameplay gain.
+- **Width:** fixed lane (±12) is fine for the first build; a modest pinch at
+  the rock gate and opening at the vista is a nice-to-have if the clamp can
+  vary by distance cheaply.
+- **Hazards:** chasms + the cliff jump only for now. The snowball chase and
+  duck-under limbs from the hazard list above are **deferred by director
+  call (2026-07-23)** — "the hazards aren't the main point"; the skeleton
+  comes first.
+
+Illustrative beat distances against length 800 (all tunable): warm-up chasm
+~120 (checkpoint ~150), vista reveal from ~300, cliff-jump crevasse ~380
+(checkpoint ~420), rock gate ~560, finish 800.
+
 ## Leveling & Unlocks
 
 - Everyone starts at level 1 with basic items. **All players have identical

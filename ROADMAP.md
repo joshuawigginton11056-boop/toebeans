@@ -4374,6 +4374,41 @@ so the look-pass is against a clean tree set. Session is at a clean stopping
 point: `master` is green (`npm run check` passes), branch pushed and merged
 up, no work in progress.
 
+## (slope-vis) 2026-07-23 — Slope 1 spec: "The Overlook" scenic-showcase skeleton
+
+Kicked off the first real slope — design + spec only, no code. The skeleton
+of a slope (length, route, grade, width, checkpoints) lives in the sim
+(`skiing.ts`), which is slope-mechanics territory, so the useful move from
+the visuals seat was to **design the slope and spec the mechanics build**,
+then take the visual half once the skeleton lands.
+
+- **Identity (director call):** Slope 1 is a **scenic showcase** — one
+  signature vista + a dramatic cliff jump, moderate hazards. Since the three
+  slopes escalate, it's the *medium* one, not the easy one.
+- **Director redirect, same session:** the design's hazard list (snowballs,
+  duck-limbs) is **not** the priority — "the hazards aren't the main point";
+  focus on the skeleton (how long the track is, and what defines its shape).
+  New hazards deferred; the spec is skeleton-first.
+- **Found:** the slope is currently an **endless sandbox** — no finish, no
+  length (`SLOPE_LENGTH` is a dead constant nothing reads), ~70 units / ~8 s
+  of real content (3 chasms) then infinite recycled scatter, on a
+  dead-straight fall line, flat underneath. That's the gap the skeleton work
+  closes.
+- **Wrote the design** into [DESIGN.md](DESIGN.md) ("The handcrafted slopes
+  — Slope 1"): identity, top→bottom beat sheet, and recommended skeleton
+  parameters (length ~800 / ~80 s; route bends as an open decision; keep
+  flat grade; fixed width for v1).
+- **Wrote the mechanics build spec** into [IDEAS.md](IDEAS.md), tagged
+  `(slope-mech)`: the actionable asks (length + a `"finished"` run state;
+  layout to the beats) plus the flagged bigger decisions (route bending,
+  variable width, grade). Josh processes it in the mechanics session.
+
+**Next:** *(slope-vis)* once mechanics lands the finite skeleton (finish
+distance + beat positions), build the visual bookends first — start gate +
+drop-in and the finish arch — then the vista reveal and the signature
+crevasse art. All gated on the skeleton existing so pieces place against a
+real, finite track.
+
 Tracking toward the v1.0 web launch scope in
 [DESIGN.md](DESIGN.md#scope-v10--v1x--steam). Check items off as sessions
 land them; each session still gets its own dated log entry above.

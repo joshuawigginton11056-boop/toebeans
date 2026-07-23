@@ -3,6 +3,51 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope-mech) Slope 1 "The Overlook" skeleton — the mechanics build (2026-07-23)
+
+The first real slope. Full design + beat sheet + rationale is in DESIGN.md
+("The handcrafted slopes — Slope 1: The Overlook"). This entry is the
+concrete mechanics build list. Identity is locked (scenic showcase, director
+2026-07-23); new hazards beyond chasms are **deferred** by director call —
+skeleton first ("the hazards aren't the main point").
+
+**Actionable now (turns the endless sandbox into a finite track):**
+
+1. **Length + finish.** `createInitialSkiState` has no length and the run
+   never ends (`SLOPE_LENGTH = 100` in `skiScene.ts` is dead — nothing reads
+   it, confirmed by grep). Add a finish distance (recommend ~800; ≈ 75–90 s
+   at cruise) and a new `RunStatus "finished"` that fires at
+   `distance >= finishDistance`: the run stops advancing, input stops
+   driving it, and the result is ready to pay XP once XP exists. This is the
+   spine everything else hangs on.
+2. **Layout to the beat sheet.** Place chasms / checkpoints / finish at the
+   beats (illustrative distances, tune freely): warm-up chasm ~120 (width
+   ~3), checkpoint ~150; signature cliff-jump crevasse ~380 (wide, width
+   ~5–6), checkpoint ~420; rock gate ~560; finish 800. The current
+   test values (`checkpoints: [0, 26, 52]`, chasms at 20/45/70) retire.
+
+**Bigger decisions (flagged; do NOT block #1–2):**
+
+3. **Route — does Slope 1 bend?** Slope-vis lean: yes (2–3 sweeping turns
+   make the showcase reveal itself). Cost: the sim models the slope as a
+   straight distance axis; bending needs a curved centerline (distance →
+   world position + heading), and `skiRender.ts`, the snowfield window, and
+   the decor scatter all key off the straight axis today — a real cross-seam
+   change. Recommend building the finite *straight* skeleton first, then
+   deciding bends as its own chunk.
+4. **Variable width.** `LATERAL_LIMIT` is one constant; a distance-varying
+   clamp would let the lane pinch at the rock gate and open at the vista.
+   Nice-to-have, not blocking.
+5. **Grade.** Recommend keeping the flat-underneath model (downhill reads
+   from motion + framing). Flagged only so it stays a conscious choice.
+
+**The visuals half (slope-vis, mine — gated on #1–2 landing):** start gate +
+drop-in, finish arch + finish-area dressing, the vista reveal (open the
+treeline, distant slate ridge + hazy hills), the crevasse art (ice walls +
+real depth, upgrading the flat chasm slab), the rock-gate spires, and
+scatter composed to the beats instead of pure procedural. I build these
+against the real finish distance + beat positions once they exist.
+
 ## (slope-mech) Clamp the frame dt — background tabs teleport the run (2026-07-23)
 
 Noticed while verifying the camera rig: browsers suspend
