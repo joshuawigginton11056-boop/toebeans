@@ -1060,3 +1060,12 @@ already-planned ski-pose session; two are independent.
   the world gains snowballs, tree limbs, critters, and more slopes, the
   vignette should grow richer with them — today it shows trees, the sun,
   and the two characters, because that's what exists.
+- **(slope-vis) MegaKit twisted trees as landmarks** (pine-sourcing
+  session, 2026-07-23) — the Stylized Nature MegaKit's five Twisted Trees
+  have spectacular gnarled, spiraling trunks — the most "mystical" shapes
+  in the pack — but they're ~9k tris (over even the set-piece budget),
+  deciduous, and red-canopied. Parked: one, decimated and snow-recolored,
+  could be a rare once-per-run landmark (a crossroads marker, a shrine
+  tree) rather than scatter. Needs the bible rewrite's word on decimation
+  and on how far "set piece" stretches. Models inspected at
+  https://poly.pizza/m/9aWlx82xUf (and 4 siblings, all CC0).

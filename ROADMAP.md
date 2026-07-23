@@ -3546,6 +3546,77 @@ chunk) and the refined snow (previous chunk) together, then the
 unblocked Art Style Bible rewrite (shape-language + asset-sourcing);
 the tree snow-cap check rides with that pass.
 
+## (slope-vis) 2026-07-23 — The mystical pines: giant sequoia-grove trees + the decor scatter learns to follow the run
+
+Director verdict on the current trees: not happy — the ask is **large
+mystical pines that force you to be in the environment**, with a snowy
+sequoia-grove photo as the reference: colossal red-bark trunks, canopy
+lost in the mist, a person ant-sized at the base. What makes that photo
+work is trunk + haze — at that scale the canopy vanishes into fog and the
+trunk is the whole silhouette. Our dawn-pink fog already does the mist's
+job; the missing piece was trees built trunk-first.
+
+- **New CC0 source, first pack legal under the amended bible:**
+  Quaternius's [Stylized Nature MegaKit](https://quaternius.com/packs/stylizednaturemegakit.html)
+  (his "Ghibli-inspired" pack — same artist as the cat, the characters,
+  and all existing scenery). It's *textured*, which the old no-texture
+  rule banned; the painted-detail amendment makes it sourceable. All 5
+  pine variants inspected on Poly Pizza and cherry-picked as single GLBs
+  (no full-pack download). The pack's twisted trees (~9k tris, gorgeous
+  gnarled trunks) are parked in IDEAS.md as landmark candidates.
+- **New converter** (`tools/glb_stylized_pine.py`), third in the family:
+  bark diffuse + normal map stripped (normal maps stay banned) → flat
+  `PineBark` material in the birch-amber deep shift, keeping the mesh's
+  baked vertex-color shading; the foliage is **alpha-cutout cards**, so
+  the leaf texture's alpha silhouette is kept — RGB baked to white,
+  recolored via `PineSnow` baseColorFactor in the snow-shadow family
+  (snow-laden canopy; the palette has no green, and the reference's
+  canopies read white-blue anyway), BLEND→MASK so cards sort and cast
+  shadows. 2.2 MB → 95–206 KB per tree. **Two flags:** variants 1/3/4/5
+  (3.4k–5k tris) are over the 2k prop budget — taken under the ~5k
+  set-piece allowance like the bedroom desk; and the kept alpha mask is
+  the **first image file in slope assets** (a silhouette mask, not photo
+  detail — the bible rewrite should codify this case).
+- **Scatter redesign** (`skiScene.ts`): old amber-canopy `PineTree_Snow`
+  set retired from the scatter (files + CREDITS rows stay pending the
+  look-pass; the lobby still uses them). Three bands now: a **giant
+  colonnade** (4.5–7× → ~35–70m) hugging the lane so the camera lives
+  under the canopy and trunks read as walls, the mixed near-flank
+  treeline (pines lead, birches thinned to warm accents), and far-flank
+  giants (2.2–3.8×, was 1.2–1.8×) layering trunk behind trunk into the
+  haze. Painted-detail rows added for `PineBark`/`PineSnow` — and since
+  the triplanar canvases sample *object space*, scaling a giant scales
+  its bark strokes: sequoia-sized fissures for free.
+- **Found + fixed while verifying: the treeline was invisible on master.**
+  Runs persist distance and the slope is endless, but the scatter was
+  static, covering z = 0…−130 only — any saved run past ~130m had every
+  tree uphill behind the camera (live repro: skier at z = −1045, 108
+  decor objects, zero in frame). The scatter is now a **recycling
+  window** like the snowfield: world z divides into per-band cells, each
+  cell seeds its own PRNG from (band, side, cell), so a given stretch of
+  mountain always grows the identical trees — a place, not a reshuffle —
+  and clones spawn/despawn as the window follows the skier (spawn-ahead
+  reaches past the fog far plane, so trees materialize invisibly inside
+  the haze). Driven from `syncEnvironment`, which already receives the
+  anchor — no new seam API. The old seeded-static determinism claim is
+  superseded by per-cell determinism.
+- `npm run check` passes (90 tests). Live-verified on 5303: fresh load
+  at z ≈ −1045 shows the grove (giant trunk + overhead canopy in frame,
+  long blue giant-shadows raking the lane); skiing further spawns new
+  forest seamlessly; no console errors.
+
+**What to playtest:** `npm run dev`, ski. The reference test: does a run
+feel like skiing *through* that photo — immense trunks, canopy overhead,
+haze eating the treetops? Knobs if not: giant scale/frequency (one line
+each in `DECOR_BANDS`), canopy color (one hex in the converter), bark
+stroke scale/strength (one `DETAIL_BY_MATERIAL` row). Also: birch amber
+share — keep the warm accents or go full cold grove?
+
+**Next:** *(slope-vis)* director look-pass on the grove; then the Art
+Style Bible rewrite (shape-language + asset-sourcing) — now with two
+concrete cases it must codify: painted-source packs and alpha-silhouette
+masks.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

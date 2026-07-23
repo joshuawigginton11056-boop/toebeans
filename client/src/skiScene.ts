@@ -183,6 +183,9 @@ export function syncEnvironment(
   const sparkle = getSnowTextures().sparkle;
   sparkle.offset.y = -sparkle.repeat.y * (0.5 + centerZ / SNOWFIELD_LENGTH);
   if (trailInput) updateSnowTrail(environment.trail, anchor, trailInput);
+  // The decor scatter is a recycling window that follows the run — see
+  // updateSlopeDecor below.
+  updateSlopeDecor(anchor.z);
   environment.skyDome.position.copy(camera.position);
   environment.sunBillboard.position
     .copy(camera.position)
@@ -1064,7 +1067,19 @@ function updateSnowTrail(
 // machine sees the identical slope.
 
 const DECOR_MODELS = {
-  pines: ["PineTree_Snow_1", "PineTree_Snow_2", "PineTree_Snow_4", "PineTree_Snow_5"],
+  // The mystical pines (director ask + sequoia-grove reference, 2026-07-23):
+  // MegaKit stylized pines replace the old amber-canopy PineTree_Snow set,
+  // which is retired from the scatter (files still in assets/ pending the
+  // look-pass). Scattered at three scales — giant trunks by the lane, mid
+  // fill, far silhouettes — so the canopy lives above the camera and the
+  // haze eats the treetops, like the reference.
+  pines: [
+    "StylizedPine_1",
+    "StylizedPine_2",
+    "StylizedPine_3",
+    "StylizedPine_4",
+    "StylizedPine_5",
+  ],
   birches: ["BirchTree_Snow_1", "BirchTree_Snow_2", "BirchTree_Snow_3", "BirchTree_Snow_5"],
   deadBirches: [
     "BirchTree_Dead_Snow_1",
@@ -1127,68 +1142,155 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
     return;
   }
 
-  const random = makeRandom(20260721);
-  const pick = (list: readonly string[]): THREE.Group =>
-    templates.get(list[Math.floor(random() * list.length)]!)!;
-
-  // Trees read slightly larger than before (director ask, 2026-07-23) —
-  // applied as a multiplier on top of each band's scale roll so the PRNG
-  // sequence (and with it the whole scatter layout) stays identical.
-  const TREE_SCALE = 1.15;
-
-  const place = (
-    template: THREE.Group,
-    x: number,
-    z: number,
-    scale: number,
-  ): void => {
-    const copy = template.clone();
-    copy.position.set(x, 0, z);
-    copy.rotation.y = random() * Math.PI * 2;
-    copy.scale.setScalar(scale);
-    scene.add(copy);
-  };
-
-  // Near flanks: a mixed treeline on both sides of the skiable lane,
-  // starting just past its edge (LANE_EDGE) so the lane stays clear. With
-  // the edge kept as a hard clamp (director call, 2026-07-22), this
-  // treeline is the visible cue for where the skiable area ends.
-  for (const side of [-1, 1]) {
-    for (let z = -4; z > -(SLOPE_LENGTH + 30); z -= 2.5 + random() * 3) {
-      const roll = random();
-      const isTree = roll < 0.75; // pines, birches, dead birches
-      const model =
-        roll < 0.3
-          ? pick(DECOR_MODELS.pines)
-          : roll < 0.6
-            ? pick(DECOR_MODELS.birches)
-            : roll < 0.75
-              ? pick(DECOR_MODELS.deadBirches)
-              : roll < 0.87
-                ? pick(DECOR_MODELS.rocks)
-                : pick(DECOR_MODELS.filler);
-      const x = side * (LANE_EDGE + 0.8 + random() * 9);
-      place(model, x, z, (0.85 + random() * 0.5) * (isTree ? TREE_SCALE : 1));
-    }
-  }
-
-  // Far flanks: sparse oversized trees for silhouettes and depth. The
-  // lonely-vast target wants these thin — resist filling them in.
-  for (const side of [-1, 1]) {
-    for (let z = -10; z > -(SLOPE_LENGTH + 30); z -= 8 + random() * 6) {
-      const model =
-        random() < 0.5
-          ? pick(DECOR_MODELS.pines)
-          : pick(DECOR_MODELS.deadBirches);
-      const x = side * (LANE_EDGE + 11 + random() * 16);
-      place(model, x, z, (1.2 + random() * 0.6) * TREE_SCALE);
-    }
-  }
-
-  // The 2026-07-22 texture-test pairs (flat vs painted, mirrored across
-  // the lane) are retired — with the rollout above, the whole scatter
-  // wears the approved painted detail.
+  decorState = { scene, templates, placed: new Map() };
 }
+
+// The scatter is a recycling window, like the snowfield (found 2026-07-23:
+// runs persist distance and the slope is endless, so the old static
+// 0..-130m scatter sat entirely uphill of any saved run — an invisible
+// treeline). World z is divided into fixed-size cells per band; each cell
+// seeds its own PRNG from (band, side, cell index), so a given stretch of
+// mountain always grows the identical trees — a place, not a reshuffle —
+// and cells spawn/despawn as the window follows the skier. Driven from
+// syncEnvironment, which already knows the anchor; no new seam API.
+
+// Trees read slightly larger than before (director ask, 2026-07-23).
+const TREE_SCALE = 1.15;
+
+interface DecorBand {
+  readonly key: string;
+  /** One potential spawn per cell of this many meters of slope. */
+  readonly cellSize: number;
+  /** Chance the cell actually spawns (sparseness without bigger cells). */
+  readonly density: number;
+  readonly spawn: (
+    random: () => number,
+  ) => { models: readonly string[]; x: number; scale: number };
+}
+
+// The giants (sequoia-grove reference, 2026-07-23): a sparse colonnade of
+// huge trunks hugging the lane, canopy far above the camera — the trees
+// are the environment, not decoration on it. Source models are 7–10m, so
+// 4.5–7× puts them at roughly 35–70m. Spacing stays wide: the reference
+// reads as a grove of individuals, not a wall, and every trunk gap is a
+// window into the hazy depth beyond.
+const DECOR_BANDS: readonly DecorBand[] = [
+  {
+    key: "giant",
+    cellSize: 19,
+    density: 1,
+    spawn: (random) => ({
+      models: DECOR_MODELS.pines,
+      x: LANE_EDGE + 2.5 + random() * 10,
+      scale: 4.5 + random() * 2.5,
+    }),
+  },
+  // Near flank: the mixed treeline just past the lane edge — the visible
+  // cue for where the skiable area ends (hard-clamp call, 2026-07-22).
+  // Pines lead the mix now; birches thin to scattered warm accents so the
+  // grove stays cold and vast.
+  {
+    key: "near",
+    cellSize: 4,
+    density: 1,
+    spawn: (random) => {
+      const roll = random();
+      const isTree = roll < 0.75;
+      const models =
+        roll < 0.45
+          ? DECOR_MODELS.pines
+          : roll < 0.63
+            ? DECOR_MODELS.birches
+            : roll < 0.75
+              ? DECOR_MODELS.deadBirches
+              : roll < 0.87
+                ? DECOR_MODELS.rocks
+                : DECOR_MODELS.filler;
+      return {
+        models,
+        x: LANE_EDGE + 0.8 + random() * 9,
+        scale: (0.85 + random() * 0.5) * (isTree ? TREE_SCALE : 1),
+      };
+    },
+  },
+  // Far flank: sparse oversized silhouettes for depth — the lonely-vast
+  // target wants these thin; resist filling them in. Giants out here
+  // layer trunk behind trunk into the haze.
+  {
+    key: "far",
+    cellSize: 11,
+    density: 0.8,
+    spawn: (random) => ({
+      models: random() < 0.7 ? DECOR_MODELS.pines : DECOR_MODELS.deadBirches,
+      x: LANE_EDGE + 11 + random() * 16,
+      scale: (2.2 + random() * 1.6) * TREE_SCALE,
+    }),
+  },
+];
+
+// How far the window reaches from the anchor. Downhill covers past the fog
+// far plane (150) so trees materialize invisibly inside the haze; uphill is
+// short — the camera never looks back far.
+const DECOR_AHEAD = 170;
+const DECOR_BEHIND = 30;
+
+interface DecorState {
+  readonly scene: THREE.Scene;
+  readonly templates: Map<string, THREE.Group>;
+  readonly placed: Map<string, THREE.Object3D>;
+}
+
+let decorState: DecorState | null = null;
+
+function updateSlopeDecor(anchorZ: number): void {
+  if (!decorState) return;
+  const { scene, templates, placed } = decorState;
+  const minZ = anchorZ - DECOR_AHEAD;
+  const maxZ = Math.min(anchorZ + DECOR_BEHIND, -4); // forest starts at -4
+  const live = new Set<string>();
+  for (let bandIndex = 0; bandIndex < DECOR_BANDS.length; bandIndex++) {
+    const band = DECOR_BANDS[bandIndex]!;
+    for (const side of [-1, 1]) {
+      const first = Math.floor(-maxZ / band.cellSize);
+      const last = Math.floor(-minZ / band.cellSize);
+      for (let cell = first; cell <= last; cell++) {
+        const key = `${band.key}:${side}:${cell}`;
+        live.add(key);
+        if (placed.has(key)) continue;
+        // Every cell owns a deterministic PRNG — same stretch of mountain,
+        // same trees, every run and every machine.
+        const random = makeRandom(
+          (20260721 ^ Math.imul(cell, 2654435761)) + bandIndex * 7919 + side,
+        );
+        if (random() > band.density) {
+          placed.set(key, EMPTY_CELL);
+          continue;
+        }
+        const { models, x, scale } = band.spawn(random);
+        const template = templates.get(
+          models[Math.floor(random() * models.length)]!,
+        );
+        if (!template) continue;
+        const copy = template.clone();
+        const jitter = random() * 0.8; // where in the cell the tree stands
+        copy.position.set(side * x, 0, -(cell + 0.1 + jitter) * band.cellSize);
+        copy.rotation.y = random() * Math.PI * 2;
+        copy.scale.setScalar(scale);
+        scene.add(copy);
+        placed.set(key, copy);
+      }
+    }
+  }
+  for (const [key, object] of placed) {
+    if (live.has(key)) continue;
+    if (object !== EMPTY_CELL) scene.remove(object);
+    placed.delete(key);
+  }
+}
+
+// Marker for a cell that rolled "no tree" — remembered so the roll isn't
+// retried every frame, and skipped on despawn.
+const EMPTY_CELL = new THREE.Object3D();
 
 // ---------------------------------------------------------------------------
 // PAINTED DETAIL (test 2026-07-22, promoted 2026-07-23) — the 2026-07-22
@@ -1350,6 +1452,12 @@ const DETAIL_BY_MATERIAL: Record<
   Wood: { map: "bark", scale: 1.6, strength: 0.85 }, // pine trunk
   Green: { map: "dapple", scale: 1.1, strength: 0.85 }, // foliage (amber)
   DarkGreen: { map: "dapple", scale: 1.1, strength: 0.85 },
+  // The stylized pines (tools/glb_stylized_pine.py). Bark strokes are in
+  // object space, so scaling a giant scales its strokes too — sequoia
+  // fissures get sequoia-sized for free. Snow canopy takes the dapple
+  // gently: it's snow-laden foliage, not painted leaves.
+  PineBark: { map: "bark", scale: 1.2, strength: 0.85 },
+  PineSnow: { map: "dapple", scale: 1.1, strength: 0.55 },
   Snow: { map: "grain", scale: 1.4, strength: 0.7 },
   Rock: { map: "grain", scale: 1.2, strength: 0.9 },
 };
