@@ -3,39 +3,6 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (slope-mech) BUG: held jump key triggers the tired hop on landing (2026-07-23)
-
-**Repro (director, 2026-07-23):** hold the space bar to spin in the air,
-keep holding it, and touch down still holding — the tired hop plays as if
-you're trying (and failing) to jump, even though you never re-pressed. The
-held key is a leftover from the jump you already took, not a fresh attempt.
-
-**Cause:** the tired-hop trigger in `skiing.ts` (`stepSkiing`, the
-`landingRecovery > 0` branch) fires on `input.jump` being **true** during
-the landing lockout — i.e. it's *level*-triggered ("is the key down this
-frame"), not *edge*-triggered ("did it go down this frame"). So a jump key
-that was already held before touchdown counts as an attempt the instant the
-lockout starts. The charge path deliberately relies on the level signal
-(hold-to-charge — see the comment there: "a key still held through a
-landing waits out the lockout and then starts a fresh load"), so we can't
-just make `input.jump` an edge; the **tired-hop trigger specifically** needs
-to distinguish "held through from before" (no cue; resume charging after the
-lockout) from "pressed anew during the lockout" (play the cue).
-
-**Fix direction (its own session):** give the tired-hop trigger a rising
-edge. Two routes — the fix session picks:
-- Carry the previous frame's jump-held state so the trigger can require
-  up→down. If that lives on `SkiState`, weigh whether it's transient input
-  bookkeeping (shouldn't need a `SAVE_VERSION` bump / shouldn't be persisted)
-  vs. real game state.
-- Or add a separate rising-edge field to `SkiInput` (e.g. `jumpPressed`)
-  fed from the keydown edge in `main.ts`, leaving `input.jump` as the level
-  signal the charge still needs. (Shared-territory `main.ts` edit.)
-
-Either way, add a test: a jump key held continuously across a touchdown must
-**not** start `tiredHop`, while a genuine press *during* the lockout still
-does (don't regress the existing one-attempt-per-lockout behavior).
-
 ## (slope-mech) Clamp the frame dt — background tabs teleport the run (2026-07-23)
 
 Noticed while verifying the camera rig: browsers suspend

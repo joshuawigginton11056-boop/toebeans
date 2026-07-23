@@ -4427,6 +4427,51 @@ since 2026-07-20), tree limbs + the crouch control (the missing second
 hazard), or purpose-built big jumps. Recommend the finish line after the bug,
 since it unblocks the most downstream work (XP).
 
+## (slope-mech) 2026-07-23 — Fixed the held-jump tired-hop bug (rising edge)
+
+Fixed the bug the director found in the last entry: holding Space to spin in
+the air and touching down *still holding* played the tired hop, as if you'd
+tried and failed to jump — even though you never re-pressed. The trigger was
+level-triggered (fires on `input.jump` being down during the landing lockout),
+so a key carried through the jump counted as a fresh attempt the instant the
+lockout began. Went with route 1 from the IDEAS entry — a rising edge inside
+the sim — so the whole fix stays in owned territory (`skiing.ts` +
+`skiing.test.ts`), no shared `main.ts` edit.
+
+- **The edge** (`skiing.ts`): new transient `SkiState.prevJumpHeld` records
+  the previous frame's raw jump input, set to `input.jump` every frame. The
+  tired-hop trigger now requires `input.jump && !prevJumpHeld` — a genuine
+  up→down during the lockout — instead of just "key down". A key held through
+  from the air is no longer an edge, so it raises no cue; it waits out the
+  lockout and starts a fresh charge, exactly as the charge path already
+  promised. A real press *during* the lockout still fires. Reset to `false` in
+  both `createInitialSkiState` and the checkpoint respawn.
+- **No `SAVE_VERSION` bump.** `prevJumpHeld` is transient input bookkeeping and
+  joins `jumpCharge`/`landingRecovery`/`tiredHop`/`flightHeading` in *not*
+  being written to the save whitelist (`save.ts` snapshots an explicit field
+  list, and `restoreSave` rebuilds from `createInitialSkiState`, so the field
+  is present and starts `false` on every restore). Save shape unchanged.
+- **Test** (`skiing.test.ts`, now 102): a jump key held continuously from
+  mid-air through touchdown and several frames into the lockout starts no
+  `tiredHop`; then a fresh press (release one frame, press) *during that same
+  lockout* still fires it at full. Guards both halves — the fix sharpens the
+  trigger without killing the locked-out-attempt feedback. `npm run check`
+  passes (typecheck + 102 tests).
+
+Not live-verified under real keys: the bug needs a held key at the exact
+landing frame, timing this suspended-`requestAnimationFrame` pane can't drive,
+and port 5302 was held by another chat's server for this worktree. The
+deterministic test reproduces the exact held-through-landing sequence, so the
+logic is pinned; the *feel* of the real cue is unchanged (presentation math
+untouched) and stays the playtest's call.
+
+**Next:** the round-10 queue, director's recommended order — the **finish
+line** first (prerequisite for XP, parked since 2026-07-20; unblocks the most
+downstream M3 work), then tree limbs + the crouch control (the missing second
+hazard) or purpose-built big jumps. The `dt`-clamp fix (IDEAS, background tabs
+teleport the run) is a separate small shared-`main.ts` chunk worth taking
+soon.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

@@ -92,6 +92,15 @@ export interface SkiState {
   // Transient presentation cue, deliberately not saved: a restore resumes
   // with nothing to apologize for, same spirit as landingRecovery above.
   readonly tiredHop: number;
+  // Whether the jump key was held on the *previous* frame, so the tired-hop
+  // trigger can require a rising edge (up→down) instead of firing on any
+  // held key. Without it, a jump key carried through an air spin counts as a
+  // failed attempt the instant you touch down, even though you never
+  // re-pressed (bug, 2026-07-23). The charge path still uses the level
+  // signal (input.jump) — only the tired-hop cue needs the edge. Transient
+  // input bookkeeping, deliberately not saved: a restore starts with the key
+  // "up", same spirit as jumpCharge above.
+  readonly prevJumpHeld: boolean;
   readonly status: RunStatus;
   readonly lives: number;
   readonly respawnTimer: number;
@@ -298,6 +307,7 @@ export function createInitialSkiState(): SkiState {
     jumpCharge: 0,
     landingRecovery: 0,
     tiredHop: 0,
+    prevJumpHeld: false,
     status: "skiing",
     lives: STARTING_LIVES,
     respawnTimer: 0,
@@ -343,6 +353,9 @@ function respawnAtCheckpoint(state: SkiState): SkiState {
     jumpCharge: 0,
     landingRecovery: 0,
     tiredHop: 0,
+    // Start the key "up" — a jump held through the crash shouldn't count as a
+    // fresh press on the respawn frame (same edge logic as the tired hop).
+    prevJumpHeld: false,
     status: "skiing",
     respawnTimer: 0,
   };
@@ -554,8 +567,16 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
       // cue (see TIRED_HOP_DURATION), so the renderer can show the spent
       // legs trying and failing. At most one attempt per lockout — a
       // second press finds the cue still running.
+      //
+      // The trigger is a rising edge (up→down), not just "key down": a jump
+      // key held through an air spin and carried into the touchdown is a
+      // leftover from the jump you already took, not a fresh attempt, so it
+      // must not fire the cue (bug, 2026-07-23). A held-through key instead
+      // waits out the lockout and starts a fresh charge below, exactly as the
+      // charge comment promises. A genuine press *during* the lockout still
+      // counts.
       landingRecovery = Math.max(0, landingRecovery - dt);
-      if (input.jump && tiredHop === 0) {
+      if (input.jump && !state.prevJumpHeld && tiredHop === 0) {
         tiredHop = TIRED_HOP_DURATION;
       }
     } else if (input.jump) {
@@ -612,6 +633,11 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     landingRecovery: crashed ? 0 : landingRecovery,
     // The tip-over owns the body during a crash — no tired bob under it.
     tiredHop: crashed ? 0 : tiredHop,
+    // Remember this frame's raw jump input so next frame can tell a fresh
+    // press from a held-through key (the tired-hop rising edge above). Track
+    // it even through a crash — the respawn resets it, but the intervening
+    // crashed frames shouldn't misremember a release as a press.
+    prevJumpHeld: input.jump,
     status: crashed ? "crashed" : "skiing",
     lives: crashed ? state.lives - 1 : state.lives,
     respawnTimer: crashed ? RESPAWN_DELAY : 0,
