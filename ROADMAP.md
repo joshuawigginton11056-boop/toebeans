@@ -3124,10 +3124,30 @@ the softened bleed? And the honest-finding question: boost a pivot
 clear through sideways — the moment of crossing has a small bite now;
 edge-work or snap?
 
-**Next:** per the slope-mech queue — a finish line (prerequisite for
-XP, parked since 2026-07-20), tree limbs + the crouch control (the
-missing second hazard), or purpose-built big jumps (the 360 question).
-Music still deliberately last, then the end-of-M2 tuning pass.
+**Playtest report (director, 2026-07-23): landings grip too hard —
+turning round 8 opens.** In the director's words: **"I feel like there's
+not enough slippage when I land. I jump and hold A (to go left) or D
+(to go right), and the skis go perfectly in that direction. I feel like
+I should slide forward a bit before going perfectly diagonal."**
+Reproduced and measured same session: grounded travel is hard-locked to
+the ski axis, so the landing frame redirects *all* momentum onto
+wherever the skis point — a tap jump with D held lands at heading 1.48
+rad off a 0.04 flight direction and the lateral velocity jumps 0.29 →
+7.96 u/s in that single frame. There is no slip phase anywhere in the
+model; landing is just where it's most visible. Full diagnosis + fix
+options (recommended: a landing grip window — touch down traveling
+along the flight direction and ease onto the ski axis at a grip rate,
+with the round-6 scrub keyed off the slip angle while it lasts) parked
+in [IDEAS.md](IDEAS.md) as **turning round 8**. Round 7's own feel
+questions (switch as a stance, W-as-faster, the boosted-crossing bite)
+went unremarked this playtest — still open, re-ask alongside round 8's.
+
+**Next:** turning round 8 (landing slippage — director picks from the
+sketched options). After that the slope-mech queue: a finish line
+(prerequisite for XP, parked since 2026-07-20), tree limbs + the crouch
+control (the missing second hazard), or purpose-built big jumps (the
+360 question). Music still deliberately last, then the end-of-M2
+tuning pass.
 
 ## Milestones
 

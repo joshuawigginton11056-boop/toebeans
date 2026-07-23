@@ -3,6 +3,88 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope-mech) Turning round 8: landing slippage — grip is instant (playtest, 2026-07-23)
+
+**The verdict (director, on round 7's build):** "I feel like there's not
+enough slippage when I land. I jump and hold A (to go left) or D (to go
+right), and the skis go perfectly in that direction. I feel like I
+should slide forward a bit before going perfectly diagonal."
+
+**The new bar:** touch down and keep sliding along the direction you
+were flying for a beat, the skis gripping *into* the new line rather
+than teleporting the momentum onto it.
+
+**Diagnosis** (`shared/src/skiing.ts`, measured on the live build):
+grounded travel is hard-locked to the ski axis — `travelHeading =
+heading`, every frame, no exceptions — so the model has no concept of
+velocity direction separate from ski direction on the snow. The landing
+frame therefore redirects 100% of the run's momentum onto wherever the
+skis point, in one frame: the director's exact repro (cruise at 8,
+tap-jump, hold D through the flight) lands at heading 1.48 rad off a
+0.04 flight direction, and the lateral velocity jumps **0.29 → 7.96 u/s
+in a single frame**. A full-charge version lands past sideways and
+instantly redirects −6.1 u/s the *other* way. There is no slip phase
+anywhere in the model — sharp grounded steers have the same instant
+grip (round 7's boosted-crossing "bite" is this same hard lock showing
+through the backstop dump) — but landing is where the angle gap is
+biggest, so it's where the missing slip is felt.
+
+**Fix options for the build session (director picks):**
+
+1. **Landing grip window** *(probably recommended — smallest change
+   that hits the bar)*: on touchdown, travel continues along the flight
+   direction and *eases* onto the ski axis at a `GRIP_RATE` (rad/s).
+   Rate-based easing gets angle-scaling for free — a big-angle landing
+   slides visibly longer than a small correction, with no timer. While
+   the slip lasts, key the round-6 skid scrub off the **slip angle**
+   (skis vs. travel) instead of heading-off-fall-line — "skis sideways
+   to your motion sheds speed" is literally round 6's model, so a hard
+   diagonal landing both slides *and* bleeds, which should read as the
+   skis biting in. Grounded-only play never enters the window, so
+   rounds 5–7 physics and tests stay untouched; the never-uphill
+   guarantee holds because both ends of the ease (flight direction,
+   grounded travel direction) are downhill-facing by construction —
+   assert it anyway. State cost: one transient field (or promote
+   `flightHeading`'s grounded meaning, which its comment already claims
+   is "the current travel direction"); not saved, no SAVE_VERSION bump,
+   same spirit as `jumpCharge`.
+2. **Velocity direction as first-class state — the full drift model:**
+   grounded travel *always* follows its own eased direction, gripping
+   toward the ski axis at a rate high enough that ordinary carving
+   feels unchanged. Landing slip falls out as a special case of the
+   general rule; sharp steers get a whiff of drift; and round 7's
+   boosted-crossing bite likely dissolves into a fast slip instead of a
+   one-frame dump (a real point in its favor). Cost: it rewrites the
+   ground the stance flip (round 5) and the skid scrub (round 6) were
+   built on — both assume travel locked to the axis — so it's a bigger
+   session with real retune risk across the whole turning saga.
+3. **Fixed slide timer:** for `SLIP_TIME` (~0.3s) after touchdown,
+   blend travel linearly from flight direction to ski axis. Two
+   constants, trivially predictable — but angle-independent (a 10°
+   correction slides as long as a 130° whip), which is exactly the
+   un-physical flavor the rate-based option 1 avoids for the same
+   implementation size. Probably only worth it if option 1's tuning
+   fights back.
+
+**Renderer note:** zero `skiRender.ts` changes required for the path
+itself (positions come from the sim), and skis-pointing-one-way-while-
+sliding-another falls out of the existing pose wiring for free — the
+drift should *read* immediately. Carve-spray / slip audio flourishes
+are slope-vis territory; park separately if wanted.
+
+**Tests that must change:** the two landing-stance tests gain slip
+assertions (lateral velocity ramps over the grip window — pin the
+0.29 → 7.96 one-frame jump as the anti-goal); new tests for slide
+scaling with landing angle, slip decaying to locked travel, and
+never-uphill through the slip. The round-5/6/7 pivot-and-crossing
+tests survive untouched under option 1; under option 2 most of them
+need re-deriving.
+
+**Round-7 questions still open (unremarked this playtest, re-ask with
+round 8's):** does switch feel like a real stance; W-as-faster vs
+W-as-flip instinct; 45° carve flow under sin⁴; and the boosted-crossing
+bite (edge-work or snap?) — note option 2 above may moot that last one.
+
 ## (slope-vis) Realistic snow — the follow-up test (director verdict, 2026-07-22)
 
 > **Status 2026-07-23: route 2 (procedural) was built and failed the
