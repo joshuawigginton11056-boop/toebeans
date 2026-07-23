@@ -209,6 +209,25 @@ interact with your space for more XP → repeat.
 >   director call** (the first green in the game; exact hex to be
 >   tuned on screen next session, then recorded here). The
 >   snow-shadow family stays the frost color on top of it.
+>
+> **Trees, amended again (director call, 2026-07-23 shadow session):
+> the giant solid-canopy pines are OUT — the slope needs a new tree
+> that lets light through.** Under the low dawn sun the sequoia
+> canopies threw huge unbroken shadows over the lane ("I really want
+> light to pass through … obviously the canopy isn't the move").
+> Requirements for the replacement, binding on the search:
+>
+> - **Open canopy**: visible gaps between branch tiers / sparse
+>   foliage — sunlight must reach the snow *through* the tree as
+>   dapple, not only around it. Judge every candidate by its shadow
+>   first, silhouette second.
+> - Shadows on the lane must read **soft, partial, and still** (the
+>   texel-snap and depth-range fixes from shadow round 1 are already
+>   in `skiScene.ts` and stay).
+> - Everything else still governs: palette families only, frosted
+>   **green** foliage (the pine-green amendment above carries over to
+>   the new tree), painted-detail treatment on load, the *Omno*
+>   lonely-vast mood, and the sourcing checklist below.
 
 The binding reference for all art in the game. Written 2026-07-21 from the
 director's five *Omno* reference images and their notes on each. When

@@ -3934,6 +3934,54 @@ second hazard), or purpose-built big jumps (director call whether still
 wanted now that spins are a control). Music still deliberately last,
 then the end-of-M2 tuning pass.
 
+## (slope-vis) 2026-07-23 — Shadow fix round 1 lands; verdict: the giant canopies are out — new tree search is next
+
+The director's ask: tree shadows were *moving*, and near-blanketing the
+lane — "I really want light to pass through." Diagnosis found three
+lighting bugs stacking (all `skiScene.ts`):
+
+- **Azimuth raked the lane.** The sun sat 22° off-left, so the left
+  colonnade's 75–150m shadows (35–70m giants under a ~25° dawn sun) swept
+  *across* the skiable lane — near-continuous umbra. `SUN_DIRECTION` is
+  now nearly straight down-lane (`-0.15` x-cheat, was `-0.4`; sun disc
+  billboard moved to match), so flank-tree shadows rake uphill *along*
+  the flanks instead. Ambient/sun colors re-derive automatically (they're
+  solved from the two snow palette colors, not tuned).
+- **The shadow map crawled.** The sun + shadow camera re-centered on the
+  skier every frame with no texel alignment — the 2048² map resampled
+  every silhouette per frame and all shadow edges shimmered. The camera's
+  tracking is now snapped to whole shadow-map texels in light space
+  (`SHADOW_RIGHT`/`SHADOW_UP` basis; the residual slides along the light
+  direction, which a directional shadow can't see).
+- **Shadows popped in.** Casters ~80m+ downhill fell behind the shadow
+  camera's near plane (sun 70 units out, far 160) while their 100m
+  shadows should already reach the skier — approaching a giant made its
+  shadow *appear*. Sun distance 70 → 120, far 160 → 200: everything
+  inside the ±55 light-space box now casts from the start.
+
+`npm run check` passes (101 tests, no shape changes, no SAVE_VERSION
+bump). **Not live-verified**: port 5303 was held by an earlier chat's
+server (same worktree, so it served these edits via HMR), but the Browser
+pane never composited in-session — no screenshots. The director's
+"still moving, huge shadows" verdict most likely came from the master
+checkout's own server (5173), which did **not** have these fixes — worth
+one re-look with them actually live before assuming the crawl survives.
+The snap + depth-range fixes stay regardless of tree: they stabilize
+*every* caster (skier, rocks, whatever tree comes next).
+
+**Director call (supersedes the sequoia verdict):** don't keep fighting
+the solid canopy — **find a new slope tree that lets light through.**
+The Art Style Bible's tree note in [DESIGN.md](DESIGN.md) is amended
+accordingly (giant solid-canopy pines out; open-canopy replacement
+requirements listed there). Search starts in a fresh session.
+
+**Next:** the new-tree chunk — source or build an open-canopy tree per
+the amended bible note (frosted-green foliage rule and painted-detail
+treatment carry over; converter in `tools/` if sourcing), re-scatter the
+bands for its silhouette, and live-verify shadows with round 1's fixes
+in: lane mostly sunlit, dappled light through the canopy, no crawl, no
+pop-in.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

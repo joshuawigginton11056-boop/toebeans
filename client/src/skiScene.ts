@@ -23,16 +23,38 @@ export const PALETTE = {
   chasmDark: 0x2e3548, // slate rock, deep value shift — never pure black
 } as const;
 
-// Direction from the scene toward the sun: ahead of the skier (you ski into
-// the light, which is what makes the haze glow) and off to the left, low
-// enough (~25°) that shadows stretch long across the snow.
-const SUN_DIRECTION = new THREE.Vector3(-0.4, 0.5, -1).normalize();
+// Direction from the scene toward the sun: nearly straight down-lane (you
+// ski into the light, which is what makes the haze glow) and low enough
+// (~26°) that shadows stretch long across the snow. The azimuth is cheated
+// only slightly left — shadow fix, 2026-07-23: at the old 22°-left azimuth
+// the giant colonnade's 100m shadows raked *across* the lane and kept it in
+// near-continuous shade; near head-on they rake uphill along the flanks
+// instead, and the lane keeps its sun (director ask: light must get
+// through).
+const SUN_DIRECTION = new THREE.Vector3(-0.15, 0.5, -1).normalize();
+
+// The shadow camera's screen axes, in world space — same basis lookAt()
+// builds (z toward the sun, x = up×z, y = z×x). syncEnvironment snaps the
+// camera's travel to whole shadow-map texels along these two axes; the
+// leftover slides along the light direction, which a directional shadow
+// can't see. Without the snap the map resampled every silhouette each
+// frame as it tracked the skier, and every shadow edge crawled (the other
+// half of the "shadows move" bug, 2026-07-23).
+const SHADOW_RIGHT = new THREE.Vector3()
+  .crossVectors(THREE.Object3D.DEFAULT_UP, SUN_DIRECTION)
+  .normalize();
+const SHADOW_UP = new THREE.Vector3().crossVectors(SUN_DIRECTION, SHADOW_RIGHT);
+const shadowAnchor = new THREE.Vector3();
 
 // Where the *visible* sun disc hangs: same azimuth as the light, but cheated
 // down to just above the horizon so it's actually in frame — the camera looks
 // downhill, so the real 25° sun sits above the top edge of the screen. A
 // horizon sun with long shadows still reads as one coherent dawn.
-const SUN_BILLBOARD_DIRECTION = new THREE.Vector3(-0.4, 0.075, -1).normalize();
+const SUN_BILLBOARD_DIRECTION = new THREE.Vector3(
+  -0.15,
+  0.075,
+  -1,
+).normalize();
 
 export const SLOPE_LENGTH = 100;
 // The snowfield plane: one moving window of snow that follows the skier
@@ -117,8 +139,15 @@ export function createEnvironment(
   sun.shadow.camera.right = 55;
   sun.shadow.camera.top = 55;
   sun.shadow.camera.bottom = -55;
+  // Depth range must swallow every caster inside the ±55 light-space box —
+  // the giants sit up to ~125m downhill of the anchor while still in the
+  // box, and their ~100m shadows reach the skier. With the old 70-unit sun
+  // distance and far=160 those trees fell behind the near plane and their
+  // shadows *popped in* on approach (part of the "shadows move" bug,
+  // 2026-07-23). Sun distance 120 (see syncEnvironment) + far=200 keeps
+  // them all in the map.
   sun.shadow.camera.near = 1;
-  sun.shadow.camera.far = 160;
+  sun.shadow.camera.far = 200;
   sun.shadow.normalBias = 0.05;
   sun.shadow.radius = 2; // soft penumbra, but shadows keep a solid core
   scene.add(sun, sun.target); // both follow the skier — see syncEnvironment
@@ -168,8 +197,26 @@ export function syncEnvironment(
   camera: THREE.Camera,
   trailInput?: SnowTrailInput,
 ): void {
-  environment.sun.target.position.copy(anchor);
-  environment.sun.position.copy(anchor).addScaledVector(SUN_DIRECTION, 70);
+  // Texel-snap the sun's tracking (see SHADOW_RIGHT above): quantize the
+  // anchor's light-space x/y to the shadow map's texel grid so the ortho
+  // camera only ever moves in whole-texel steps and shadows hold still.
+  const shadow = environment.sun.shadow;
+  const texel =
+    (shadow.camera.right - shadow.camera.left) / shadow.mapSize.x;
+  shadowAnchor.copy(anchor);
+  for (const axis of [SHADOW_RIGHT, SHADOW_UP]) {
+    const along = shadowAnchor.dot(axis);
+    shadowAnchor.addScaledVector(
+      axis,
+      Math.round(along / texel) * texel - along,
+    );
+  }
+  environment.sun.target.position.copy(shadowAnchor);
+  // 120 units back (was 70): far enough that casters ~125m downhill still
+  // sit past the near plane — see the depth-range note in createEnvironment.
+  environment.sun.position
+    .copy(shadowAnchor)
+    .addScaledVector(SUN_DIRECTION, 120);
   // The window recenters in steps of the vertex grid's fine z spacing, so
   // every vertex always lands on the same world-z lattice — the displaced
   // surface re-samples the height field at identical points and never
