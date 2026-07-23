@@ -3278,6 +3278,58 @@ second hazard), or purpose-built big jumps (the 360 question, possibly
 mooted if 180s stack). Music still deliberately last, then the
 end-of-M2 tuning pass.
 
+## (slope-vis) 2026-07-23 — Realism snow refinements landed for real: de-jagged carved turns + visible lumpiness
+
+The round-2 verdict's two refinements, redone with the live verification
+the first attempt lacked (the "neither change is apparent" follow-up).
+The 5303 dev server rendered this session, so every claim below has an
+on-screen before/after behind it.
+
+- **The jag, diagnosed with the director's screenshots.** Reproduced
+  live against master's code first: straight-downhill trails carve
+  clean, but any trail *diagonal to the world axes* — turns AND
+  straight traverses — breaks into a 20–30 cm sawtooth. That
+  disambiguates the four round-2 candidates: not the stance weave (a
+  traverse holds constant heading yet still jags), not brush-segment
+  scalloping (sub-centimeter sagitta at game speeds), not isotropy
+  (last session equalized the steps; no effect, as the director saw).
+  The real cause: the groove's shoulder ridge (~11 cm wide, 4.5 cm
+  tall) and core wall are **sub-grid features** — a diagonal ridge
+  crossing the 9×12 cm vertex grid gets alternately caught and missed
+  by vertices, a moiré sawtooth whose period stretches far past the
+  grid spacing at shallow angles, then amplified into hard zigzag
+  shadows by the 25° sun.
+- **The fix: band-limit what the geometry sees.** `snowHeightGeom` —
+  the carve profile tent-filtered over one grid cell (9 taps) — now
+  drives vertex displacement in both the surface material and the
+  shadow depth material, so silhouettes and cast shadows can't carry
+  frequencies the mesh can't represent. Fragment normals, carved-core
+  color, and AO still read the sharp field, so the crisp carved look
+  the verdict approved is untouched. Verified live: the same turn and
+  traverse maneuvers now leave smooth carved ribbons.
+- **Lumpiness, crank-then-dial (the follow-up's lead 2).** Cranked
+  `LUMP_AMP_*`/`GRAIN2_AMP` to obviously-too-much on screen first —
+  mechanism confirmed visible, so the originals were simply below the
+  visibility floor (shading-only relief under this scene's near-white
+  ambient is round 1's lesson repeating). Settled at roughly double:
+  lane lumps 0.05→0.12 (the trail visibly dips through them), flank
+  0.16→0.32, half-meter grain octave 0.07→0.2 (reads as crusty
+  mottling across the field). `MARKER_LIFT` rose 0.06→0.12 with the
+  lane amplitude (max lane relief is now dune 0.04 + lump 0.06).
+- Watch-item for the next playtest: checkpoint stripes and chasm slabs
+  sit at the raised 12 cm lift — clearance is guaranteed by
+  construction, but a slab edge over a deep lane hollow could show a
+  gap up close; no marker crossed the camera live this session.
+- `npm run check` passes (85 tests). Live verification on 5303: pane
+  displayed this session; baseline jag reproduced via git stash A/B,
+  fix and final tuning values confirmed served (fetch marker check)
+  and rendering.
+
+**Next:** *(slope-vis)* director look-pass on the refined snow, then
+the unblocked Art Style Bible rewrite (shape-language + asset-sourcing)
+and the approved painted-detail rollout across the 24 slope models;
+snow-cap check on the trees rides with that look-reconciliation pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

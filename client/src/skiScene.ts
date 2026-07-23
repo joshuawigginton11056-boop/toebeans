@@ -193,7 +193,9 @@ export function syncEnvironment(
 // 1–2 cm above y=0 — lane relief would poke through them. The lift is baked
 // into the geometry (mechanics code owns .position and sets its own small
 // y), sized to clear the lane's dune amplitude.
-const MARKER_LIFT = 0.06;
+// Raised 0.06 → 0.12 with the lane lump amplitude (refinement round,
+// 2026-07-23 follow-up): lane relief maxes at dune 0.04 + lump 0.06.
+const MARKER_LIFT = 0.12;
 
 // The look of a checkpoint: a glacial-ice stripe lying on the snow.
 // Mechanics code positions it at the checkpoint's distance.
@@ -364,14 +366,22 @@ const DUNE_TILE = 13; // world units per dune-texture tile (~3–6 m dunes)
 // self-shadow. Kept subtle in the lane (groomed piste, and the lane
 // surface must stay under the markers' 6 cm lift).
 const LUMP_TILE = 4.3;
-const LUMP_AMP_LANE = 0.05;
-const LUMP_AMP_FLANK = 0.16;
+// Refinement round (2026-07-23 follow-up): the original 0.05/0.16 sat
+// below the visibility floor — the crank test (0.3/0.6) proved the
+// mechanism reads, so these settle at roughly double the originals: lane
+// lumps the trail visibly dips through, flank lumps that hold their own
+// against the ±40 cm dunes. MARKER_LIFT rose with the lane amplitude.
+const LUMP_AMP_LANE = 0.12;
+const LUMP_AMP_FLANK = 0.32;
 const GRAIN_TILE = 8; // world units per grain-texture tile
 const GRAIN_AMP = 0.05; // fine crust height — feeds normals, not geometry
 // A second, chunkier grain octave (same director ask) — shading-only
 // lumpiness at the half-meter scale.
 const GRAIN2_TILE = 2.6;
-const GRAIN2_AMP = 0.07;
+// Same refinement round: 0.07 of shading-only relief was invisible under
+// this scene's near-white ambient (round 1's bump-map lesson repeating) —
+// the crank test's 0.3 read as dense crusty mottling, so it lands here.
+const GRAIN2_AMP = 0.2;
 // Vertex grid spacing: fine inside the carve strip and around the skier,
 // coarse elsewhere. SNOW_Z_STEP doubles as the window's recenter snap (see
 // syncEnvironment). ~305k vertices — all static; only the shader moves
@@ -625,6 +635,29 @@ float snowLump(vec2 w) {
 float snowHeight(vec2 w) {
   return snowDune(w) + snowLump(w) + snowProfile(snowCarve(w));
 }
+// The height the GEOMETRY is displaced by: same field, but the groove
+// profile is band-limited to the vertex grid first. The shoulder ridge and
+// core wall are ~one grid cell wide — a diagonal groove crossing the grid
+// raw gets alternately caught and missed by vertices, a moiré sawtooth
+// whose period stretches to 20-30 cm at shallow angles (the director's
+// "weird wavy/jagged when turning": isotropic spacing alone couldn't fix a
+// sub-grid feature). A 3x3 tent filter spanning one cell keeps frequencies
+// the grid can't represent out of the mesh — silhouettes and the shadow
+// pass go smooth, while fragment normals / carve color / AO keep reading
+// the sharp field, so the carved look the verdict approved is untouched.
+float snowHeightGeom(vec2 w) {
+  vec2 e = vec2(${SNOW_X_STEP.toFixed(3)}, ${SNOW_Z_STEP.toFixed(3)});
+  float p = snowProfile(snowCarve(w)) * 4.0;
+  p += snowProfile(snowCarve(w + vec2(e.x, 0.0))) * 2.0;
+  p += snowProfile(snowCarve(w - vec2(e.x, 0.0))) * 2.0;
+  p += snowProfile(snowCarve(w + vec2(0.0, e.y))) * 2.0;
+  p += snowProfile(snowCarve(w - vec2(0.0, e.y))) * 2.0;
+  p += snowProfile(snowCarve(w + e)) * 1.0;
+  p += snowProfile(snowCarve(w - e)) * 1.0;
+  p += snowProfile(snowCarve(w + vec2(e.x, -e.y))) * 1.0;
+  p += snowProfile(snowCarve(w - vec2(e.x, -e.y))) * 1.0;
+  return snowDune(w) + snowLump(w) + p / 16.0;
+}
 `;
 
 // Fragment-only: the full-detail height (adds crust grain) and its
@@ -651,7 +684,7 @@ vec3 snowNormal(vec2 w) {
 // so a world-space height offset is a local-space one too.
 const SNOW_DISPLACE_GLSL = `
 vec4 snowW = modelMatrix * vec4(position, 1.0);
-float snowH = snowHeight(snowW.xz);
+float snowH = snowHeightGeom(snowW.xz);
 transformed.y += snowH;
 `;
 
