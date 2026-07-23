@@ -161,9 +161,11 @@ interface Hint {
 // keycaps printed on them, which is the hint bar's job done better.
 const SLOPE_HINTS: readonly Hint[] = [
   { key: "← →", label: "steer" },
-  // W's full meaning is "downhill, faster" (turning round 4) — one word
-  // has to carry it, and "downhill" is the half a player can't guess.
-  { key: "↑", label: "downhill" },
+  // W's full meaning is "straighten out and go faster, in the stance
+  // you're in" (turning round 7 — riding switch it speeds you backwards
+  // rather than flipping you forward, so round 4's "downhill" label went
+  // stale). One word has to carry it; "faster" is the constant half.
+  { key: "↑", label: "faster" },
   { key: "↓", label: "brake" },
   // Hold-to-charge: the hold is the half of the control a player can't
   // guess from "jump" alone.

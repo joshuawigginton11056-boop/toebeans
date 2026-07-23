@@ -86,18 +86,24 @@ const BRAKE_DECEL = 10;
 // The skid scrub (turning round 6, director verdict 2026-07-22: "momentum
 // should be lost if the skis are sideways"). The speed-loss rate ramps with
 // how far the skis are turned off the fall line — aligned coasting sheds at
-// plain COAST_DRAG, fully sideways skids at this rate, blended by sin² of
+// plain COAST_DRAG, fully sideways skids at this rate, blended by sin⁴ of
 // the heading (which is also symmetric for switch: tails-first down the
-// fall line is aligned too, no scrub). 45 is deliberately far above the
-// IDEAS sketch's 12–15 guess: measured against the boosted worst case
-// (BOOST_SPEED 16, boosted turn rate 2.52 rad/s → sideways in ~0.62s),
-// 15 still arrives at the crossing carrying ~10 u/s — which the stance
-// flip would mirror, re-creating the exact jerk that failed round 5's
-// playtest. At 45 the same pivot arrives carrying ~0.1 u/s: below the flip
-// epsilon, so the speed simply eases through zero and both round-5 jerks
-// (the lateral mirror, the re-fire reversal) dissolve with no special case
-// at the crossing. Side effect, deliberate: a full-sideways hockey stop
-// from boost speed now takes ~0.4s instead of ~4s.
+// fall line is aligned too, no scrub). The exponent was sin² through round
+// 6; round 7 steepened it to sin⁴ (director pick, 2026-07-23, answering
+// round 6's "it feels abrupt"): the full 45 skid at dead sideways is
+// untouched — hockey stops stay decisive at ~0.36s from boost — but the
+// mid-carve bleed roughly halves (a 45° carve scrubs at 14.25 u/s² instead
+// of 24.5), so held diagonals and slalom swings keep their flow. Measured
+// cost of the steeper curve: the boosted worst-case pivot (BOOST_SPEED 16,
+// boosted turn rate 2.52 rad/s → sideways in ~0.62s) now crosses the high-
+// scrub zone too fast to die entirely and reaches the crossing at ~3.7 u/s
+// (sin² spent it to ~0.1), where the backstop flip dumps it — a ~4.4 u/s
+// one-frame lateral change, far under round 5's rejected ~27 but no longer
+// nothing. Unboosted pivots still arrive spent (~0.02). Raising the peak to
+// re-spend the boosted crossing would undo the softening (at 90, a 45°
+// carve is back to sin² bleed) and sharpen the hockey stop — the wrong
+// trade against the "abrupt" verdict, so the small boosted-crossing bite
+// stands as the tuning knob to revisit at playtest.
 const SKID_SCRUB = 45;
 // Steering is a real turn (M2 heading session): holding left/right keeps
 // rotating the skis, up to fully sideways and beyond — there's no built-in
@@ -122,23 +128,35 @@ const BOOST_TURN_MULTIPLIER = 1.4;
 // turnaround bug: 3.5s of uphill travel at 9+ u/s). When a grounded pivot
 // carries the heading across ±π/2 above this epsilon, the speed sign flips
 // so the downhill component of travel never turns uphill. Since round 6's
-// skid scrub, the flip is a backstop rather than the normal path: any held
-// pivot arrives at the crossing already scrubbed below this epsilon (see
-// SKID_SCRUB), where the easing-through-zero handles it. The flip only
-// fires on states that skip the scrubbed approach — chiefly landing a jump
-// pointed near sideways at speed — and it dumps the run to this epsilon
+// skid scrub, the flip is a backstop rather than the normal path: an
+// unboosted held pivot arrives at the crossing already scrubbed below this
+// epsilon (see SKID_SCRUB), where the easing-through-zero handles it. The
+// flip fires on states that outrun the scrubbed approach — landing a jump
+// pointed near sideways at speed, or (since round 7's sin⁴ softening) a
+// boosted held pivot, which crosses carrying a few u/s — and it dumps the
+// run to this epsilon
 // rather than carrying the magnitude (round 5's carry mirrored the lateral
 // drift, which is the jerk that failed its playtest; and crossing sideways
 // spending the run IS the round-6 model). So a crossing is never faster
 // than a crawl, whichever path reached it.
 const PIVOT_FLIP_MIN_SPEED = 1;
-// W means "downhill" (turning round 4, director call 2026-07-22). On top of
-// its speed-up meaning, holding W steers the skis home: the heading eases
-// toward straight-downhill at the normal turn rate, so you can carve into
-// switch and come back to forward running without ever releasing W. With a
-// steer key held too, the target is a carve diagonal to that side instead —
-// W+left/right holds a stable diagonal rather than fighting the steer to a
-// draw. Left/right alone still steer additively, exactly as before.
+// W means "faster, in the stance you're in" (turning round 7, director call
+// 2026-07-23: "I want to be able to turn around and continue down the slope
+// backwards" — riding switch is a first-class way down the hill, not just
+// the aftermath of a pivot). On top of its speed-up meaning, holding W
+// straightens the skis onto the fall line *in the current stance*: forward
+// it eases the heading toward straight-downhill (turning round 4's seek,
+// unchanged); riding switch it eases toward straight-backwards instead, so
+// W backwards means "line up and go faster backwards" — never the surprise
+// 180 that round 4's always-seek-forward fired (that whip through the skid
+// zone was a chunk of round 6's "abrupt" verdict, and it inverted this
+// round's director bar). Note this deliberately re-calls round 4's bar
+// ("return from switch on W alone"): coming back forward is now a held
+// steer carve through sideways — which pays the round-6 skid toll, exactly
+// like turning into switch does. With a steer key held too, the target is
+// the carve diagonal to that side in the same stance (mirrored while
+// switch, so each key keeps pulling toward its own screen side). Dead
+// backwards is switch's stable point now, not a tie to break.
 const SEEK_DIAGONAL = Math.PI / 4;
 // Half the skiable width. Widened 4 → 12 (director directive, 2026-07-22:
 // open up the skiable area — carving, hockey stops, and switch riding all
@@ -280,15 +298,22 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     steerAuthority *
     dt;
   if (input.up) {
-    // W seeks the fall line: ease toward pointing downhill (or a carve
-    // diagonal, with a steer key). Easing the nearest-equivalent offset
-    // takes the shortest way around — which is also the side you're
-    // already drifting toward; from exactly backwards, where both ways
-    // are equidistant, the tie breaks to a right turn.
-    const target =
+    // W seeks the fall line in the current stance (turning round 7 — see
+    // SEEK_DIAGONAL): forward stances ease toward straight-downhill,
+    // switch stances toward straight-backwards, each with its own carve
+    // diagonals a steer key away. The stance test is which alignment the
+    // skis are nearer (the flip and the scrub keep travel and heading in
+    // step through crossings, and it stays well-defined at a standstill,
+    // where the speed sign wouldn't be). Easing the nearest-equivalent
+    // offset takes the shortest way around; since the target is always in
+    // the heading's own half, the seek never carries the skis across
+    // sideways — and no target is ever a half-turn away, which retires
+    // round 4's exactly-backwards tie-break.
+    const forwardTarget =
       (input.right ? SEEK_DIAGONAL : 0) - (input.left ? SEEK_DIAGONAL : 0);
-    let delta = downhillHeading(target - heading);
-    if (delta === -Math.PI) delta = Math.PI;
+    const ridingSwitch = Math.abs(downhillHeading(heading)) > Math.PI / 2;
+    const target = ridingSwitch ? Math.PI + forwardTarget : forwardTarget;
+    const delta = downhillHeading(target - heading);
     heading += Math.max(-maxTurn, Math.min(maxTurn, delta));
   } else {
     if (input.left) heading -= maxTurn;
@@ -329,7 +354,7 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     // hard hockey-stop skid at full sideways (see SKID_SCRUB).
     const gainingMagnitude = (stepUp ? speed : -speed) >= 0;
     const skidScrub =
-      COAST_DRAG + (SKID_SCRUB - COAST_DRAG) * Math.sin(heading) ** 2;
+      COAST_DRAG + (SKID_SCRUB - COAST_DRAG) * Math.sin(heading) ** 4;
     const rate = gainingMagnitude
       ? input.boost
         ? BOOST_ACCEL
