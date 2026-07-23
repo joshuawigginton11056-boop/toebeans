@@ -56,12 +56,16 @@ export interface SkiSceneHandle {
 const TIP_DURATION = 0.35;
 
 // The tired hop's shape (the sim's TIRED_HOP_DURATION clock drives it): a
-// jump press eaten by the landing lockout buckles the spent legs into a
-// weak extra crouch (TIRED_DIP, in tuck units), then a feeble push lifts
-// the whole rig a few centimeters (TIRED_LIFT, world units — a real tap
-// jump flies ~1.4, so this reads as pathetic on purpose) and drops it
-// back. Both are knobs: deeper dip = wearier legs, more lift = more hop.
-const TIRED_DIP = 0.35;
+// jump press eaten by the landing lockout sinks the spent legs into a deep
+// labored crouch (TIRED_DIP, in tuck units — retuned 2026-07-23 from 0.35,
+// which read as a stutter; at cruise the baseline tuck is ~0.33, so this
+// bottoms out near a full crouch), holds the strain at the bottom, then a
+// feeble push extends the legs (TIRED_EXTEND) and lifts the whole rig a few
+// centimeters (TIRED_LIFT, world units — a real tap jump flies ~1.4, so the
+// hop reads as pathetic on purpose) before gravity wins and everything
+// settles. All knobs: deeper dip = wearier legs, more lift = more hop.
+const TIRED_DIP = 0.65;
+const TIRED_EXTEND = 0.2;
 const TIRED_LIFT = 0.07;
 
 export function createSkiScene(container: HTMLElement): SkiSceneHandle {
@@ -226,14 +230,26 @@ export function syncSkiSceneToState(
   if (state.tiredHop > 0) {
     const attempt = 1 - state.tiredHop / TIRED_HOP_DURATION;
     if (attempt < 0.45) {
-      // The buckle: knees give under the press.
-      tiredTuck = TIRED_DIP * Math.sin((Math.PI * attempt) / 0.45);
-    } else if (attempt < 0.85) {
-      // The feeble push: legs extend weakly, the rig lifts a few
-      // centimeters, and gravity wins.
-      const push = Math.sin((Math.PI * (attempt - 0.45)) / 0.4);
-      tiredTuck = -0.2 * push;
-      tiredLift = TIRED_LIFT * push;
+      // The sink: knees give slowly under the press, easing to a stop at
+      // the bottom of the labored crouch (sin ends flat at π/2).
+      tiredTuck = TIRED_DIP * Math.sin((Math.PI / 2) * (attempt / 0.45));
+    } else if (attempt < 0.6) {
+      // The strain: held deep at the bottom — the legs trying and failing
+      // to find the push. The wobble layer keeps it alive.
+      tiredTuck = TIRED_DIP;
+    } else {
+      // The feeble push and collapse: up out of the crouch, a weak leg
+      // extension under a few centimeters of lift, and gravity wins —
+      // everything settles back to exactly baseline. At boost speeds the
+      // baseline tuck is already near full and the sink clamps invisible,
+      // so this half — the lift arc and the extension dipping *below*
+      // baseline — is what carries the read there.
+      const p = (attempt - 0.6) / 0.4;
+      tiredLift = TIRED_LIFT * Math.sin(Math.PI * p);
+      tiredTuck =
+        p < 0.5
+          ? TIRED_DIP * Math.cos(Math.PI * p)
+          : -TIRED_EXTEND * Math.sin(Math.PI * (2 * p - 1));
     }
   }
   // Set every frame (0 when the cue is idle) so the rig always lands back

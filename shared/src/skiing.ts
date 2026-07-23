@@ -258,11 +258,15 @@ export const LANDING_RECOVERY = 0.3;
 // gameplay effect the lockout exists to deny. So the sim just starts this
 // clock when a press lands during the lockout, and the renderer shapes the
 // weak knee-dip and feeble lift from it — the skis never actually leave the
-// snow. Sized to LANDING_RECOVERY so one lockout fits at most one attempt:
-// a second press finds the cue still running and does nothing. A *real*
-// launch cancels any leftover cue — the legs evidently recovered. Exported
-// for the renderer (it normalizes the clock into animation progress).
-export const TIRED_HOP_DURATION = 0.3;
+// snow. Sized *longer* than LANDING_RECOVERY (retune, director verdict
+// 2026-07-23: the 0.3s version read as a stutter — "needs to be a slow and
+// deep attempt"), so the cue visibly outlives the lockout; a real launch
+// under a leftover cue cancels it — the legs evidently recovered. The
+// one-attempt-per-lockout guarantee only needs duration ≥ LANDING_RECOVERY
+// (a second press finds the cue still running and does nothing) — there's a
+// test pinning that ordering. Exported for the renderer (it normalizes the
+// clock into animation progress).
+export const TIRED_HOP_DURATION = 0.8;
 const GRAVITY = -18;
 const CHASM_CLEAR_HEIGHT = 0.4;
 export const STARTING_LIVES = 9;

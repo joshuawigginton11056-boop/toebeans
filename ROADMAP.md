@@ -3838,6 +3838,83 @@ second hazard), or purpose-built big jumps (director call whether still
 wanted now that spins are a control). Music still deliberately last,
 then the end-of-M2 tuning pass.
 
+## (slope-mech) 2026-07-23 — M2: the tired hop retuned — slow and deep
+
+The playtest verdict on the tired hop, verbatim: "too rapid and shallow —
+needs to be a slow and deep attempt." The mechanism stood; the shape was
+wrong. All three knobs the last entry flagged got turned, and the curve
+itself was reshaped from a quick blip into a labored struggle: press jump
+during the landing beat and the skier now sinks slowly into a deep
+crouch, *holds the strain at the bottom* — legs trying and failing to
+find the push — then manages a feeble few-centimeter hop and collapses
+back to baseline. The whole attempt takes 0.8s instead of 0.3s.
+
+- **The clock** (`shared/src/skiing.ts`): `TIRED_HOP_DURATION` 0.3 →
+  0.8s (the retune notes suggested 0.7–0.9). The renderer's phases are
+  progress fractions, so they stretched with it for free — but the curve
+  was reshaped anyway (below), because a stretched blip is still a blip.
+- **The shape** (`client/src/skiRender.ts`): the old two-phase
+  sin-arc (buckle 45% / push 40%) became a three-phase struggle — a slow
+  sink easing to a stop at the bottom (0–45%, ~0.36s), a **held strain**
+  at full depth (45–60%, new — the old curve never dwelled, which is a
+  lot of why it read as a stutter; the existing wobble layer keeps the
+  hold alive), then the feeble push-and-collapse (60–100%): up out of
+  the crouch, a weak leg extension (`TIRED_EXTEND` 0.2, new knob) under
+  the lift arc, settling back to exactly baseline. All phase boundaries
+  are continuous — no pops.
+- **The depth**: `TIRED_DIP` 0.35 → 0.65. Baseline cruise tuck is
+  ~0.33, so the sink now bottoms out at ~0.98 — a genuinely full labored
+  crouch, roughly what a maxed jump-charge load looks like, versus the
+  old half-crouch flicker. `TIRED_LIFT` stays 0.07 — the hop staying
+  pathetic is the point; the effort lives in the slow deep buckle.
+- **The boost caveat from the retune notes, handled the way they
+  suggested**: at boost speeds the baseline tuck is already ~1.0 and the
+  sink clamps invisible (`setSkiMotion` clamps tuck to [0,1]), so the
+  read there comes from the back half — the lift arc and the extension
+  dipping *below* baseline, which survive the clamp. Worth one boost-
+  speed glance at playtest, but the common case (cruise landing) gets
+  the full struggle.
+- **The interaction the last entry warned about, now pinned**: the
+  one-attempt-per-lockout guarantee only holds while the cue outlasts
+  the lockout, and at 0.8s the cue visibly outlives it — a press
+  recovered mid-cue can charge and launch, and the existing real-launch
+  cancel covers it (test already pinned). New test asserts
+  `TIRED_HOP_DURATION ≥ LANDING_RECOVERY` outright, so a future retune
+  of either constant can't silently hand mashers a second attempt.
+  Tests 100 → 101; no SAVE_VERSION bump (no state shape change).
+- `npm run check` (101 tests) and `npm run build` pass. Live-verified
+  against the served modules (this session's port 5302 was again held by
+  an earlier chat's server for this same worktree — same folder, so it
+  serves these edits; confirmed the served sim exports the new 0.8
+  before trusting anything): the served `stepSkiing` measures lockout
+  0.3 at touchdown, locked press → cue 0.8 with charge 0, a mash two
+  frames later reads 0.76 (falling, not reset), the cue holds 0.52 when
+  the lockout ends (outliving it as designed), 26 wind-down frames with
+  height and charge pinned at 0, then a free tap flies with the cue
+  cleared. The served renderer, probed at key clock values with a spied
+  `setSkiMotion`: baseline tuck 0.3333 → mid-sink 0.7930 → strain hold
+  0.9833 (continuous across the phase boundary) → lift peak 0.070 with
+  tuck back at baseline → extension 0.1333 (−0.2 exactly) with lift
+  0.0495 → clean settle to baseline/0. Zero console errors. Standing
+  caveat: the pane suspends rAF, so the *feel* under real keys is the
+  playtest's call.
+
+**What to playtest:** `npm run dev`, Enter to ski. Jump, land, and press
+jump during the landing beat — the skier should now sink into a slow,
+deep, straining crouch, hang there a beat, then manage a pathetic little
+hop and settle. The feel questions: does it read as spent legs straining
+now (the verdict's ask), or has it swung too slow — does 0.8s of
+struggle ever get in the way when you're trying to line up the next real
+jump? Is the held moment at the bottom the right length? And one glance
+while boosting: does the attempt still read at all when the skier is
+already fully tucked?
+
+**Next:** the round-10 queue — a finish line (prerequisite for XP,
+parked since 2026-07-20), tree limbs + the crouch control (the missing
+second hazard), or purpose-built big jumps (director call whether still
+wanted now that spins are a control). Music still deliberately last,
+then the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
