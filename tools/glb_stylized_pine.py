@@ -13,12 +13,18 @@
 #     The mesh's COLOR_0 vertex shading (baked AO-ish variation) is kept.
 #   - Leaves material: the foliage is alpha-cutout cards, so the texture's
 #     alpha channel IS the frond silhouette and must survive. The RGB is
-#     baked to white (color comes from baseColorFactor so skiScene can
-#     treat it like any palette material), the image is downscaled, and
-#     alphaMode goes BLEND -> MASK so a forest of overlapping cards
-#     depth-sorts correctly and casts real shadows. Renamed "PineSnow",
-#     colored in the snow-shadow family (the canopies read snow-laden,
-#     per the sequoia-grove reference — the palette has no green).
+#     REPAINTED from that silhouette into frosted green (director call,
+#     2026-07-23): pine green in the interior, white frost on the needle
+#     tips. "Tips" = the outer edge of the silhouette, so the frost is a
+#     distance-from-edge gradient (thin lobes stay white, the dense body
+#     goes green). baseColorFactor is then WHITE so the painted RGB shows
+#     through unmodified — the green lives in the pixels, not the factor,
+#     because a tinting factor would also tint the white frost. The image
+#     is downscaled, and alphaMode goes BLEND -> MASK so a forest of
+#     overlapping cards depth-sorts correctly and casts real shadows.
+#     Renamed "PineSnow". The green is the game's first (pine-green family
+#     added to the palette by director call); the snow-shadow family stays
+#     the frost color on top of it.
 #   - Origin snapped to the base (min Y -> 0), matching every other prop.
 #   - Unreferenced buffer data (the dropped ~2 MB of bark textures) is
 #     repacked away; triangle counts are reported against the bible's
@@ -36,11 +42,18 @@ import struct
 import sys
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageChops, ImageFilter
 
 # Palette targets (sRGB hex). Value shifts of palette colors, per the bible.
 BARK_HEX = "#8C6539"  # 7 birch amber, deep shift — same as obj2glb "Wood"
-LEAF_HEX = "#E4EAF4"  # 2 snow shadow, lightened — snow-laden canopy
+# Pine-green family — the game's FIRST green, added by director call
+# (2026-07-23). Tuned on the slope under dawn light. The frost is white
+# (snow-shadow family reads as the frost, sat on the green needle body).
+GREEN_HEX = "#4E6B4C"
+FROST_HEX = "#FFFFFF"
+# How many 1px erosions from the silhouette edge fade fully to green. Bigger
+# = thinner frost / more green; smaller = frostier. Tuned on screen.
+FROST_DEPTH = 10
 LEAF_IMAGE_SIZE = 256  # the source silhouette is 1024px; 256 keeps the edge
 
 PROP_BUDGET = 2000
@@ -122,14 +135,42 @@ def snap_origin_to_base(gltf: dict, binary: bytearray) -> float:
     return -min_y
 
 
+def _hex_rgb(hex_color: str) -> tuple[int, int, int]:
+    value = hex_color.lstrip("#")
+    return tuple(int(value[i : i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
+
+
+def frost_over_green(alpha: Image.Image) -> Image.Image:
+    """RGBA card: green interior fading to white frost at the needle tips.
+
+    Frost is keyed off distance from the silhouette edge — a pixel's depth is
+    how many 1px erosions (Chebyshev distance) it survives, so thin outer
+    lobes stay near the edge (white) while the dense body reaches full green.
+    Pure PIL (no numpy/scipy in this env): erode with a 3x3 min filter and
+    accumulate a depth map.
+    """
+    mask = alpha.point(lambda v: 255 if v > 127 else 0)
+    depth = Image.new("L", alpha.size, 0)
+    current = mask
+    for _ in range(FROST_DEPTH):
+        current = current.filter(ImageFilter.MinFilter(3))
+        depth = ImageChops.add(depth, current.point(lambda v: 1 if v > 127 else 0))
+    # t: 0 at the edge (white frost) -> 255 deep in the body (green).
+    t = depth.point(lambda d: int(255 * min(d / FROST_DEPTH, 1.0)))
+    green = Image.new("RGB", alpha.size, _hex_rgb(GREEN_HEX))
+    frost = Image.new("RGB", alpha.size, _hex_rgb(FROST_HEX))
+    rgb = Image.composite(green, frost, t)  # green where t=255, frost where t=0
+    r, g, b = rgb.split()
+    return Image.merge("RGBA", (r, g, b, alpha))
+
+
 def rebake_leaf_image(png_bytes: bytes) -> bytes:
-    """White RGB + original alpha, downscaled: the silhouette without the green."""
+    """Frosted-green RGB + original alpha, downscaled."""
     image = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
     alpha = image.getchannel("A").resize(
         (LEAF_IMAGE_SIZE, LEAF_IMAGE_SIZE), Image.LANCZOS
     )
-    white = Image.new("L", alpha.size, 255)
-    baked = Image.merge("RGBA", (white, white, white, alpha))
+    baked = frost_over_green(alpha)
     out = io.BytesIO()
     baked.save(out, format="PNG", optimize=True)
     return out.getvalue()
@@ -218,7 +259,9 @@ def convert(source: Path, output_dir: Path, name: str) -> None:
             "doubleSided": True,  # cards must read from both sides
             "pbrMetallicRoughness": {
                 "baseColorTexture": {"index": 0, "texCoord": 0},
-                "baseColorFactor": hex_to_linear_factor(LEAF_HEX),
+                # White: the frosted-green color lives in the painted RGB
+                # (a tint here would also tint the white frost).
+                "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
                 "metallicFactor": 0.0,
                 "roughnessFactor": 1.0,
             },

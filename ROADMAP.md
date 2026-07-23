@@ -4181,6 +4181,67 @@ feel natural alongside the drag-look?
 in that entry above), then the round-10 queue: a finish line, tree limbs
 + crouch, or purpose-built big jumps.
 
+## (slope-vis) 2026-07-23 — Frosted-green pines: green needles, white frosted tips
+
+Director redirect on the new-tree chunk, verbatim: "i want frosted green
+trees" → "green with white frosted tips." So instead of sourcing a
+brand-new open-canopy tree, the standing MegaKit stylized pines were
+**recolored** — their canopies went from solid frost-white to green
+boughs with white frost on the needle tips.
+
+- **The problem with the old bake.** `glb_stylized_pine.py` baked the
+  leaf card's RGB to solid white and tinted it via `baseColorFactor`
+  (snow-shadow), so the whole canopy read as one flat near-white. Green
+  can't come from the factor: a factor tints the frost too, so it can't
+  stay white. The green has to live in the *pixels*.
+- **Frost = distance from the edge.** The leaf card is an alpha-cutout
+  silhouette (a pine bough). "Tips" are its outer edge, so the frost is a
+  distance-from-edge gradient: erode the silhouette 1px at a time and
+  count how many passes each pixel survives — thin outer needles vanish
+  fast (stay white), the dense interior survives deep (goes green). Pure
+  PIL (no numpy/scipy in this env): 3×3 min-filter erosions accumulated
+  into a depth map, composited green-over-white. New `frost_over_green`
+  in the converter; `baseColorFactor` set to white so the paint shows
+  through. Knobs: `GREEN_HEX` (`#4E6B4C`, palette #13 — the game's first
+  green), `FROST_DEPTH` (10 — bigger = thinner frost).
+- **Re-frosted the shipped assets in place.** The original green-textured
+  MegaKit sources aren't kept in the repo, but the leaf *alpha* is
+  preserved inside each converted GLB — and the frosted-green look is
+  generated purely from that alpha. So `tools/frost_pine_leaves.py`
+  (new) re-processes `assets/slope/StylizedPine_{1..5}.glb` offline,
+  reusing the converter's `frost_over_green` for a single source of
+  truth. No re-download.
+- **These pines already let light through.** They're alpha-cutout boughs,
+  not a solid canopy — which is what the shadow-session's open-canopy
+  amendment was reaching for. Verified in a faithful in-engine render
+  (three.js loaded from the running dev server, the game's exact dawn
+  ambient/sun/fog and round-1 shadow setup, rendered headless since the
+  pane won't composite): green survives the near-white ambient (no
+  wash-out), white tips read crisply, snow and sky show *through* the
+  bough gaps, shadows soft and directional. Whether this fully satisfies
+  "light passes through" or a sparser tree is still wanted is the
+  director's look-pass call — the new-tree search is paused, not
+  cancelled (bible note updated).
+- No scatter/`DECOR_BANDS` change (recolor only), no state change, **no
+  SAVE_VERSION bump**. Palette gains #13 pine green; CREDITS + bible
+  updated. `npm run check` passes (101 tests).
+
+**What to playtest:** `npm run dev`, Enter to ski. The treeline canopies
+should now read as frosted evergreen — green needles under white frost —
+instead of solid snow-white. Questions: is `#4E6B4C` the right green
+under the dawn light (too dark / too muted / too cold?), and is the
+frost the right amount (`FROST_DEPTH` — more white on the tips, or more
+green showing)? Both are one-line tunes + a re-run of
+`tools/frost_pine_leaves.py`. And the standing look-pass question: do
+these alpha-cutout pines pass enough light through to call the
+open-canopy requirement met, or do you still want a sparser tree?
+
+**Next:** *(slope-vis)* director look-pass on the frosted-green pines
+(green hex + frost amount + the open-canopy question above); then the
+Art Style Bible shape-language + asset-sourcing rewrite (still queued;
+now with a third case to codify — alpha-silhouette masks repainted with
+a generated gradient).
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

@@ -206,9 +206,13 @@ interact with your space for more XP → repeat.
 > - **Frosted foliage, not white:** pine canopies must read as frost
 >   over *visible green* — not the solid snow-white of the chunk's
 >   first pass. This adds a **pine-green family to the palette by
->   director call** (the first green in the game; exact hex to be
->   tuned on screen next session, then recorded here). The
->   snow-shadow family stays the frost color on top of it.
+>   director call** (the first green in the game). **Done + hex
+>   recorded 2026-07-23:** palette #13 `#4E6B4C`, painted as *green
+>   body → white frosted tips* (the frost is a distance-from-edge
+>   gradient on the needle silhouette, so the thin outer needles stay
+>   white and the dense interior goes green — `tools/glb_stylized_pine.py`
+>   `frost_over_green`; knobs `GREEN_HEX`/`FROST_DEPTH`). The
+>   snow-shadow family reads as the frost sitting on top of it.
 >
 > **Trees, amended again (director call, 2026-07-23 shadow session):
 > the giant solid-canopy pines are OUT — the slope needs a new tree
@@ -228,6 +232,18 @@ interact with your space for more XP → repeat.
 >   **green** foliage (the pine-green amendment above carries over to
 >   the new tree), painted-detail treatment on load, the *Omno*
 >   lonely-vast mood, and the sourcing checklist below.
+>
+> **Trees, latest (director redirect, 2026-07-23 frosted-green session):
+> stay on the MegaKit stylized pines — recolor, don't replace.** Rather
+> than sourcing a brand-new tree, the standing pines were repainted to
+> the frosted-green above. These pines are **alpha-cutout boughs, not a
+> solid canopy**: light already reaches the snow *through* them as
+> dapple (verified in-engine under the round-1 shadow fixes — gaps
+> between boughs, soft directional shadows), which is what the
+> open-canopy amendment was reaching for. Whether that fully satisfies
+> "light passes through" or a sparser tree is still wanted is the
+> director's look-pass call; the new-tree *search* is paused, not
+> cancelled, pending it.
 
 The binding reference for all art in the game. Written 2026-07-21 from the
 director's five *Omno* reference images and their notes on each. When
@@ -245,7 +261,7 @@ had no depth — no footprints, no ski trails carved into it.
 Big empty bright spaces where the skier and cat are small; the warmth comes
 from the characters, not the landscape.
 
-### Palette (12 colors)
+### Palette (13 colors)
 
 Every material in the game comes from this list (small value shifts for
 shading are fine; new hues are not).
@@ -264,6 +280,7 @@ shading are fine; new hues are not).
 | 10 | `#79B7D8` | Glacial ice | Ice walls and frozen hazards — the coldest, most saturated blue. |
 | 11 | `#4E72A8` | Skier blue | The player's coat. Reserved — nothing else in a scene uses it, so the player always reads instantly. |
 | 12 | `#C6473E` | Signal red | The cat's scarf/accent, hazard warnings, small critters. Also reserved — red means "look at this." |
+| 13 | `#4E6B4C` | Pine green | Evergreen needles. The game's first green (added by director call, 2026-07-23). Always worn *under* white frost on the tips — never a bare flat green field. |
 
 Rough scene balance: ~60% snow whites (1–3), ~25% sky/haze (4–6), ~10%
 landscape accents (7–10), ~5% character/signal (11–12). If a screenshot
