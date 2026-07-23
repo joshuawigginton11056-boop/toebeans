@@ -3928,11 +3928,47 @@ jump? Is the held moment at the bottom the right length? And one glance
 while boosting: does the attempt still read at all when the skier is
 already fully tucked?
 
-**Next:** the round-10 queue — a finish line (prerequisite for XP,
-parked since 2026-07-20), tree limbs + the crouch control (the missing
-second hazard), or purpose-built big jumps (director call whether still
-wanted now that spins are a control). Music still deliberately last,
-then the end-of-M2 tuning pass.
+**Playtest verdict (director, 2026-07-23): "it's not fast enough now.
+by deep i meant an actual small hop."** Two corrections, and the second
+one re-reads the original directive: the 0.8s struggle overshot — the
+attempt needs to be quicker again — and "deep" was never about the
+crouch. The director wants the failed attempt to be **a real small hop
+off the snow**, not a buckle that stays grounded. The slow sink + strain
+hold this session built is the wrong emphasis: the read should be a
+quick spent-legs attempt that actually pops a little air and lands going
+nowhere.
+
+Retune notes for the next session (its own session, director call):
+
+- **Speed:** bring `TIRED_HOP_DURATION` back down — somewhere between
+  the stuttery 0.3 and this session's 0.8; ~0.45–0.55s is the likely
+  window. The ≥ `LANDING_RECOVERY` (0.3) test still bounds it from
+  below — going under 0.3 needs that guarantee rethought, not just the
+  test deleted.
+- **The hop:** two ways to get real air, try (a) first. **(a) Stay
+  presentation-only and raise the lift** — `TIRED_LIFT` 0.07 → ~0.25–0.35
+  (a real tap jump flies ~1.4, so a fifth of that still reads as
+  pathetic), with the curve re-weighted so the hop *is* the event
+  (quick dip → pop → land) rather than the tail of a long crouch. The
+  whole rig group lifts, so the cat rides it and the shadow detaches —
+  it should read as genuinely airborne, and every lockout guarantee
+  holds by construction since the sim never leaves the ground. **(b) A
+  real sim micro-hop** — only if (a)'s look isn't enough. This is what
+  the original tired-hop entry deliberately avoided, and its hazards
+  are documented there: the hop's own touchdown must not restart the
+  lockout (chained lockouts), the air spin must not open during it, and
+  a real airborne frame means chasm physics apply to a hop the player
+  didn't choose. Needs explicit guards for all three plus tests.
+- **What to keep:** the deep crouch depth (`TIRED_DIP` 0.65) can likely
+  stay — just compressed in time, with the strain hold shortened or cut
+  (it's the main thing making the attempt feel slow).
+
+**Next:** tired-hop retune round 2 — faster, with an actual small hop
+(verdict above, notes ready). Then the round-10 queue — a finish line
+(prerequisite for XP, parked since 2026-07-20), tree limbs + the crouch
+control (the missing second hazard), or purpose-built big jumps
+(director call whether still wanted now that spins are a control). Music
+still deliberately last, then the end-of-M2 tuning pass.
 
 ## (slope-vis) 2026-07-23 — Shadow fix round 1 lands; verdict: the giant canopies are out — new tree search is next
 
