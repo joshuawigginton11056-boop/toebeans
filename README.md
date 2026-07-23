@@ -37,7 +37,8 @@ same spot and run. Controls:
   does turning: skis sideways scrub speed to a hockey stop. **Space**
   charges a jump while held (deeper crouch, higher jump — release to
   launch) and, held again mid-air, spins the body for 180s and 360s; land
-  backwards and you're riding switch, not crashing. **Shift** boosts, and
+  backwards and you're riding switch, not crashing. Landings take a
+  short beat before you can jump again. **Shift** boosts, and
   commits harder into turns. Falling into a chasm costs one of the cat's
   9 lives and sends you back to the last checkpoint (ice-blue stripe);
   lose all 9 and the run is forfeited. The nine cat faces in the top-left

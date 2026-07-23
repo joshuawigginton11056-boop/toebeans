@@ -3657,8 +3657,24 @@ read as the legs absorbing the landing (good weight) or as the game
 eating your input (frustration)? And does rhythm hopping still feel
 possible when you *want* to chain jumps?
 
-**Next:** unchanged from round 10 — a finish line, tree limbs +
-crouch, or big jumps; music last, then the end-of-M2 tuning pass.
+**Director response (2026-07-23): accepted**, with the follow-up
+directive that sets the next slope-mech chunk: give a locked-out jump
+press a *visual* response — "a small hop that looks like a tired
+attempt" — so the eaten input reads as the skier's legs being spent,
+not the game ignoring the key. Notes for that session: whether the hop
+is a pure presentation bob or a tiny real hop in the sim is the first
+call to make; either way the renderer currently can't see a locked-out
+*press* at all (the sim ignores `input.jump` during the lockout and
+`syncSkiSceneToState` doesn't take input), so the attempt needs a
+signal — a transient field on `SkiState`, or the client passing the
+held key alongside state. `LANDING_RECOVERY` is already exported. If
+the cue needs new rig work in `skierModel.ts`, that's slope-vis's file
+— smallest additive seam change per PARALLEL.md, polish parked in
+IDEAS.md for them.
+
+**Next:** the tired-hop response to a locked-out press (directive
+above), then the round-10 queue — a finish line, tree limbs + crouch,
+or big jumps; music last, then the end-of-M2 tuning pass.
 
 ## Milestones
 
