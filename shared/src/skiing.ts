@@ -39,10 +39,15 @@ export interface SkiState {
   // fall line skids speed away (turning round 6), so by the time the skis
   // cross sideways the run is nearly spent and the speed just eases
   // through zero; a residual-speed crossing flips the stance instead, so
-  // the momentum never turns uphill (round 5's surviving guarantee). On
-  // the snow the heading lives in (-π, π];
-  // mid-air it can accumulate whole spins, and landing collapses it (see
-  // downhillHeading).
+  // the momentum never turns uphill (round 5's surviving guarantee). A
+  // held turn ends at straight-backwards (turning round 10): grounded
+  // steer saturates at ±π instead of wrapping through it, so one hold is
+  // at most one turnaround — carve to sideways, pivot into switch, settle
+  // riding backwards — never the endless rotate-die-rebuild serpentine.
+  // On the snow the heading lives in [-π, π] — the sign at the ends
+  // remembers which way you turned around, and the opposite key carves
+  // back. Mid-air it can accumulate whole spins, and landing collapses it
+  // (see downhillHeading).
   readonly heading: number;
   // The direction the run is actually traveling, everywhere. Airborne it's
   // frozen on the takeoff frame — flight is ballistic (nothing to carve
@@ -123,9 +128,11 @@ const BRAKE_DECEL = 10;
 // stands as the tuning knob to revisit at playtest.
 const SKID_SCRUB = 45;
 // Steering is a real turn (M2 heading session): holding left/right keeps
-// rotating the skis, up to fully sideways and beyond — there's no built-in
-// stop, and no fall either (turning round 3): past sideways you pivot into
-// riding switch. TURN_RATE is how fast the skis rotate at full authority —
+// rotating the skis, up to fully sideways and beyond — no stop at sideways,
+// and no fall either (turning round 3): past sideways you pivot into
+// riding switch. The rotation does end, though: a grounded hold saturates
+// at straight-backwards (turning round 10 — see the clamp in stepSkiing).
+// TURN_RATE is how fast the skis rotate at full authority —
 // ONE rate everywhere, grounded or airborne (director call, 2026-07-22:
 // the 9 rad/s air-trick rate and the held/fresh key split are gone).
 const TURN_RATE = 1.8;
@@ -328,9 +335,13 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     Math.min(1, Math.abs(state.speed) / MIN_SPEED),
   );
   let heading = state.heading;
-  if (grounded) {
-    // On the snow the heading lives in (-π, π] — whole turns only ever
-    // accumulate mid-air.
+  if (grounded && Math.abs(heading) > Math.PI) {
+    // On the snow the heading lives in [-π, π] — whole turns only ever
+    // accumulate mid-air. Guarded so an exact ±π (the held-steer
+    // saturation point, turning round 10 — see the clamp below) keeps its
+    // sign: downhillHeading's rounding maps +π to −π, and that flip would
+    // hand a saturated right-hold a fresh 2π of rotation — the serpentine
+    // this round removed, reopened through the back door.
     heading = downhillHeading(heading);
   }
   // Where the skis pointed before this frame's steering — the stance flip
@@ -370,6 +381,22 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   } else {
     if (input.left) heading -= maxTurn;
     if (input.right) heading += maxTurn;
+    if (grounded) {
+      // The turnaround saturation (turning round 10, director directive
+      // 2026-07-23: "remove auto straightening — I can hold one turn and
+      // create a semi circle of constantly trying to turn around"). A held
+      // key used to rotate through backwards forever: every half turn the
+      // run died at sideways, gravity rebuilt it in the new stance, and
+      // the trail re-straightened downhill — an endless S of turnarounds.
+      // Grounded steer now stops at straight-backwards: carve to sideways,
+      // keep holding to pivot into switch, and settle riding backwards
+      // down the fall line — the turnaround happens once. The wall only
+      // holds against the key that built the turn; the opposite key carves
+      // back through sideways (paying the round-6 skid toll, same as
+      // ever). Ground 360s die here, deliberately — full spins are the
+      // air trick (round 9). Airborne held steer stays unclamped.
+      heading = Math.max(-Math.PI, Math.min(Math.PI, heading));
+    }
   }
 
   // Speed is signed along the ski axis; the target is the input magnitude

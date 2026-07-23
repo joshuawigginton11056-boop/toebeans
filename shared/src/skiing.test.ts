@@ -257,7 +257,9 @@ describe("stepSkiing", () => {
     for (let i = 0; i < 25; i++) {
       state = stepSkiing(state, { ...noInput, right: true }, 0.02);
     }
-    // No built-in stop: the turn keeps accumulating as long as you hold it.
+    // No stop at sideways: the turn keeps accumulating as long as you hold
+    // it — all the way to the round-10 saturation at straight-backwards
+    // (pinned in its own tests below).
     expect(state.heading).toBeGreaterThan(halfTurn);
   });
 
@@ -580,6 +582,72 @@ describe("stepSkiing", () => {
     expect(sawSwitch).toBe(true);
     expect(state.lives).toBe(STARTING_LIVES);
     expect(Math.abs(state.heading)).toBeGreaterThan(Math.PI / 2);
+  });
+
+  it("saturates a held turn at straight-backwards — one turnaround, no serpentine", () => {
+    // Turning round 10 (director directive, 2026-07-23): "remove auto
+    // straightening — I can hold one turn and create a semi circle of
+    // constantly trying to turn around." Before, a held key rotated
+    // through backwards forever: every half turn the run died at
+    // sideways, gravity rebuilt it, and the trail re-straightened
+    // downhill — an endless S. Now the rotation stops at ±π: carve to
+    // sideways, keep holding to pivot into switch, settle riding
+    // backwards down the fall line.
+    let state = cruising;
+    for (let i = 0; i < 400; i++) {
+      state = stepSkiing(state, { ...noInput, right: true }, 0.02);
+      // A right-hold's heading never leaves [0, π]. The serpentine was
+      // exactly the wrap past π: re-entering from the far side handed the
+      // hold a fresh half-turn to straighten and cross again.
+      expect(state.heading).toBeGreaterThanOrEqual(0);
+      expect(state.heading).toBeLessThanOrEqual(Math.PI);
+    }
+    expect(state.heading).toBe(Math.PI);
+    expect(state.speed).toBe(-BASE_SPEED); // settled riding switch at cruise
+  });
+
+  it("saturates the left turnaround at −π — the sign remembers the way round", () => {
+    let state = cruising;
+    for (let i = 0; i < 400; i++) {
+      state = stepSkiing(state, { ...noInput, left: true }, 0.02);
+    }
+    expect(state.heading).toBe(-Math.PI);
+    expect(state.speed).toBe(-BASE_SPEED);
+  });
+
+  it("carves back out of a saturated turnaround with the opposite key", () => {
+    // The wall only holds against the key that built the turn: from
+    // straight-backwards the other key carves back through sideways
+    // (paying the round-6 skid toll) to forward running.
+    let state: SkiState = {
+      ...cruising,
+      heading: Math.PI,
+      flightHeading: Math.PI,
+      speed: -BASE_SPEED,
+    };
+    for (let i = 0; i < 150; i++) {
+      state = stepSkiing(state, { ...noInput, left: true }, 0.02);
+    }
+
+    expect(state.heading).toBeLessThan(Math.PI / 2);
+    expect(state.speed).toBeGreaterThan(0); // forward stance again
+  });
+
+  it("keeps air rotation unclamped — spins accumulate past backwards", () => {
+    // The saturation is a grounded rule. Airborne, held steer (like the
+    // air spin) still accumulates whole turns; the landing collapse and
+    // the round-8 grip window sort out whatever angle comes down.
+    const airborne: SkiState = {
+      ...cruising,
+      heading: 3.0,
+      flightHeading: 0,
+      height: 1,
+      verticalVelocity: 2,
+    };
+
+    const state = stepSkiing(airborne, { ...noInput, right: true }, 0.2);
+
+    expect(state.heading).toBeGreaterThan(Math.PI);
   });
 
   it("never travels uphill through a boosted turnaround — the round-5 bar", () => {

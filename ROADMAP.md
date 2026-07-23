@@ -3498,6 +3498,68 @@ design question — spins are answered by controls; director call whether
 big jumps are still wanted). Music still deliberately last, then the
 end-of-M2 tuning pass.
 
+## (slope-mech) 2026-07-23 — M2: turning round 10 — held turns saturate at backwards (the serpentine fix)
+
+The director's directive, verbatim: "remove auto straightening. I can
+hold one turn and create a semi circle of constantly trying to turn
+around" — with a photo of the trail: an endless S carved by one held
+key. Traced headless before touching code: holding right, the heading
+wrapped through backwards forever (0 → π → −π → 0, a full rotation
+every ~5s), and each half turn the run died at sideways, gravity
+rebuilt it in the new stance, and the trail re-straightened downhill.
+No single feature was "auto straightening" — the serpentine was the
+wrap.
+
+Director pick (2026-07-23, from three options): **a held turn ends at
+straight-backwards** — turn around once, then ride switch. Rejected
+alternatives, for the record: hockey-stop-at-sideways (would reverse
+round 3's carve-into-switch) and momentum-follows-the-carve (would gut
+round 6's turning-is-braking).
+
+- Grounded held steer now clamps the heading to [−π, π] — carve to
+  sideways (round 6's scrub pays out unchanged), keep holding to pivot
+  into switch (rounds 3/5's crossing, unchanged), and settle riding
+  backwards down the fall line. One hold = at most one turnaround. The
+  sign at the ends remembers which way you turned; the wall only holds
+  against the key that built the turn, and the opposite key carves back
+  through sideways as ever.
+- The grounded normalize is now guarded (`|heading| > π` only): JS
+  `Math.round(0.5) = 1` made `downhillHeading(π)` return −π, and that
+  flip would have handed a saturated right-hold a fresh 2π — the
+  serpentine reopened through the back door. Exact ±π keeps its sign.
+- Ground 360s die here, deliberately — full spins are the air trick
+  (round 9). Airborne held steer stays unclamped; the landing collapse
+  and grip window are untouched. W-seek untouched (its switch-diagonal
+  targets legitimately cross ±π and still may).
+- **No SAVE_VERSION bump** (a saved heading is already in range) and
+  zero renderer changes — the rig eases toward the heading it reads,
+  and a saturated heading just stops moving.
+- Tests 90 → 94 (one reworded): the right-hold pins heading inside
+  [0, π] for 8s and settles at exactly π, speed −8; the left mirror
+  settles at −π; the opposite key carves back out to forward; air
+  rotation still accumulates past π. The old "keeps turning while held"
+  test now documents the saturation instead of "no built-in stop".
+- `npm run check` (94 tests) passes. Headless re-trace of the exact
+  repro: heading saturates at 3.14 by t≈3s and stays; lateral freezes
+  (was wiggling 0→2→0.1→2.4→…); speed settles at −8 riding switch.
+  Live-verified on this session's own server (5302, started clean this
+  time): the served module carries the round-10 clamp, and 8s of the
+  real repro (Enter, held ArrowRight via key events) ran with zero
+  console errors. Standing caveat: the hidden pane suspends
+  compositing, so screenshots time out — the trail's look under real
+  keys is the playtest.
+
+**What to playtest:** `npm run dev`, Enter to ski. Hold A or D and
+don't let go: you should carve to sideways, pivot into switch, and
+settle riding straight backwards — one clean turnaround, no serpentine,
+no more "constantly trying to turn around." Tap the opposite key to
+carve back forward. The feel questions: does the settle-at-backwards
+read as intentional (a stance you chose) rather than a dead end? And
+reaching backwards, is it obvious the *other* key is the way out?
+
+**Next:** unchanged from round 9 — a finish line, tree limbs + crouch,
+or big jumps; music last, then the end-of-M2 tuning pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
