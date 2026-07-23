@@ -4366,6 +4366,14 @@ silhouettes). Rocks and filler props still fill the gaps in the near band.
 
 Art Style Bible updated with a **"Trees, cleanup"** amendment.
 
+**Next:** *(slope-vis)* still awaiting the director's look-pass on the
+frosted-green pines (green hex + frost amount + the open-canopy "does light
+pass through enough" question). The new-tree *search* stays paused pending
+that call. The slope now shows only pines + rocks + filler — no birches —
+so the look-pass is against a clean tree set. Session is at a clean stopping
+point: `master` is green (`npm run check` passes), branch pushed and merged
+up, no work in progress.
+
 ## (slope-mech) 2026-07-23 — Tired-hop retune round 2 (faster, an actual small hop)
 
 Built the round-2 verdict on the failed-jump cue: *"it's not fast enough now.
