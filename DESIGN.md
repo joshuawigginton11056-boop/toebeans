@@ -147,7 +147,8 @@ interact with your space for more XP → repeat.
 >   ("I like the trees") — visible bark strokes, posterized foliage
 >   dapple, grain; hand-painted feel on the existing low-poly geometry,
 >   colors inside a palette color's family (value/saturation shifts).
->   To be rolled across all 24 slope models.
+>   **Rolled across all 24 slope models 2026-07-23** (see that ROADMAP
+>   entry); awaiting the director's look-pass.
 > - **Snow: REALISM** ("I'm going for realism snow") — the painted
 >   dapple patch is *not* the snow direction. Snow should read as real
 >   snow: fine sparkle, soft relief, believable sunlit white — while
@@ -180,17 +181,17 @@ interact with your space for more XP → repeat.
 >     floor and roughly doubled after an on-screen crank test. Awaiting
 >     the director's look-pass. **Realism snow as a direction is settled;
 >     the bible's shape-language and asset-sourcing rewrite (below) is
->     now unblocked** and waits on its own session, along with the
->     approved painted-detail rollout across the 24 slope models.
+>     now unblocked** and waits on its own session. (The painted-detail
+>     rollout that waited alongside it landed 2026-07-23.)
 >
 > The *Omno* references stay the target for mood, lighting, haze, and
 > palette. Signal red stays reserved. With the snow verdict in
 > (approved, procedural — zero image files, so no new sourcing/tooling
 > rules were forced), the bible's shape-language and asset-sourcing
-> rewrite is **unblocked but not yet done** — it's its own session,
-> together with the painted-detail rollout across all 24 slope models.
-> Until that rewrite lands: no new *flat-shaded* assets; everything
-> else below still governs.
+> rewrite is **unblocked but not yet done** — it's its own session.
+> The painted-detail rollout across all 24 slope models landed
+> 2026-07-23. Until the rewrite lands: no new *flat-shaded* assets;
+> everything else below still governs.
 
 The binding reference for all art in the game. Written 2026-07-21 from the
 director's five *Omno* reference images and their notes on each. When

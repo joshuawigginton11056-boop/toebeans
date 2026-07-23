@@ -3498,6 +3498,54 @@ design question — spins are answered by controls; director call whether
 big jumps are still wanted). Music still deliberately last, then the
 end-of-M2 tuning pass.
 
+## (slope-vis) 2026-07-23 — Painted detail rolled across all 24 slope models + slightly larger trees
+
+The approved half of the 2026-07-22 split verdict ("I like the trees")
+lands for real: the triplanar painted detail leaves the test pairs and
+goes on **everything** — all 24 slope models, every scattered piece.
+
+- **Rollout mechanics** (`skiScene.ts`): each decor template gets
+  `applyPaintedDetail` once at load, so every scattered `clone()` shares
+  the patched materials — one material set and one shader program for the
+  whole slope, no per-copy cost. The three flat-vs-painted test pairs at
+  the lane edges are retired, per the verdict.
+- **One coverage bug found on the way in:** `Rock_Snow_2.glb` names its
+  materials `Rock.001`/`Snow.001` (Blender-style suffix), which would
+  have silently fallen to the weak generic fallback. The detail lookup
+  now strips the suffix; verified live that both hit their intended rows
+  (strength 0.9/0.7, not the 0.5 fallback).
+- **Trees slightly larger** (director ask, this session): a
+  `TREE_SCALE = 1.15` multiplier on pines, birches, and dead birches in
+  both scatter bands. Rocks and filler props keep their old sizes. The
+  multiplier sits *on top of* each band's scale roll, so the PRNG call
+  sequence — and with it the entire scatter layout — is byte-identical;
+  the same trees stand in the same places, 15% bigger.
+- `npm run check` passes (90 tests). Live verification on 5303 (the pane
+  suspends rAF — the app can't render itself — so verification drove the
+  *served modules* directly: imported `loadSlopeDecor` in-page, loaded
+  the real scatter, and inspected the graph): served source carries the
+  session's markers; **294/294 mesh materials patched, 0 unpatched**
+  across 87 placed pieces; tree scales span 0.978–2.059 (exactly the old
+  0.85–1.8 range ×1.15) while rocks/filler stay inside the untouched
+  0.85–1.35; a forced offscreen compile+render of the full scatter drew
+  real content with zero console errors.
+
+**What to playtest:** `npm run dev`, Enter to ski. The whole treeline —
+both flanks, near and far — now wears the painted look you approved
+(bark strokes, foliage dapple, rock grain), and the trees stand a touch
+taller. The questions: does the slope still read *Omno*-calm with every
+surface painted, or is it too busy now that it's everywhere (strengths
+are per-material knobs — easy to dial back foliage vs bark vs rock
+separately)? Do the slightly larger trees feel right, or should they go
+bigger/smaller (one number)? And with texture everywhere, do the snow
+caps on the trees clash with the realism snowfield (the parked snow-cap
+reconciliation in IDEAS.md)?
+
+**Next:** *(slope-vis)* director look-pass on the textured slope (this
+chunk) and the refined snow (previous chunk) together, then the
+unblocked Art Style Bible rewrite (shape-language + asset-sourcing);
+the tree snow-cap check rides with that pass.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
