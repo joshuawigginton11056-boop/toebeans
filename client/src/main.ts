@@ -150,9 +150,9 @@ window.addEventListener("keydown", (event) => {
     );
     return;
   }
-  // Camera round 2 (slope-mech): the slope camera is all mouse/touch now —
-  // wheel/pinch zoom and no-click mouse-position look, wired in skiRender.ts.
-  // No keyboard camera control anymore (V cycling is gone).
+  // Camera round 3 (slope-mech): the slope camera is all mouse/touch now —
+  // wheel/pinch zoom and Pointer-Lock mouse look (click to engage, Esc to
+  // release), wired in skiRender.ts. No keyboard camera control (V is gone).
   if (event.code === "Enter") {
     if (mode === "lobby") goSkiing();
     else backToLobby();

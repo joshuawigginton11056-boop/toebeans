@@ -4277,6 +4277,73 @@ Art Style Bible shape-language + asset-sourcing rewrite (still queued;
 now with a third case to codify — alpha-silhouette masks repainted with
 a generated gradient).
 
+## (slope-mech) 2026-07-23 — M2: camera round 3 (free zoom, fixed angle + Pointer-Lock mouselook)
+
+Built the round-2 verdict: both halves of the camera got the changes the
+director asked for. Still all presentation-side — no sim or save changes.
+
+- **Zoom is free now — the angle is fixed.** Round 2 blended elevation/aim
+  off the radius, so zooming *swung the angle* between the low chase and
+  the high overhead framing — it read as "it only zooms between the top
+  angle and the close one," not a free in/out. So `ZOOM_KNOTS` /
+  `framingForRadius` are gone; the framing angle is a single fixed constant
+  (`FIXED_ELEVATION` + the `AIM_*` aim offset — the classic DESIGN.md
+  three-quarter front) and the wheel/pinch drive `radius` alone. The range
+  is the only zoom knob left, and it's wider so "free" feels free:
+  `[MIN_RADIUS 3, MAX_RADIUS 40]` (was `[4.6, 15]`). Verified the default
+  distance still reproduces the old fixed-camera offset **(0, 4, 8)
+  bit-for-bit** with no look layered on, so the default look is unchanged
+  from every round before.
+- **Mouse look is Pointer-Lock relative mouselook** (round-2 verdict:
+  mouse-*position* look "can't look past the window" — it topped out at the
+  window edge). Chose option (b): click the slope to `requestPointerLock`
+  (system cursor hidden by the lock), then `mousemove` deltas
+  (`movementX/Y`) accumulate, so you look as far as you keep turning, past
+  any edge; **Esc** releases and the look eases home. **Yaw is unbounded**
+  on mouse (settling the round-2 open call — turn all the way round and
+  keep going); pitch clamps so you can't look under the snow or past
+  straight up (`LOOK_PITCH_MIN/MAX`, derived from the elevation clamp off
+  the fixed angle, so the accumulator never winds past a limit you'd have
+  to unturn). On unlock the unbounded yaw is wrapped by whole turns before
+  easing to 0, so it takes the short way home with no visible jump. When
+  *not* locked the mouse does nothing to the camera — no drift during
+  normal play (the deadzone concern from round 2 is moot).
+- **Touch is unchanged from round 2** (touch has no cursor-edge problem):
+  single-finger drag peeks and eases home on release, two-finger pinch
+  zooms, the drag↔pinch↔drag finger transitions all carry over. Its yaw
+  keeps the ±π clamp (drag can't run away like an unbounded mouse); its
+  pitch uses the same new `LOOK_PITCH_MIN/MAX` bounds.
+- **Shared-territory edits, small:** `main.ts` — comment only (the KeyV
+  handler was already gone; mouse look now engages via click→lock, wired in
+  `skiRender.ts`). `hud.ts` swaps the camera hint chip `Mouse` →
+  `Click` (label "look around") since mouse look now needs a click to
+  engage; `Scroll`/"zoom" stays.
+- `npm run check` passes (101 tests, camera is render-side so no new sim
+  surface to pin). Live-verified against a throwaway Vite server (port 5302
+  held by another chat's server for this same folder again, so a temporary
+  instance on 5312 stood in; the pane stays hidden here, which pauses
+  `requestAnimationFrame`, so verification drove real DOM events and read
+  the camera transform back through a temporary window hook, since
+  removed). Confirmed: default framing frames to exactly (0, 4, 8); wheel
+  zoom clamps at both ends (3 and 40) and eases; unlocked mouse move leaves
+  the camera dead-still; a click fires `requestPointerLock` without
+  throwing; the look orbits correctly (yaw π → downhill side, ±π/2 →
+  left/right) with pitch clamping at both elevation limits; unlock wraps
+  the yaw and eases home; touch drag/pinch and all finger transitions
+  behave. Zero console errors.
+
+**What to playtest:** on the slope, scroll (or pinch) to zoom — does the
+fixed three-quarter angle feel right held across the whole `[3, 40]`
+range, or does far-out want a touch more height after all? Click to grab
+the mouse look (cursor hides), turn to look around — is unbounded yaw the
+right call, is `MOUSE_LOOK_SENSITIVITY` comfortable, does the Esc-to-
+release ceremony feel fine now that it buys unlimited look? Is the wider
+zoom range actually free-feeling, or is 40 too far (skier gets small)?
+
+**Next:** tired-hop retune round 2 (faster, an actual small hop — see the
+tired-hop entries above for the notes), then the round-10 queue: a finish
+line, tree limbs + crouch, or purpose-built big jumps.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

@@ -27,101 +27,63 @@ import {
 // (slope-visuals territory). See PARALLEL.md for the ownership split.
 
 // ---------------------------------------------------------------------------
-// Camera zoom (camera round 2, 2026-07-23 director verdict: pre-built views
-// are out, free control is in). The camera is one downhill-facing orbit whose
-// distance the player sets continuously — mouse wheel / pinch driving the
-// radius through a clamped range. Elevation and aim don't hold fixed; they're
-// *blended off the radius* through these knots, so each distance stays framed
-// the way its old round-1 view was tuned (director's recommended start): close
-// = the low over-the-shoulder chase, mid = the DESIGN.md three-quarter
-// classic, far = the high whole-slope tactical read. The eased orbit rig
-// survives; only what drives it changed. Knots are ordered by radius.
-interface ZoomKnot {
-  /** Orbit distance from the skier. */
-  readonly radius: number;
-  /** Radians above horizontal. */
-  readonly elevation: number;
-  /** Aim point, offset from the skier (world axes; -z = downhill). */
-  readonly lookX: number;
-  readonly lookY: number;
-  readonly lookZ: number;
-}
+// Camera zoom (camera round 3, 2026-07-23 director verdict: free zoom, fixed
+// angle). Round 2 blended elevation/aim off the radius, so zooming *swung the
+// angle* between the low chase framing and the high overhead one — it read as
+// "it only zooms between the top angle and the close one" rather than a free
+// in/out. So the framing angle is now FIXED (the classic DESIGN.md
+// three-quarter front) and the wheel/pinch move only the orbit distance,
+// across a wide free range. The eased orbit rig survives; only what drives it
+// changed.
 
-const ZOOM_KNOTS: readonly ZoomKnot[] = [
-  // Chase: low and close off the ski tails, aimed over the shoulder — speed
-  // reads hardest here. The zoomed-in end of the range.
-  { radius: 4.6, elevation: 0.35, lookX: 0, lookY: 0.5, lookZ: -6 },
-  // Classic: the DESIGN.md three-quarter front framing, bit-for-bit the old
-  // fixed numbers (offset (0, 4, 8), aimed 4 downhill). The default distance.
-  { radius: Math.hypot(4, 8), elevation: Math.atan2(4, 8), lookX: 0, lookY: 0, lookZ: -4 },
-  // Far: high and well back — chasms and checkpoints laid out ahead. The
-  // zoomed-out end.
-  { radius: 15, elevation: 0.9, lookX: 0, lookY: 0, lookZ: -6 },
-];
+// The fixed framing: bit-for-bit the old fixed camera — offset (0, 4, 8),
+// aimed 4 units downhill. Elevation and aim are constants now; only the
+// distance changes. At DEFAULT_RADIUS with no look layered on, this
+// reproduces the old (0, 4, 8) offset exactly (flat = 8, height = 4), so the
+// default look is unchanged from every round before.
+const FIXED_ELEVATION = Math.atan2(4, 8); // radians above horizontal
+const DEFAULT_RADIUS = Math.hypot(4, 8);
+const AIM_X = 0;
+const AIM_Y = 0;
+const AIM_Z = -4; // aim point offset from the skier (world axes; -z = downhill)
 
-const MIN_RADIUS = ZOOM_KNOTS[0]!.radius;
-const MAX_RADIUS = ZOOM_KNOTS[ZOOM_KNOTS.length - 1]!.radius;
-// Classic distance is the default framing (unchanged from the old fixed cam).
-const DEFAULT_RADIUS = ZOOM_KNOTS[1]!.radius;
+// The free zoom range — now the only zoom tuning knob (round 3 dropped the
+// per-distance framing blend). Wider than round 2's [4.6, 15] so "free" feels
+// free: in tight for a chase read, way back for the whole-slope tactical view.
+const MIN_RADIUS = 3;
+const MAX_RADIUS = 40;
 
-// Blend the elevation and aim offset for a given orbit distance by walking the
-// knots — piecewise-linear, so the framing slides smoothly as you zoom.
-function framingForRadius(radius: number): {
-  elevation: number;
-  lookX: number;
-  lookY: number;
-  lookZ: number;
-} {
-  const r = clamp(radius, MIN_RADIUS, MAX_RADIUS);
-  let lo = ZOOM_KNOTS[0]!;
-  let hi = ZOOM_KNOTS[ZOOM_KNOTS.length - 1]!;
-  for (let i = 0; i < ZOOM_KNOTS.length - 1; i++) {
-    if (r >= ZOOM_KNOTS[i]!.radius && r <= ZOOM_KNOTS[i + 1]!.radius) {
-      lo = ZOOM_KNOTS[i]!;
-      hi = ZOOM_KNOTS[i + 1]!;
-      break;
-    }
-  }
-  const span = hi.radius - lo.radius;
-  const t = span > 0 ? (r - lo.radius) / span : 0;
-  return {
-    elevation: lo.elevation + (hi.elevation - lo.elevation) * t,
-    lookX: lo.lookX + (hi.lookX - lo.lookX) * t,
-    lookY: lo.lookY + (hi.lookY - lo.lookY) * t,
-    lookZ: lo.lookZ + (hi.lookZ - lo.lookZ) * t,
-  };
-}
-
-// How fast the zoom eases toward its target distance, and how fast the mouse
-// look tracks the pointer (per-second easing rates).
+// How fast the zoom eases toward its target distance, and how fast the look
+// tracks the pointer (per-second easing rates).
 const ZOOM_EASE = 6;
 const LOOK_EASE = 8;
-// Wheel/pinch feel: wheel deltaY is ~±100 per notch, so ~1 unit of radius per
-// notch (≈10 notches across the whole range); pinch is px of finger spread.
-const ZOOM_SENSITIVITY = 0.01;
-const PINCH_SENSITIVITY = 0.03;
+// Wheel/pinch feel: wheel deltaY is ~±100 per notch, so ~3 units of radius per
+// notch across the wider range; pinch is px of finger spread.
+const ZOOM_SENSITIVITY = 0.03;
+const PINCH_SENSITIVITY = 0.08;
 // Touch drag feel (pointer px → radians), kept from round 1.
 const LOOK_SENSITIVITY = 0.006;
-// No-click mouse look (camera round 2): the cursor's offset from canvas center
-// drives the look — centered = camera home, edges = full look, no button. A
-// deadzone keeps the camera still during normal play, and the offset is
-// squared so near-center is gentle and only a deliberate push to the edge
-// reaches the extremes (checking uphill). Max reach matches round 1's drag.
-const LOOK_DEADZONE = 0.15;
-const MAX_LOOK_YAW = Math.PI;
-const MAX_LOOK_PITCH = 1.3;
+// Mouse look (camera round 3): Pointer-Lock relative mouselook. Accumulate
+// mousemove deltas (px → radians) so you can look as far as you keep turning
+// the mouse, past any window edge, with the system cursor hidden. Click the
+// slope to engage the lock, Esc to release. Supersedes round 2's no-click
+// mouse-position look, which topped out when the cursor hit the window edge.
+const MOUSE_LOOK_SENSITIVITY = 0.0022;
 // The rig's total pitch clamp: never under the snow, never straight
 // overhead (straight-down gimbal-locks lookAt's up vector).
 const MIN_ELEVATION = 0.06;
 const MAX_ELEVATION = 1.45;
+// Look pitch is measured off the fixed elevation, so its travel is exactly
+// what keeps the final elevation inside the clamp above — no winding past the
+// snow or the zenith that you'd then have to unturn back out of.
+const LOOK_PITCH_MIN = MIN_ELEVATION - FIXED_ELEVATION;
+const LOOK_PITCH_MAX = MAX_ELEVATION - FIXED_ELEVATION;
 
-// Map a centered axis (mouse offset in [-1, 1]) to a look fraction: dead near
-// zero, then a signed square ramp out to 1 at the edge.
-function shapeLookAxis(v: number): number {
-  const a = Math.abs(v);
-  if (a <= LOOK_DEADZONE) return 0;
-  const t = Math.min(1, (a - LOOK_DEADZONE) / (1 - LOOK_DEADZONE));
-  return Math.sign(v) * t * t;
+// Reduce an angle to [-π, π] by whole turns — used to unwind the unbounded
+// mouse yaw before easing it home, so it takes the short way back without a
+// visible jump (sin/cos ignore the removed multiples of 2π).
+function wrapAngle(a: number): number {
+  return a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
 }
 
 /** The camera rig's eased state — presentation-side memory. */
@@ -130,12 +92,17 @@ interface CameraMemory {
   radius: number;
   /** Zoom target the wheel/pinch sets, clamped [MIN_RADIUS, MAX_RADIUS]. */
   targetRadius: number;
-  /** The look-around: a rigid extra swing of the whole rig around the skier. */
+  /**
+   * The look-around: a rigid extra swing of the whole rig around the skier.
+   * Yaw is unbounded (mouse look accumulates freely; touch drag clamps to
+   * ±π); pitch stays within LOOK_PITCH_MIN/MAX so the elevation can't leave
+   * its clamp.
+   */
   lookYaw: number;
   lookPitch: number;
   targetLookYaw: number;
   targetLookPitch: number;
-  /** A touch drag is in progress (mouse look is position-based, no drag). */
+  /** A touch drag is in progress (mouse look uses Pointer Lock, no drag). */
   dragging: boolean;
 }
 
@@ -167,9 +134,10 @@ export interface SkiSceneHandle {
    */
   readonly jumpMemory: { airborne: boolean; envelope: number };
   /**
-   * The camera rig (wheel/pinch zooms, the mouse position looks around) —
-   * eased orbit state, presentation-side memory like steerMemory. Deliberately
-   * not saved, same reasoning as the scrapped bedroom's follow camera.
+   * The camera rig (wheel/pinch zooms, Pointer-Lock mouse / touch drag looks
+   * around) — eased orbit state, presentation-side memory like steerMemory.
+   * Deliberately not saved, same reasoning as the scrapped bedroom's follow
+   * camera.
    */
   readonly cameraMemory: CameraMemory;
 }
@@ -195,8 +163,8 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   const scene = new THREE.Scene();
 
   // The camera rig places and aims this every frame (see the sync below):
-  // the default framing is the DESIGN.md three-quarter front perspective at
-  // the classic distance; wheel/pinch zooms in and out, the mouse looks around.
+  // the framing is a fixed DESIGN.md three-quarter front angle; wheel/pinch
+  // zooms the distance in and out, the mouse (Pointer Lock) / touch looks around.
   const camera = new THREE.PerspectiveCamera(
     50,
     window.innerWidth / window.innerHeight,
@@ -263,12 +231,14 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     dragging: false,
   };
 
-  // Camera controls (camera round 2). Mouse and touch part ways here, by the
-  // director's call: on mouse the look is automatic — the cursor's offset from
-  // canvas center *is* the input, no button — while touch keeps a finger drag
-  // (which makes sense for a touchscreen) and adds a two-finger pinch to zoom.
-  // The wheel zooms on either. touch-action off so a touch drag/pinch isn't a
-  // page scroll; capture keeps a drag alive outside the window.
+  // Camera controls (camera round 3). Mouse and touch part ways here, by the
+  // director's call. Mouse: Pointer-Lock relative mouselook — click the slope
+  // to lock (system cursor hidden), then mousemove deltas accumulate so you
+  // can look as far as you keep turning, past any window edge; Esc releases
+  // and the look eases home. Touch: a finger drag peeks (eases home on
+  // release) and a two-finger pinch zooms — unchanged from round 2. The wheel
+  // zooms on either. touch-action off so a touch drag/pinch isn't a page
+  // scroll; capture keeps a drag alive outside the window.
   const canvas = renderer.domElement;
   canvas.style.touchAction = "none";
 
@@ -286,6 +256,43 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     { passive: false },
   );
 
+  // --- Mouse: Pointer-Lock relative mouselook -----------------------------
+  let mouseLocked = false;
+  // Click the slope to engage the lock — Pointer Lock requires a user gesture.
+  // requestPointerLock may reject (not user-activated, or the doc is still
+  // exiting a prior lock); ignore it, the player just clicks again. Wrapped in
+  // Promise.resolve so it's safe whether the browser returns a promise or not.
+  canvas.addEventListener("mousedown", () => {
+    if (!mouseLocked) {
+      void Promise.resolve(canvas.requestPointerLock()).catch(() => {});
+    }
+  });
+  document.addEventListener("pointerlockchange", () => {
+    mouseLocked = document.pointerLockElement === canvas;
+    if (!mouseLocked) {
+      // Esc (or any unlock) → ease the look home, unwinding the unbounded yaw
+      // by whole turns first so it takes the short way back with no jump.
+      cameraMemory.lookYaw = wrapAngle(cameraMemory.lookYaw);
+      cameraMemory.targetLookYaw = 0;
+      cameraMemory.targetLookPitch = 0;
+    }
+  });
+  // While locked, movementX/Y are relative deltas even at the screen edge.
+  // Mouse right = look right (the rig orbits the opposite way round the
+  // skier); mouse down = look down (the camera rises). Yaw is unbounded — turn
+  // as far as you like; pitch clamps so you can't look under the snow or past
+  // straight up.
+  document.addEventListener("mousemove", (event) => {
+    if (!mouseLocked) return;
+    cameraMemory.targetLookYaw -= event.movementX * MOUSE_LOOK_SENSITIVITY;
+    cameraMemory.targetLookPitch = clamp(
+      cameraMemory.targetLookPitch + event.movementY * MOUSE_LOOK_SENSITIVITY,
+      LOOK_PITCH_MIN,
+      LOOK_PITCH_MAX,
+    );
+  });
+
+  // --- Touch/pen: drag to peek, two fingers to pinch-zoom (round 2) --------
   // Touch bookkeeping: which fingers are down (for the pinch), and the last
   // single-finger position (for the drag). Mouse ignores all of this.
   const pointers = new Map<number, { x: number; y: number }>();
@@ -298,22 +305,8 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     return Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
   };
 
-  // No-click mouse look: the cursor's position on the canvas drives the look
-  // directly — centered = home, edges = full look. A move to the edge peeks;
-  // moving back re-centers (round 1's snap-back-on-release becomes this).
-  // Leaving the canvas (onto the HUD, say) re-centers too.
   canvas.addEventListener("pointermove", (event) => {
-    if (event.pointerType === "mouse") {
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return; // not laid out yet
-      const nx = clamp(((event.clientX - rect.left) / rect.width) * 2 - 1, -1, 1);
-      const ny = clamp(((event.clientY - rect.top) / rect.height) * 2 - 1, -1, 1);
-      // Mouse right = look right (the camera orbits the opposite way round
-      // the skier); mouse toward the bottom = look down (the camera rises).
-      cameraMemory.targetLookYaw = -shapeLookAxis(nx) * MAX_LOOK_YAW;
-      cameraMemory.targetLookPitch = shapeLookAxis(ny) * MAX_LOOK_PITCH;
-      return;
-    }
+    if (event.pointerType === "mouse") return; // mouse look is Pointer Lock now
     // Touch/pen: update this finger, then either pinch (two down) or drag.
     if (pointers.has(event.pointerId)) {
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -345,20 +338,13 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     );
     cameraMemory.targetLookPitch = clamp(
       cameraMemory.targetLookPitch + dy * LOOK_SENSITIVITY,
-      -1.3,
-      1.3,
+      LOOK_PITCH_MIN,
+      LOOK_PITCH_MAX,
     );
   });
 
-  // Mouse leaves the canvas → recenter the look (it's parked, not stranded).
-  canvas.addEventListener("pointerleave", (event) => {
-    if (event.pointerType !== "mouse") return;
-    cameraMemory.targetLookYaw = 0;
-    cameraMemory.targetLookPitch = 0;
-  });
-
   canvas.addEventListener("pointerdown", (event) => {
-    if (event.pointerType === "mouse") return; // mouse look needs no press
+    if (event.pointerType === "mouse") return; // mouse engages via mousedown → lock
     canvas.setPointerCapture(event.pointerId);
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointers.size >= 2) {
@@ -567,25 +553,23 @@ export function syncSkiSceneToState(
     mesh.position.set(0, 0.01, -(chasm.start + chasm.width / 2));
   }
 
-  // The camera rig: ease the orbit distance toward the zoom target, read the
-  // elevation and aim off that eased distance (so the framing slides with the
-  // zoom), then layer the look on top (a rigid extra swing of the whole rig
-  // around the skier — position orbits one way, the aim point rotates with it)
-  // and place and aim. The base azimuth is a constant 0 (downhill-facing) now
-  // that views are gone; the look yaw is the only thing that swings it.
-  // state.height rides along in both, so jumps lift the framing exactly the
-  // way the old fixed camera did.
+  // The camera rig: ease the orbit distance toward the zoom target, hold the
+  // framing angle fixed (round 3 — no more radius-driven blend), then layer
+  // the look on top (a rigid extra swing of the whole rig around the skier —
+  // position orbits one way, the aim point rotates with it) and place and aim.
+  // The base azimuth is a constant 0 (downhill-facing); the look yaw is the
+  // only thing that swings it. state.height rides along in both, so jumps lift
+  // the framing exactly the way the old fixed camera did.
   const cam = handle.cameraMemory;
   const zoomEase = Math.min(1, dt * ZOOM_EASE);
   cam.radius += (cam.targetRadius - cam.radius) * zoomEase;
-  const framing = framingForRadius(cam.radius);
   const lookEase = Math.min(1, dt * LOOK_EASE);
   cam.lookYaw += (cam.targetLookYaw - cam.lookYaw) * lookEase;
   cam.lookPitch += (cam.targetLookPitch - cam.lookPitch) * lookEase;
 
   const azimuth = cam.lookYaw;
   const elevation = clamp(
-    framing.elevation + cam.lookPitch,
+    FIXED_ELEVATION + cam.lookPitch,
     MIN_ELEVATION,
     MAX_ELEVATION,
   );
@@ -598,9 +582,9 @@ export function syncSkiSceneToState(
   const yawSin = Math.sin(cam.lookYaw);
   const yawCos = Math.cos(cam.lookYaw);
   handle.camera.lookAt(
-    state.lateral + framing.lookX * yawCos + framing.lookZ * yawSin,
-    state.height + framing.lookY,
-    -state.distance + framing.lookZ * yawCos - framing.lookX * yawSin,
+    state.lateral + AIM_X * yawCos + AIM_Z * yawSin,
+    state.height + AIM_Y,
+    -state.distance + AIM_Z * yawCos - AIM_X * yawSin,
   );
 
   // Atmosphere follows the run downhill — the offsets are skiScene's.
