@@ -3557,6 +3557,14 @@ carve back forward. The feel questions: does the settle-at-backwards
 read as intentional (a stance you chose) rather than a dead end? And
 reaching backwards, is it obvious the *other* key is the way out?
 
+**Director response (2026-07-23): "great."** Received in-session on the
+work summary, not yet a hands-on verdict — the two feel questions above
+stand for the next playtest. Docs refreshed the same session for the
+handoff: README rewritten current (the lobby, the roster, the full
+control set — it still described the scrapped bedroom and a blue-box
+skier), and the context-handoff doc's M2 status caught up to the
+momentum + turning saga.
+
 **Next:** unchanged from round 9 — a finish line, tree limbs + crouch,
 or big jumps; music last, then the end-of-M2 tuning pass.
 
