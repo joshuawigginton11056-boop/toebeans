@@ -4277,33 +4277,27 @@ Art Style Bible shape-language + asset-sourcing rewrite (still queued;
 now with a third case to codify — alpha-silhouette masks repainted with
 a generated gradient).
 
-## (slope-vis) 2026-07-23 — Trees removed: clean slate before the next tree
+## (slope-vis) 2026-07-23 — Removed the lingering old trees (birches / dead birches); pines stay
 
-Director ask to open the next tree pass: **remove the previous trees.** The
-whole standing-tree scatter is gone — the frosted-green MegaKit pines, plus
-the `BirchTree_Snow` and `BirchTree_Dead_Snow` sets that were still rolling
-in the near/far mix despite the earlier "birches are out" verdict. The three
-tree bands (`giant` colonnade, mixed `near` treeline, far silhouettes)
-collapsed to a single `near` band that now scatters only rocks and small
-ground props (bushes, stump, log) to keep the lane-edge cue. `TREE_SCALE`
-retired with them.
+Director ask: **remove the previous trees** — the *old* Ultimate Nature Pack
+trees, not the frosted-green pines we just added. The bible had already
+declared the birches and dead birches out, but `BirchTree_Snow` /
+`BirchTree_Dead_Snow` were still rolling in the near and far scatter bands.
+Those rolls are now gone; the MegaKit frosted-green pines remain the slope's
+tree at all three scales (`giant` colonnade, `near` treeline, `far`
+silhouettes). Rocks and filler props still fill the gaps in the near band.
 
-- **Files kept, not deleted:** every tree `.glb` stays in `assets/slope/`
-  so the replacement tree can reuse `loadSlopeDecor`'s loader/painted-detail
-  path. `DECOR_MODELS` just no longer lists them, so they no longer load.
-- **What this costs (flagged for the look-pass):** the flanks read flat and
-  treeless, and the far *depth* silhouettes are gone — the "read distance"
-  cue the bible prizes is muted until a new tree fills it back in. Palette
-  #13 (pine green) stays reserved for that tree.
+- **First pass over-removed** — it stripped *every* tree including the new
+  pines (misread "previous trees"). Caught by Josh and corrected same
+  session: pines restored, only the old birch/dead-birch models pulled.
+- `DECOR_MODELS` drops the `birches` and `deadBirches` lists; their `.glb`
+  files stay in `assets/slope/` (nothing deleted). `pines`, `rocks`,
+  `filler` remain.
 - Only `client/src/skiScene.ts` and the docs changed. `npm run check`
-  passes; verified live in the slope-vis dev server (flanks clear of trees,
-  rocks/props still present, no load errors).
+  passes; verified live off the running dev server that the served module
+  lists the pines and no longer references any birch model.
 
-Art Style Bible updated with a **"Trees, removed"** amendment.
-
-**Next:** *(slope-vis)* the replacement tree — the paused open-canopy /
-"light passes through" search reopens here, now against a genuinely empty
-slope.
+Art Style Bible updated with a **"Trees, cleanup"** amendment.
 
 ## Milestones
 

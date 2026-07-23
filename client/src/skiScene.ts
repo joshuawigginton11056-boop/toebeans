@@ -1114,11 +1114,22 @@ function updateSnowTrail(
 // machine sees the identical slope.
 
 const DECOR_MODELS = {
-  // Trees removed 2026-07-23 (slope-vis session, director ask — clean slate
-  // before the next tree direction). The former pine/birch/dead-birch model
-  // lists are gone from the scatter; their .glb files stay in assets/slope/
-  // so the eventual replacement tree can reuse the loader. Only rocks and
-  // small ground props decorate the flanks now.
+  // The mystical pines (director ask + sequoia-grove reference, 2026-07-23,
+  // recolored frosted-green): MegaKit stylized pines are the slope's tree,
+  // scattered at three scales — giant trunks by the lane, mid fill, far
+  // silhouettes — so the canopy lives above the camera and the haze eats the
+  // treetops, like the reference.
+  pines: [
+    "StylizedPine_1",
+    "StylizedPine_2",
+    "StylizedPine_3",
+    "StylizedPine_4",
+    "StylizedPine_5",
+  ],
+  // The old Ultimate Nature Pack trees (amber-canopy PineTree_Snow, birches,
+  // dead birches) are retired from the scatter per the bible — the lingering
+  // birch/dead-birch rolls were removed 2026-07-23. Their .glb files stay in
+  // assets/slope/. Pines, rocks, and small ground props remain.
   rocks: [
     "Rock_Snow_1",
     "Rock_Snow_2",
@@ -1185,6 +1196,9 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
 // and cells spawn/despawn as the window follows the skier. Driven from
 // syncEnvironment, which already knows the anchor; no new seam API.
 
+// Trees read slightly larger than before (director ask, 2026-07-23).
+const TREE_SCALE = 1.15;
+
 interface DecorBand {
   readonly key: string;
   /** One potential spawn per cell of this many meters of slope. */
@@ -1196,26 +1210,60 @@ interface DecorBand {
   ) => { models: readonly string[]; x: number; scale: number };
 }
 
-// Trees removed (director ask, 2026-07-23 slope-vis session): the giant
-// colonnade, the mixed near treeline, and the far silhouette bands were all
-// pines/birches, so they're gone with the trees. Only the near flank
-// survives, now holding rocks and small ground props — enough to still mark
-// the lane edge (the hard-clamp cue) without any standing trees. The far
-// depth silhouettes go dark until the replacement tree lands.
+// The giants (sequoia-grove reference, 2026-07-23): a sparse colonnade of
+// huge trunks hugging the lane, canopy far above the camera — the trees
+// are the environment, not decoration on it. Source models are 7–10m, so
+// 4.5–7× puts them at roughly 35–70m. Spacing stays wide: the reference
+// reads as a grove of individuals, not a wall, and every trunk gap is a
+// window into the hazy depth beyond.
 const DECOR_BANDS: readonly DecorBand[] = [
+  {
+    key: "giant",
+    cellSize: 19,
+    density: 1,
+    spawn: (random) => ({
+      models: DECOR_MODELS.pines,
+      x: LANE_EDGE + 2.5 + random() * 10,
+      scale: 4.5 + random() * 2.5,
+    }),
+  },
+  // Near flank: the treeline just past the lane edge — the visible cue for
+  // where the skiable area ends (hard-clamp call, 2026-07-22). Pines lead;
+  // rocks and filler props fill the gaps between them. The old birches and
+  // dead birches that used to thin through this mix are retired (2026-07-23).
   {
     key: "near",
     cellSize: 4,
     density: 1,
     spawn: (random) => {
       const roll = random();
-      const models = roll < 0.6 ? DECOR_MODELS.rocks : DECOR_MODELS.filler;
+      const isTree = roll < 0.55;
+      const models =
+        roll < 0.55
+          ? DECOR_MODELS.pines
+          : roll < 0.8
+            ? DECOR_MODELS.rocks
+            : DECOR_MODELS.filler;
       return {
         models,
         x: LANE_EDGE + 0.8 + random() * 9,
-        scale: 0.85 + random() * 0.5,
+        scale: (0.85 + random() * 0.5) * (isTree ? TREE_SCALE : 1),
       };
     },
+  },
+  // Far flank: sparse oversized silhouettes for depth — the lonely-vast
+  // target wants these thin; resist filling them in. Giants out here
+  // layer trunk behind trunk into the haze. Pines only now (the dead
+  // birches that shared this band are retired).
+  {
+    key: "far",
+    cellSize: 11,
+    density: 0.8,
+    spawn: (random) => ({
+      models: DECOR_MODELS.pines,
+      x: LANE_EDGE + 11 + random() * 16,
+      scale: (2.2 + random() * 1.6) * TREE_SCALE,
+    }),
   },
 ];
 

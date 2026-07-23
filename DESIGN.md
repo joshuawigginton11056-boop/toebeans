@@ -245,18 +245,14 @@ interact with your space for more XP → repeat.
 > director's look-pass call; the new-tree *search* is paused, not
 > cancelled, pending it.
 >
-> **Trees, removed (director ask, 2026-07-23 slope-vis session): the
-> slope has no trees for now — clean slate before the next tree.** All
-> standing trees left the scatter (the frosted-green pines, plus the
-> birches and dead birches that lingered in the near/far mix). The giant
-> colonnade and far-silhouette bands went with them; only rocks and small
-> ground props still mark the lane edge. The .glb files stay in
-> `assets/slope/` so the replacement tree can reuse the loader — nothing
-> was deleted. **Consequence to weigh at look-pass:** the flanks now read
-> flat and treeless, and the far *depth* silhouettes are gone, so the
-> "read distance" cue the bible prizes is muted until a new tree fills it
-> back in. The pine-green palette entry (#13) stays reserved for that
-> tree.
+> **Trees, cleanup (2026-07-23 slope-vis session): the lingering old
+> trees finally leave the scatter — the frosted-green pines stay.** The
+> Ultimate Nature Pack birches and dead birches were declared out above
+> but were still rolling in the near/far bands; they're now removed in
+> code, matching that verdict. The MegaKit frosted-green pines remain the
+> slope's tree at all three scales (giant colonnade, near treeline, far
+> silhouettes). The retired `.glb` files stay in `assets/slope/`; nothing
+> was deleted.
 
 The binding reference for all art in the game. Written 2026-07-21 from the
 director's five *Omno* reference images and their notes on each. When
