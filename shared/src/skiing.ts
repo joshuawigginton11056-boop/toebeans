@@ -39,10 +39,15 @@ export interface SkiState {
   // fall line skids speed away (turning round 6), so by the time the skis
   // cross sideways the run is nearly spent and the speed just eases
   // through zero; a residual-speed crossing flips the stance instead, so
-  // the momentum never turns uphill (round 5's surviving guarantee). On
-  // the snow the heading lives in (-π, π];
-  // mid-air it can accumulate whole spins, and landing collapses it (see
-  // downhillHeading).
+  // the momentum never turns uphill (round 5's surviving guarantee). A
+  // held turn ends at straight-backwards (turning round 10): grounded
+  // steer saturates at ±π instead of wrapping through it, so one hold is
+  // at most one turnaround — carve to sideways, pivot into switch, settle
+  // riding backwards — never the endless rotate-die-rebuild serpentine.
+  // On the snow the heading lives in [-π, π] — the sign at the ends
+  // remembers which way you turned around, and the opposite key carves
+  // back. Mid-air it can accumulate whole spins, and landing collapses it
+  // (see downhillHeading).
   readonly heading: number;
   // The direction the run is actually traveling, everywhere. Airborne it's
   // frozen on the takeoff frame — flight is ballistic (nothing to carve
@@ -72,6 +77,21 @@ export interface SkiState {
   // charge, higher jump. Transient input state, deliberately not saved: a
   // restore starts uncharged, same spirit as flightHeading above.
   readonly jumpCharge: number;
+  // Seconds left in the touchdown lockout (see LANDING_RECOVERY): set on the
+  // landing frame, ticks down on the snow, and while it's running the jump
+  // key neither loads nor launches. Transient input-adjacent state,
+  // deliberately not saved: a restore lands (or resumes) recovered, same
+  // spirit as jumpCharge above.
+  readonly landingRecovery: number;
+  // Seconds left in the tired-hop cue (see TIRED_HOP_DURATION): set when the
+  // jump key presses into the landing lockout, so the renderer can show the
+  // locked-out attempt — the skier's legs are spent, and the eaten input
+  // should read as *their* failure, not the game ignoring the key. The sim
+  // itself does nothing with it: height never leaves the snow, no physics
+  // change — it's a clock the renderer shapes the tired little bob from.
+  // Transient presentation cue, deliberately not saved: a restore resumes
+  // with nothing to apologize for, same spirit as landingRecovery above.
+  readonly tiredHop: number;
   readonly status: RunStatus;
   readonly lives: number;
   readonly respawnTimer: number;
@@ -123,9 +143,11 @@ const BRAKE_DECEL = 10;
 // stands as the tuning knob to revisit at playtest.
 const SKID_SCRUB = 45;
 // Steering is a real turn (M2 heading session): holding left/right keeps
-// rotating the skis, up to fully sideways and beyond — there's no built-in
-// stop, and no fall either (turning round 3): past sideways you pivot into
-// riding switch. TURN_RATE is how fast the skis rotate at full authority —
+// rotating the skis, up to fully sideways and beyond — no stop at sideways,
+// and no fall either (turning round 3): past sideways you pivot into
+// riding switch. The rotation does end, though: a grounded hold saturates
+// at straight-backwards (turning round 10 — see the clamp in stepSkiing).
+// TURN_RATE is how fast the skis rotate at full authority —
 // ONE rate everywhere, grounded or airborne (director call, 2026-07-22:
 // the 9 rad/s air-trick rate and the held/fresh key split are gone).
 const TURN_RATE = 1.8;
@@ -216,6 +238,31 @@ export const LATERAL_LIMIT = 12;
 export const MIN_JUMP_VELOCITY = 7;
 export const MAX_JUMP_VELOCITY = 11;
 export const JUMP_CHARGE_TIME = 0.6;
+// The landing lockout (director directive 2026-07-23: "after landing from a
+// jump, the player should not be able to immediately jump"). Touching down
+// starts this timer, and until it runs out the jump key does nothing — no
+// load, no launch. A key held through a landing waits out the lockout and
+// *then* starts its fresh load, so the soonest possible re-jump is lockout +
+// tap. Sized as a beat, not a penalty: about a third of a tap jump's airtime
+// (~0.78s), long enough to kill the instant pogo bounce, short enough that
+// deliberate hop-hop-hop rhythm play still flows. Exported for the tests
+// (they wait it out) and for the renderer/audio if the landing absorb ever
+// wants to read it. Tuning knob: higher = heavier, more committal landings.
+export const LANDING_RECOVERY = 0.3;
+// The tired hop (director directive 2026-07-23, riding the lockout's
+// acceptance): a locked-out jump press gets a visual response — "a small hop
+// that looks like a tired attempt" — instead of nothing. This is a *pure
+// presentation cue*, deliberately not a real sim hop: a real hop would make
+// the skier airborne (opening the air spin mid-lockout), restart the lockout
+// on its own touchdown (chained lockouts), and hand the eaten input the very
+// gameplay effect the lockout exists to deny. So the sim just starts this
+// clock when a press lands during the lockout, and the renderer shapes the
+// weak knee-dip and feeble lift from it — the skis never actually leave the
+// snow. Sized to LANDING_RECOVERY so one lockout fits at most one attempt:
+// a second press finds the cue still running and does nothing. A *real*
+// launch cancels any leftover cue — the legs evidently recovered. Exported
+// for the renderer (it normalizes the clock into animation progress).
+export const TIRED_HOP_DURATION = 0.3;
 const GRAVITY = -18;
 const CHASM_CLEAR_HEIGHT = 0.4;
 export const STARTING_LIVES = 9;
@@ -242,6 +289,8 @@ export function createInitialSkiState(): SkiState {
     // of the run, not something that happens before it.
     speed: 0,
     jumpCharge: 0,
+    landingRecovery: 0,
+    tiredHop: 0,
     status: "skiing",
     lives: STARTING_LIVES,
     respawnTimer: 0,
@@ -285,6 +334,8 @@ function respawnAtCheckpoint(state: SkiState): SkiState {
     // checkpoint, so momentum lost is part of the crash's cost.
     speed: 0,
     jumpCharge: 0,
+    landingRecovery: 0,
+    tiredHop: 0,
     status: "skiing",
     respawnTimer: 0,
   };
@@ -328,9 +379,13 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     Math.min(1, Math.abs(state.speed) / MIN_SPEED),
   );
   let heading = state.heading;
-  if (grounded) {
-    // On the snow the heading lives in (-π, π] — whole turns only ever
-    // accumulate mid-air.
+  if (grounded && Math.abs(heading) > Math.PI) {
+    // On the snow the heading lives in [-π, π] — whole turns only ever
+    // accumulate mid-air. Guarded so an exact ±π (the held-steer
+    // saturation point, turning round 10 — see the clamp below) keeps its
+    // sign: downhillHeading's rounding maps +π to −π, and that flip would
+    // hand a saturated right-hold a fresh 2π of rotation — the serpentine
+    // this round removed, reopened through the back door.
     heading = downhillHeading(heading);
   }
   // Where the skis pointed before this frame's steering — the stance flip
@@ -370,6 +425,22 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   } else {
     if (input.left) heading -= maxTurn;
     if (input.right) heading += maxTurn;
+    if (grounded) {
+      // The turnaround saturation (turning round 10, director directive
+      // 2026-07-23: "remove auto straightening — I can hold one turn and
+      // create a semi circle of constantly trying to turn around"). A held
+      // key used to rotate through backwards forever: every half turn the
+      // run died at sideways, gravity rebuilt it in the new stance, and
+      // the trail re-straightened downhill — an endless S of turnarounds.
+      // Grounded steer now stops at straight-backwards: carve to sideways,
+      // keep holding to pivot into switch, and settle riding backwards
+      // down the fall line — the turnaround happens once. The wall only
+      // holds against the key that built the turn; the opposite key carves
+      // back through sideways (paying the round-6 skid toll, same as
+      // ever). Ground 360s die here, deliberately — full spins are the
+      // air trick (round 9). Airborne held steer stays unclamped.
+      heading = Math.max(-Math.PI, Math.min(Math.PI, heading));
+    }
   }
 
   // Speed is signed along the ski axis; the target is the input magnitude
@@ -458,19 +529,39 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
 
   // Hold-to-charge: holding jump on the snow loads the crouch (charge only
   // ever accrues grounded — pressing mid-air does nothing, and a key still
-  // held through a landing starts a fresh load). Releasing launches, scaled
-  // by how full the load got; a quick tap launches at essentially the
-  // minimum — the old fixed jump.
+  // held through a landing waits out the landing lockout and then starts a
+  // fresh load). Releasing launches, scaled by how full the load got; a
+  // quick tap launches at essentially the minimum — the old fixed jump.
   let jumpCharge = state.jumpCharge;
+  let landingRecovery = state.landingRecovery;
+  // The tired-hop cue winds down on its own — it's an animation clock, and
+  // the bob should finish even if the lockout ends under it.
+  let tiredHop = Math.max(0, state.tiredHop - dt);
   let verticalVelocity = state.verticalVelocity + GRAVITY * dt;
   if (grounded) {
-    if (input.jump) {
+    if (landingRecovery > 0) {
+      // The landing lockout (see LANDING_RECOVERY): fresh off a touchdown,
+      // the legs are absorbing the hit — the jump key neither loads nor
+      // launches until the timer runs out, so there's no instant pogo
+      // re-jump. The press isn't *silent*, though: it starts the tired-hop
+      // cue (see TIRED_HOP_DURATION), so the renderer can show the spent
+      // legs trying and failing. At most one attempt per lockout — a
+      // second press finds the cue still running.
+      landingRecovery = Math.max(0, landingRecovery - dt);
+      if (input.jump && tiredHop === 0) {
+        tiredHop = TIRED_HOP_DURATION;
+      }
+    } else if (input.jump) {
       jumpCharge = Math.min(JUMP_CHARGE_TIME, jumpCharge + dt);
     } else if (jumpCharge > 0) {
       verticalVelocity =
         MIN_JUMP_VELOCITY +
         (MAX_JUMP_VELOCITY - MIN_JUMP_VELOCITY) * (jumpCharge / JUMP_CHARGE_TIME);
       jumpCharge = 0;
+      // A real launch cancels a leftover tired-hop cue (a press late in the
+      // lockout outlives it) — the legs evidently recovered, and the
+      // takeoff pose owns the body now.
+      tiredHop = 0;
     }
   }
   const height = Math.max(0, state.height + verticalVelocity * dt);
@@ -487,6 +578,8 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
       magnitude > 0 && Math.cos(heading - flightHeading) < 0
         ? -magnitude
         : magnitude;
+    // Touchdown starts the landing lockout — see LANDING_RECOVERY.
+    landingRecovery = LANDING_RECOVERY;
   }
 
   let lastCheckpoint = state.lastCheckpoint;
@@ -509,6 +602,9 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     speed,
     // A crash drops the load — the charge doesn't survive into the respawn.
     jumpCharge: crashed ? 0 : jumpCharge,
+    landingRecovery: crashed ? 0 : landingRecovery,
+    // The tip-over owns the body during a crash — no tired bob under it.
+    tiredHop: crashed ? 0 : tiredHop,
     status: crashed ? "crashed" : "skiing",
     lives: crashed ? state.lives - 1 : state.lives,
     respawnTimer: crashed ? RESPAWN_DELAY : 0,

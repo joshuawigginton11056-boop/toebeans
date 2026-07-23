@@ -3498,6 +3498,76 @@ design question — spins are answered by controls; director call whether
 big jumps are still wanted). Music still deliberately last, then the
 end-of-M2 tuning pass.
 
+## (slope-mech) 2026-07-23 — M2: turning round 10 — held turns saturate at backwards (the serpentine fix)
+
+The director's directive, verbatim: "remove auto straightening. I can
+hold one turn and create a semi circle of constantly trying to turn
+around" — with a photo of the trail: an endless S carved by one held
+key. Traced headless before touching code: holding right, the heading
+wrapped through backwards forever (0 → π → −π → 0, a full rotation
+every ~5s), and each half turn the run died at sideways, gravity
+rebuilt it in the new stance, and the trail re-straightened downhill.
+No single feature was "auto straightening" — the serpentine was the
+wrap.
+
+Director pick (2026-07-23, from three options): **a held turn ends at
+straight-backwards** — turn around once, then ride switch. Rejected
+alternatives, for the record: hockey-stop-at-sideways (would reverse
+round 3's carve-into-switch) and momentum-follows-the-carve (would gut
+round 6's turning-is-braking).
+
+- Grounded held steer now clamps the heading to [−π, π] — carve to
+  sideways (round 6's scrub pays out unchanged), keep holding to pivot
+  into switch (rounds 3/5's crossing, unchanged), and settle riding
+  backwards down the fall line. One hold = at most one turnaround. The
+  sign at the ends remembers which way you turned; the wall only holds
+  against the key that built the turn, and the opposite key carves back
+  through sideways as ever.
+- The grounded normalize is now guarded (`|heading| > π` only): JS
+  `Math.round(0.5) = 1` made `downhillHeading(π)` return −π, and that
+  flip would have handed a saturated right-hold a fresh 2π — the
+  serpentine reopened through the back door. Exact ±π keeps its sign.
+- Ground 360s die here, deliberately — full spins are the air trick
+  (round 9). Airborne held steer stays unclamped; the landing collapse
+  and grip window are untouched. W-seek untouched (its switch-diagonal
+  targets legitimately cross ±π and still may).
+- **No SAVE_VERSION bump** (a saved heading is already in range) and
+  zero renderer changes — the rig eases toward the heading it reads,
+  and a saturated heading just stops moving.
+- Tests 90 → 94 (one reworded): the right-hold pins heading inside
+  [0, π] for 8s and settles at exactly π, speed −8; the left mirror
+  settles at −π; the opposite key carves back out to forward; air
+  rotation still accumulates past π. The old "keeps turning while held"
+  test now documents the saturation instead of "no built-in stop".
+- `npm run check` (94 tests) passes. Headless re-trace of the exact
+  repro: heading saturates at 3.14 by t≈3s and stays; lateral freezes
+  (was wiggling 0→2→0.1→2.4→…); speed settles at −8 riding switch.
+  Live-verified on this session's own server (5302, started clean this
+  time): the served module carries the round-10 clamp, and 8s of the
+  real repro (Enter, held ArrowRight via key events) ran with zero
+  console errors. Standing caveat: the hidden pane suspends
+  compositing, so screenshots time out — the trail's look under real
+  keys is the playtest.
+
+**What to playtest:** `npm run dev`, Enter to ski. Hold A or D and
+don't let go: you should carve to sideways, pivot into switch, and
+settle riding straight backwards — one clean turnaround, no serpentine,
+no more "constantly trying to turn around." Tap the opposite key to
+carve back forward. The feel questions: does the settle-at-backwards
+read as intentional (a stance you chose) rather than a dead end? And
+reaching backwards, is it obvious the *other* key is the way out?
+
+**Director response (2026-07-23): "great."** Received in-session on the
+work summary, not yet a hands-on verdict — the two feel questions above
+stand for the next playtest. Docs refreshed the same session for the
+handoff: README rewritten current (the lobby, the roster, the full
+control set — it still described the scrapped bedroom and a blue-box
+skier), and the context-handoff doc's M2 status caught up to the
+momentum + turning saga.
+
+**Next:** unchanged from round 9 — a finish line, tree limbs + crouch,
+or big jumps; music last, then the end-of-M2 tuning pass.
+
 ## (slope-vis) 2026-07-23 — Painted detail rolled across all 24 slope models + slightly larger trees
 
 The approved half of the 2026-07-22 split verdict ("I like the trees")
@@ -3616,6 +3686,157 @@ share — keep the warm accents or go full cold grove?
 Style Bible rewrite (shape-language + asset-sourcing) — now with two
 concrete cases it must codify: painted-source packs and alpha-silhouette
 masks.
+## (slope-mech) 2026-07-23 — M2: the landing lockout — no instant re-jump
+
+The director's directive, verbatim: "after landing from a jump, the
+player should not be able to immediately jump." Before this, a key
+held (or tapped fast) through a touchdown started charging on the very
+next grounded frame — a pogo bounce off every landing.
+
+- New `LANDING_RECOVERY = 0.3` beat: touching down starts a lockout
+  timer, and until it runs out the jump key does nothing — no load, no
+  launch. A key held through the landing waits it out and *then*
+  starts its fresh load, so the soonest re-jump is lockout + tap.
+  Sized as a beat, not a penalty: ~⅓ of a tap jump's airtime, enough
+  to kill the instant pogo, short enough that deliberate
+  hop-hop-hop rhythm still flows. Tuning knob: higher = heavier, more
+  committal landings.
+- New transient `landingRecovery` on `SkiState`, same spirit as
+  `jumpCharge`: deliberately not saved (**no SAVE_VERSION bump** — the
+  save shape is unchanged; a restore resumes recovered), zeroed on
+  respawn, dropped on a crash.
+- Sim-only — zero renderer/audio changes. During the lockout no charge
+  accrues, so the crouch-load pose correctly doesn't show; the
+  round-8 landing slip and the spin's landing collapse are untouched.
+- Tests 94 → 95 (one extended): a tap right on touchdown launches
+  nothing and the same tap flies again once the beat passes; the
+  held-through-landing test now measures the lockout window
+  (~LANDING_RECOVERY) before the fresh load starts.
+- `npm run check` (95 tests) passes. Live-verified on this session's
+  own server (5302) with real key events driving the served client:
+  tap 1 sampled mid-flight (height 1.57), an immediate tap 2 after
+  touchdown sampled grounded (height 0 — the lockout holding), tap 3
+  after the beat sampled mid-flight again (height 1.61). Standing
+  caveat: the hidden pane suspends compositing (rAF frozen), so this
+  run used a timer-shimmed frame loop; feel is the playtest's call.
+
+**What to playtest:** `npm run dev`, Enter to ski. Jump, land, and
+immediately try to jump again — the second press should do nothing for
+a beat (~0.3s), then work normally. The feel questions: does the beat
+read as the legs absorbing the landing (good weight) or as the game
+eating your input (frustration)? And does rhythm hopping still feel
+possible when you *want* to chain jumps?
+
+**Director response (2026-07-23): accepted**, with the follow-up
+directive that sets the next slope-mech chunk: give a locked-out jump
+press a *visual* response — "a small hop that looks like a tired
+attempt" — so the eaten input reads as the skier's legs being spent,
+not the game ignoring the key. Notes for that session: whether the hop
+is a pure presentation bob or a tiny real hop in the sim is the first
+call to make; either way the renderer currently can't see a locked-out
+*press* at all (the sim ignores `input.jump` during the lockout and
+`syncSkiSceneToState` doesn't take input), so the attempt needs a
+signal — a transient field on `SkiState`, or the client passing the
+held key alongside state. `LANDING_RECOVERY` is already exported. If
+the cue needs new rig work in `skierModel.ts`, that's slope-vis's file
+— smallest additive seam change per PARALLEL.md, polish parked in
+IDEAS.md for them.
+
+**Next:** the tired-hop response to a locked-out press (directive
+above), then the round-10 queue — a finish line, tree limbs + crouch,
+or big jumps; music last, then the end-of-M2 tuning pass.
+
+## (slope-mech) 2026-07-23 — M2: the tired hop — a locked-out jump press gets an answer
+
+The lockout's follow-up directive, verbatim: a locked-out jump press
+should get "a small hop that looks like a tired attempt" — the eaten
+input should read as the skier's legs being spent, not the game ignoring
+the key. That's in: press jump during the landing beat and the skier's
+knees buckle, the legs push a feeble few-centimeter bob that barely
+leaves the snow (a real tap jump flies ~1.4 units), and they settle —
+try again in a beat and you fly for real.
+
+- **The first call the last entry flagged — presentation bob, not a real
+  sim hop.** A real hop would make the skier airborne, and airborne means
+  things: the air spin would open mid-lockout, the hop's own touchdown
+  would restart the lockout (chained lockouts), and the eaten input would
+  gain exactly the gameplay effect the lockout exists to deny. So the sim
+  never leaves the ground — `SkiState` gains `tiredHop`, a 0.3s clock
+  (transient like `jumpCharge`; **no SAVE_VERSION bump**, and no save.ts
+  edit at all — the restore's initial-state spread covers it) that starts
+  when a press lands during the lockout, and the renderer shapes the
+  whole bob from it. The renderer keeps reading state alone — zero
+  `main.ts`/seam changes.
+- **The sim's rules** (`shared/src/skiing.ts`): one attempt per lockout —
+  the clock matches `LANDING_RECOVERY`, so a second press finds it still
+  running and does nothing (no drumroll from mashing). A *real* launch
+  cancels a leftover cue (a press late in the lockout outlives it, and
+  the takeoff pose owns the body). A crash zeroes it — the tip-over owns
+  the body.
+- **The shape** (`client/src/skiRender.ts`, existing rig knobs only — no
+  `skierModel.ts` change needed): first half of the cue buckles the knees
+  (+0.35 tuck), then a weak push extends the legs (−0.2 tuck) under a
+  0.07-unit lift on the rig group, then everything settles back to
+  exactly baseline. The cat rides the bob for free (it's mounted inside
+  the rig group). Knobs: `TIRED_DIP`, `TIRED_LIFT` in skiRender,
+  `TIRED_HOP_DURATION` in the sim. Sound + a wearier rig pose (head
+  drop/arm slump) parked in [IDEAS.md](IDEAS.md) tagged (slope-vis) —
+  `audio.ts`/`skierModel.ts` are theirs.
+- Tests 95 → 100: the locked press starts the cue at full while height
+  and charge stay pinned at zero for its whole life; a second press
+  mid-lockout can't restart the clock; a free press charges with no cue;
+  a real launch clears the leftover cue; a crash drops it.
+- `npm run check` (100 tests) and `npm run build` pass. Live-verified
+  against the served modules (this session's own port 5302 was held by an
+  earlier chat's server for this same worktree — same folder, so it
+  serves these edits live; verified the served sim actually exports
+  `TIRED_HOP_DURATION` before trusting it): the served `stepSkiing` run
+  measures lockout 0.3 at touchdown, press → cue 0.3 with charge 0,
+  second press two frames later reads 0.26 (falling, not reset), 13
+  frames of wind-down with max height 0 and max charge 0, then a free
+  tap flies with the cue at 0; the served renderer, probed at key clock
+  values with a spied `setSkiMotion`, reads baseline tuck 0.333 → peak
+  buckle 0.683 (+0.35 exactly) → peak push lift 0.070 with tuck 0.133
+  (−0.2 exactly) → clean reset to baseline/0. Zero console errors.
+  Standing caveat: the pane suspends rAF, so what the bob *feels* like
+  under real keys is the playtest.
+
+**What to playtest:** `npm run dev`, Enter to ski. Jump, land, and mash
+jump during the landing beat — instead of nothing, the skier should give
+a weary little knee-buckle and a pathetic hop that goes nowhere, then
+jump for real once the beat passes. The feel questions: does the tired
+attempt read as "my legs are spent" (the directive's intent) or just as
+a stutter? Is the bob the right size — should the failed attempt be more
+visible, or is subtle right? And does one attempt per landing feel
+correct when you mash, or do you expect each press to get its own little
+struggle?
+
+**Playtest verdict (director, 2026-07-23): "too rapid and shallow —
+needs to be a slow and deep attempt."** The mechanism stands; the shape
+is wrong — the whole struggle currently fits in 0.3s with a 0.35 knee-
+dip, and it reads as a stutter rather than spent legs straining. Retune
+notes for the next session (all three knobs already exist, no new
+machinery): stretch `TIRED_HOP_DURATION` (shared/src/skiing.ts —
+something like 0.7–0.9s; the renderer's buckle/push phases are progress
+fractions, so they stretch with it for free) and deepen `TIRED_DIP`
+(client/src/skiRender.ts — toward a real labored crouch; `TIRED_LIFT`
+is taste, but the *hop* staying pathetic is the point — the effort goes
+into the slow deep buckle, not the air). Two interactions to keep true
+while retuning: the one-attempt-per-lockout guarantee only holds while
+`TIRED_HOP_DURATION ≥ LANDING_RECOVERY` (a longer cue keeps it, and
+also means the cue now visibly outlives the lockout — the existing
+real-launch cancel already covers a recovered press under a leftover
+cue, and there's a test pinning it); and at boost speeds the baseline
+tuck is already near full, so a deeper dip clamps invisible there — if
+the slow attempt must read while boosting too, the dip may need to
+express partly through the lift/settle instead of crouch alone.
+
+**Next:** retune the tired hop slow-and-deep (verdict above — its own
+session), then the round-10 queue — a finish line (prerequisite for XP,
+parked since 2026-07-20), tree limbs + the crouch control (the missing
+second hazard), or purpose-built big jumps (director call whether still
+wanted now that spins are a control). Music still deliberately last,
+then the end-of-M2 tuning pass.
 
 ## Milestones
 

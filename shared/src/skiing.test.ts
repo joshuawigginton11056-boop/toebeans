@@ -5,6 +5,7 @@ import {
   createInitialSkiState,
   downhillHeading,
   JUMP_CHARGE_TIME,
+  LANDING_RECOVERY,
   LATERAL_LIMIT,
   MAX_JUMP_VELOCITY,
   MAX_SPEED,
@@ -13,6 +14,7 @@ import {
   RESPAWN_DELAY,
   STARTING_LIVES,
   stepSkiing,
+  TIRED_HOP_DURATION,
   type SkiInput,
   type SkiState,
 } from "./skiing";
@@ -38,6 +40,8 @@ const nearChasm: SkiState = {
   verticalVelocity: 0,
   speed: 8,
   jumpCharge: 0,
+  landingRecovery: 0,
+  tiredHop: 0,
   status: "skiing",
   lives: STARTING_LIVES,
   respawnTimer: 0,
@@ -201,14 +205,125 @@ describe("stepSkiing", () => {
     }
 
     // Ride it down with the key still held: no instant bounce on touchdown —
-    // the next grounded frame starts a fresh load instead.
+    // the landing lockout runs first, and only then does the still-held key
+    // start its fresh load.
     while (state.height > 0) {
       state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
     }
     expect(state.jumpCharge).toBe(0);
-    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    let lockedFrames = 0;
+    while (state.jumpCharge === 0 && lockedFrames < 60) {
+      state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+      lockedFrames++;
+      expect(state.height).toBe(0);
+    }
     expect(state.jumpCharge).toBeCloseTo(0.02, 5);
+    // The lockout held the key off for about LANDING_RECOVERY first.
+    expect(lockedFrames * 0.02).toBeGreaterThanOrEqual(LANDING_RECOVERY);
+    expect(lockedFrames * 0.02).toBeLessThan(LANDING_RECOVERY + 0.06);
+  });
+
+  it("locks out the jump for a beat after landing — no instant re-jump", () => {
+    // Tap jump and ride the flight down to the landing frame.
+    let state = stepSkiing(cruising, { ...noInput, jump: true }, 0.02);
+    state = stepSkiing(state, noInput, 0.02);
+    expect(state.height).toBeGreaterThan(0);
+    while (state.height > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+
+    // Tap again right on touchdown: the press loads nothing, so the release
+    // launches nothing — the skis stay on the snow.
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    expect(state.jumpCharge).toBe(0);
+    state = stepSkiing(state, noInput, 0.02);
     expect(state.height).toBe(0);
+
+    // Wait out the recovery, and the very same tap flies again.
+    for (let i = 0; i * 0.02 <= LANDING_RECOVERY; i++) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    state = stepSkiing(state, noInput, 0.02);
+    expect(state.height).toBeGreaterThan(0);
+  });
+
+  it("answers a locked-out press with the tired-hop cue — presentation only", () => {
+    // Tap jump and ride the flight down to the landing frame.
+    let state = stepSkiing(cruising, { ...noInput, jump: true }, 0.02);
+    state = stepSkiing(state, noInput, 0.02);
+    while (state.height > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    expect(state.tiredHop).toBe(0);
+
+    // Press into the lockout: the cue starts at full, and while it winds
+    // down the skis never leave the snow and no charge loads — the hop
+    // belongs to the renderer, not the physics.
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    expect(state.tiredHop).toBe(TIRED_HOP_DURATION);
+    while (state.tiredHop > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+      expect(state.height).toBe(0);
+      expect(state.jumpCharge).toBe(0);
+    }
+  });
+
+  it("fits one tired attempt per lockout — a second press can't restart it", () => {
+    let state = stepSkiing(cruising, { ...noInput, jump: true }, 0.02);
+    state = stepSkiing(state, noInput, 0.02);
+    while (state.height > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+
+    // First press starts the cue; release and press again mid-lockout —
+    // the clock keeps falling, it never snaps back to full.
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    const started = state.tiredHop;
+    state = stepSkiing(state, noInput, 0.02);
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    expect(state.tiredHop).toBeCloseTo(started - 0.04, 5);
+  });
+
+  it("plays no tired hop outside the lockout — a free press just charges", () => {
+    const state = stepSkiing(cruising, { ...noInput, jump: true }, 0.02);
+    expect(state.jumpCharge).toBeCloseTo(0.02, 5);
+    expect(state.tiredHop).toBe(0);
+  });
+
+  it("cancels a leftover cue on a real launch — takeoff owns the body", () => {
+    let state = stepSkiing(cruising, { ...noInput, jump: true }, 0.02);
+    state = stepSkiing(state, noInput, 0.02);
+    while (state.height > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    // Let most of the lockout pass, then press: this cue outlives the
+    // lockout's tail.
+    for (let i = 0; i * 0.02 < LANDING_RECOVERY - 0.04; i++) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    expect(state.tiredHop).toBeGreaterThan(0);
+
+    // Wait out the lockout remainder, then tap-and-release a real jump
+    // while the cue is still winding down: the launch flies and clears it.
+    while (state.landingRecovery > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    expect(state.tiredHop).toBeGreaterThan(0);
+    state = stepSkiing(state, noInput, 0.02);
+    expect(state.height).toBeGreaterThan(0);
+    expect(state.tiredHop).toBe(0);
+  });
+
+  it("drops the tired-hop cue on a crash — the tip-over owns the body", () => {
+    const state = skiUntilCrash({
+      ...nearChasm,
+      landingRecovery: 0.25,
+      tiredHop: 0.25,
+    });
+    expect(state.tiredHop).toBe(0);
   });
 
   it("drops the charge on a crash — it doesn't survive to the respawn", () => {
@@ -257,7 +372,9 @@ describe("stepSkiing", () => {
     for (let i = 0; i < 25; i++) {
       state = stepSkiing(state, { ...noInput, right: true }, 0.02);
     }
-    // No built-in stop: the turn keeps accumulating as long as you hold it.
+    // No stop at sideways: the turn keeps accumulating as long as you hold
+    // it — all the way to the round-10 saturation at straight-backwards
+    // (pinned in its own tests below).
     expect(state.heading).toBeGreaterThan(halfTurn);
   });
 
@@ -580,6 +697,72 @@ describe("stepSkiing", () => {
     expect(sawSwitch).toBe(true);
     expect(state.lives).toBe(STARTING_LIVES);
     expect(Math.abs(state.heading)).toBeGreaterThan(Math.PI / 2);
+  });
+
+  it("saturates a held turn at straight-backwards — one turnaround, no serpentine", () => {
+    // Turning round 10 (director directive, 2026-07-23): "remove auto
+    // straightening — I can hold one turn and create a semi circle of
+    // constantly trying to turn around." Before, a held key rotated
+    // through backwards forever: every half turn the run died at
+    // sideways, gravity rebuilt it, and the trail re-straightened
+    // downhill — an endless S. Now the rotation stops at ±π: carve to
+    // sideways, keep holding to pivot into switch, settle riding
+    // backwards down the fall line.
+    let state = cruising;
+    for (let i = 0; i < 400; i++) {
+      state = stepSkiing(state, { ...noInput, right: true }, 0.02);
+      // A right-hold's heading never leaves [0, π]. The serpentine was
+      // exactly the wrap past π: re-entering from the far side handed the
+      // hold a fresh half-turn to straighten and cross again.
+      expect(state.heading).toBeGreaterThanOrEqual(0);
+      expect(state.heading).toBeLessThanOrEqual(Math.PI);
+    }
+    expect(state.heading).toBe(Math.PI);
+    expect(state.speed).toBe(-BASE_SPEED); // settled riding switch at cruise
+  });
+
+  it("saturates the left turnaround at −π — the sign remembers the way round", () => {
+    let state = cruising;
+    for (let i = 0; i < 400; i++) {
+      state = stepSkiing(state, { ...noInput, left: true }, 0.02);
+    }
+    expect(state.heading).toBe(-Math.PI);
+    expect(state.speed).toBe(-BASE_SPEED);
+  });
+
+  it("carves back out of a saturated turnaround with the opposite key", () => {
+    // The wall only holds against the key that built the turn: from
+    // straight-backwards the other key carves back through sideways
+    // (paying the round-6 skid toll) to forward running.
+    let state: SkiState = {
+      ...cruising,
+      heading: Math.PI,
+      flightHeading: Math.PI,
+      speed: -BASE_SPEED,
+    };
+    for (let i = 0; i < 150; i++) {
+      state = stepSkiing(state, { ...noInput, left: true }, 0.02);
+    }
+
+    expect(state.heading).toBeLessThan(Math.PI / 2);
+    expect(state.speed).toBeGreaterThan(0); // forward stance again
+  });
+
+  it("keeps air rotation unclamped — spins accumulate past backwards", () => {
+    // The saturation is a grounded rule. Airborne, held steer (like the
+    // air spin) still accumulates whole turns; the landing collapse and
+    // the round-8 grip window sort out whatever angle comes down.
+    const airborne: SkiState = {
+      ...cruising,
+      heading: 3.0,
+      flightHeading: 0,
+      height: 1,
+      verticalVelocity: 2,
+    };
+
+    const state = stepSkiing(airborne, { ...noInput, right: true }, 0.2);
+
+    expect(state.heading).toBeGreaterThan(Math.PI);
   });
 
   it("never travels uphill through a boosted turnaround — the round-5 bar", () => {

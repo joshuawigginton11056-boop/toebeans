@@ -1,12 +1,13 @@
 # Toebeans
 
 A cozy 3D game: ski mountain slopes with your cat, earn XP, and decorate a
-home you customize together. Early build — two playable scenes (a bedroom
-to walk around and a ski slope with crashes, checkpoints, and the cat's 9
-lives). The slope is getting its real art first — snowy trees and rocks,
-the dawn lighting pass, the real UI, sound effects, save/load, and a real
-animated cat are all in; the skier is still a blue box, and the bedroom is
-still gray-box. Most of the game described in [`DESIGN.md`](DESIGN.md)
+home you customize together. Early build — the game opens on a menu lobby
+(a title screen with a snowy diorama behind it) and has one playable
+scene: the ski slope, with crashes, checkpoints, and the cat's 9 lives.
+The slope wears the game's real art — painted snowy trees and rocks, dawn
+lighting, carved ski trails, a playable cast of 11 characters with your
+animated cat riding on your back — plus the real UI, synthesized sound,
+and save/load. Most of the game described in [`DESIGN.md`](DESIGN.md)
 isn't built yet. See [`ROADMAP.md`](ROADMAP.md) for what's done and what's
 next.
 
@@ -18,28 +19,31 @@ npm run dev
 ```
 
 Then open the URL it prints (usually `http://localhost:5173`). You start
-in a gray-box bedroom — placeholder box shapes, except the cat, which is
-a real model; the rest of the real art starts on the slope. The game
+on the title screen — its buttons have their keyboard shortcuts printed
+right on them (pick a character, skin and hair colors, sound). The game
 remembers where you were: close the tab and reopen it and you resume the
-same scene, spot, and run. Controls:
+same spot and run. Controls:
 
-- **Enter** — switch between the bedroom and the ski slope. Every trip to
+- **Enter** — hit the slopes, or head back to the lobby. Every trip to
   the slope is a fresh run with full lives (this is also how you retry
   after losing all 9).
 - **M** — mute/unmute. All sound is synthesized in the browser; there are
   no audio files.
-- In the bedroom: **arrow keys or WASD** to walk around; the bed, dresser,
-  and desk block your path. The cat trots over to greet you, follows you
-  around, and sits back down when it catches up.
-- On the slope: **arrow keys or WASD** to steer left/right and lean
-  up/down to speed up or brake, **Space** to jump the gaps in the snow,
-  **Shift** to boost. Crashing costs one of the cat's 9 lives and sends
-  you back to the last checkpoint (ice-blue stripe); lose all 9 and the
-  run is forfeited. The nine cat faces in the top-left corner are the
-  lives — each one fades out as it's spent — and the chips along the
-  bottom of the screen show the controls for whichever scene you're in.
-  The treelines flanking the run are the first real art, and your cat
-  rides along on your back — see [`assets/CREDITS.md`](assets/CREDITS.md)
+- On the slope: **left/right (or A/D)** steer — turns are real: the skis
+  stay where you point them, and holding a turn carves all the way around
+  into riding switch (backwards), settling there. The opposite key carves
+  you back. **Up (or W)** speeds up and straightens you onto the fall
+  line in whichever stance you're in; **down (or S)** brakes — and so
+  does turning: skis sideways scrub speed to a hockey stop. **Space**
+  charges a jump while held (deeper crouch, higher jump — release to
+  launch) and, held again mid-air, spins the body for 180s and 360s; land
+  backwards and you're riding switch, not crashing. Landings take a
+  short beat before you can jump again. **Shift** boosts, and
+  commits harder into turns. Falling into a chasm costs one of the cat's
+  9 lives and sends you back to the last checkpoint (ice-blue stripe);
+  lose all 9 and the run is forfeited. The nine cat faces in the top-left
+  are the lives — each fades as it's spent — and the chips along the
+  bottom show the controls. See [`assets/CREDITS.md`](assets/CREDITS.md)
   for where the models come from.
 
 Other useful commands:
@@ -56,6 +60,8 @@ Other useful commands:
 - [`ROADMAP.md`](ROADMAP.md) — session-by-session log of what changed and
   what's next.
 - [`DESIGN.md`](DESIGN.md) — game design decisions, including the approved
-  v1.0/v1.x/Steam scope split.
+  v1.0/v1.x/Steam scope split and the Art Style Bible.
 - [`IDEAS.md`](IDEAS.md) — a parking lot for ideas that come up but aren't
   being built yet.
+- [`PARALLEL.md`](PARALLEL.md) — how the three parallel Claude sessions
+  (lobby, slope-mechanics, slope-visuals) share the repo.
