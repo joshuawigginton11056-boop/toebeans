@@ -109,6 +109,11 @@ const HUD_CSS = `
   border: 1px solid ${SUNLIT_SNOW};
   color: ${SUNLIT_SNOW};
 }
+.hud-banner.finish {
+  background: ${BIRCH_AMBER}F2;
+  border: 1px solid ${SUNLIT_SNOW};
+  color: ${SLATE_DEEP};
+}
 .hud-banner .sub {
   display: block;
   margin-top: 6px;
@@ -244,15 +249,22 @@ export function createHud(): HudHandle {
 
     if (state.status === "crashed") {
       bannerEl.classList.add("visible", "crash");
-      bannerEl.classList.remove("forfeit");
+      bannerEl.classList.remove("forfeit", "finish");
       bannerText.textContent =
         state.lives > 0 ? "Crashed! Back to the checkpoint…" : "Crashed!";
       bannerSub.textContent = "";
     } else if (state.status === "forfeited") {
       bannerEl.classList.add("visible", "forfeit");
-      bannerEl.classList.remove("crash");
+      bannerEl.classList.remove("crash", "finish");
       bannerText.textContent = "Out of lives — run forfeited";
       bannerSub.textContent = "Press Enter to head back to the lobby";
+    } else if (state.status === "finished") {
+      // Crossing the line wins the run — a celebratory beat before the coast
+      // auto-returns to the lobby (no keypress; the sub says so).
+      bannerEl.classList.add("visible", "finish");
+      bannerEl.classList.remove("crash", "forfeit");
+      bannerText.textContent = "Run complete!";
+      bannerSub.textContent = "Heading back to the lobby…";
     } else {
       bannerEl.classList.remove("visible");
     }

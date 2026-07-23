@@ -4513,6 +4513,89 @@ now the 0.3s lockout ends ~0.2s before the 0.5s cue does, so a jump can fire
 (and cancel the bob) while it's still playing. Gate the jump on `tiredHop` too;
 full routes in IDEAS.md. Its own session.
 
+## (slope-mech) 2026-07-23 — Slope 1 "The Overlook": the finite track skeleton
+
+The endless sandbox is gone — Slope 1 is a real, finite track now. This is the
+spine the beat sheet (DESIGN.md) and the whole slope-vis dressing pass hang on,
+and it clears the finish-line prerequisite for XP that's been parked since
+2026-07-20. Built to the `(slope-mech)` spec in IDEAS.md, with three director
+calls from this session's Q&A folded in.
+
+- **Length + finish** (`skiing.ts`). New `FINISH_DISTANCE = 800` (≈ 75–90 s at
+  cruise) and a new `RunStatus "finished"`. Crossing the line wins the run:
+  `stepSkiing` flips to `"finished"` at `distance >= finishDistance`, keeping
+  all your lives (it's a win, not a crash). New state fields `finishDistance`
+  (static layout, like chasms/checkpoints — unsaved, comes fresh from
+  `createInitialSkiState`) and `finishTimer` (transient countdown, unsaved).
+- **Coast, then auto-return** (director call this session). Finishing doesn't
+  freeze — a new `"finished"` branch in `stepSkiing` stops input from driving
+  the run and eases the skier to a stop past the line (drag), settling any
+  airborne crossing back down. After `FINISH_LINGER` (4 s — enough to coast a
+  boosted crossing down and read the banner), `main.ts` auto-returns to the
+  lobby; pressing Play starts a fresh run as always.
+- **Layout to the beat sheet** (`createInitialSkiState`). The test chasms
+  (20/45/70) and checkpoints (0/26/52) retired for five chasms to the beats:
+  warm-up **120** (w3), an extra on the vista run-in **250** (w3.5), the
+  signature cliff jump **380** (w**5.5**, the widest — the payoff), and two
+  back-half extras **500** (w3.5) and **660** (w4). Checkpoints
+  `[0, 150, 285, 420, 620]` — one just before each chasm (620 sits *past* the
+  rock gate), so a crash only ever replays the hazard that killed you. The
+  "sprinkle a few extras" density and where they go was this session's third
+  director call.
+- **The signature cliff jump demands commitment.** At w5.5 the crevasse is
+  wider than a bare cruise tap can clear (a tap reaches ~5.2 units above the
+  clear height; the gap is 5.5), so the payoff wants a charged jump or a boost.
+  Pinned by a timing-sweep test (tap clears a w3 gap but never the cliff; a
+  full charge does), so a physics tune can't silently make it trivial.
+- **The rock gate is a real pinch** (director call this session: build it now,
+  not deferred). New `laneHalfWidth(distance)` narrows the lateral clamp from
+  the full ±12 down to ±6 at the gate (~560), smoothly over ±40 units (a raised
+  cosine) — tension before the finish, no new crash type, just less room.
+  `LATERAL_LIMIT` is now the *maximum* width; the pinch only ever narrows
+  (widening would push travel into the treeline). **Seam:** the visual lane +
+  the spire art live in `skiScene.ts` (slope-vis) and still read the constant,
+  so the pinch is an *invisible* narrowing until they wire the visual lane to
+  `laneHalfWidth` — exported for exactly that, and parked for them in IDEAS.md.
+- **`hud.ts` (shared):** a new amber "Run complete! / Heading back to the
+  lobby…" banner variant, reusing the forfeit banner's slot.
+- **`save.ts` (shared):** `"finished"` added to the decoded-status whitelist
+  (+ the "can't win with no lives" consistency rule). **No `SAVE_VERSION`
+  bump** — it's a new enum value, not a shape change; old v5 saves lack it and
+  still decode, and `finishDistance`/`finishTimer` are unsaved (static /
+  transient). A save taken mid-coast restores and returns to the lobby at once.
+- `npm run check` passes (typecheck + **113** tests; +11 new covering the
+  finish transition, the coast-and-ignore-input, the linger timer, the
+  rock-gate clamp, and the cliff-jump difficulty sweep). Updated two save-test
+  fixtures that hard-coded the old checkpoint/chasm distances.
+
+**Deferred, on purpose** (flagged in the spec, not blocking the spine): route
+**bending** stays #3's own chunk — the sim still models distance as a straight
+axis, and a curved centerline is a real cross-seam change. **Grade** stays flat
+(downhill reads from motion + framing). Variable width was the one "bigger
+decision" pulled forward this session (the rock gate).
+
+**Not live-verified in-browser:** port 5302 was held by another chat's dev
+server for this worktree, and this pane suspends `requestAnimationFrame` (an
+80-second run to the finish isn't drivable by hand here anyway). The sim is
+pinned by the deterministic tests; the *feel* — is 800 too long, does the
+4-second coast read right, does the cliff jump land as the payoff, does the
+invisible rock-gate pinch feel fair before the spires exist — is the playtest's
+call. Josh's own server (5173, main checkout) hot-reloads this after the merge.
+
+**What to playtest:** `npm run dev`, Enter to ski, and just ski the whole way
+down. New things to feel: the run now *ends* — after ~75–90 s you cross a
+finish (no arch art yet) and the skier coasts to a stop, then you're returned
+to the lobby. The wide gap around distance 380 is the signature cliff jump —
+try clearing it on a tap (should fail) vs. holding to charge or boosting. And
+around 560 the lane quietly narrows (the rock gate — no spires yet, so it'll
+feel like an invisible squeeze for now).
+
+**Next:** hand the visual half to slope-vis (finish arch, the vista reveal, the
+crevasse art, and the rock-gate spires + visual lane following `laneHalfWidth`
+— all now have real distances to build against). On the mechanics side, the
+route-bending decision (#3) is the biggest remaining skeleton question; the
+tired-hop jump-gate follow-up and the `dt`-clamp are still queued in IDEAS.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

@@ -198,6 +198,12 @@ function loop(now: number): void {
     skiState = stepSkiing(skiState, readSkiInput(), dt);
     syncSkiSceneToState(skiScene, skiState, dt);
     render(skiScene);
+    // Finishing the slope coasts to a stop and then auto-returns to the lobby
+    // (director call, 2026-07-23): once the post-finish linger runs out, head
+    // back. goSkiing() will start a fresh run next time Play is pressed.
+    if (skiState.status === "finished" && skiState.finishTimer <= 0) {
+      backToLobby();
+    }
   }
   hud.sync(mode, skiState);
   // audio.ts is slope-session territory and its AudioMode still says

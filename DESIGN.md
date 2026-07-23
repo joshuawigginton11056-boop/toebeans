@@ -66,34 +66,35 @@ against; mechanics places the layout at these beats, visuals dresses them:
 6. **The finish.** Opens up again; a finish arch/banner readable from far
    off; crossing it completes the run.
 
-**Skeleton parameters** — recommended starting values (director/mechanics
-tune when built; the concrete build list is the `(slope-mech)` entry in
-[IDEAS.md](IDEAS.md)):
+**Skeleton parameters** — the *straight finite skeleton* was **built
+2026-07-23** (slope-mech; see the ROADMAP entry). Values as built below; the
+concrete build list is the `(slope-mech)` entry in [IDEAS.md](IDEAS.md).
 
-- **Length / finish:** ~800 units (≈ 75–90 s of skiing). Today the run is
-  *endless* with only ~70 units of real content (~8 s) — this is the single
-  biggest gap between the sandbox and a real slope. A fixed length also
-  unlocks the timed per-slope song (the Geometry-Dash music direction).
-- **Route:** *open decision.* A showcase wants to **bend** (curve around the
-  vista, dogleg past the rock gate) so the mountain reveals itself instead
-  of being visible whole from the top. That's the largest mechanics addition
-  — the sim models distance as a straight axis today, so bending needs a
-  curved centerline — so it's split out: build the finite *straight*
-  skeleton first, decide bends as a follow-on. Slope-vis lean: yes, gentle.
-- **Grade:** keep the current flat-underneath model for v1 (the downhill
-  read comes from motion + framing, not real elevation change) — real
-  terrain grade is a big change for little gameplay gain.
-- **Width:** fixed lane (±12) is fine for the first build; a modest pinch at
-  the rock gate and opening at the vista is a nice-to-have if the clamp can
-  vary by distance cheaply.
+- **Length / finish:** **built** — `FINISH_DISTANCE = 800` (≈ 75–90 s of
+  skiing). Crossing the line wins the run (`RunStatus "finished"`); it coasts
+  to a stop and auto-returns to the lobby. This retired the endless sandbox
+  and unblocks the timed per-slope song (the Geometry-Dash music direction).
+- **Route:** *still open* — built **straight** for now. A showcase wants to
+  **bend** (curve around the vista, dogleg past the rock gate), but the sim
+  models distance as a straight axis, so a curved centerline is its own
+  cross-seam chunk (the biggest remaining skeleton decision). Slope-vis lean:
+  yes, gentle.
+- **Grade:** flat-underneath model kept for v1 (the downhill read comes from
+  motion + framing, not real elevation change).
+- **Width:** **built with a pinch.** `laneHalfWidth(distance)` narrows the
+  lane from the full ±12 to ±6 at the rock gate (~560), smoothly over ±40
+  units — tension before the finish, no new crash. ±12 is now the *maximum*;
+  the lane only ever pinches narrower (the vista's "opening" is the treeline
+  falling away — a visuals job — not a wider playable lane).
 - **Hazards:** chasms + the cliff jump only for now. The snowball chase and
   duck-under limbs from the hazard list above are **deferred by director
   call (2026-07-23)** — "the hazards aren't the main point"; the skeleton
   comes first.
 
-Illustrative beat distances against length 800 (all tunable): warm-up chasm
-~120 (checkpoint ~150), vista reveal from ~300, cliff-jump crevasse ~380
-(checkpoint ~420), rock gate ~560, finish 800.
+Beat distances as built (all tunable): warm-up chasm **120** (checkpoint 150),
+an extra gap **250**, vista reveal from ~300 (visuals), signature cliff-jump
+crevasse **380** (widest at w5.5; checkpoint 420), two back-half extras **500**
+and **660**, rock-gate pinch ~**560** (checkpoint 620 past it), finish **800**.
 
 ## Leveling & Unlocks
 

@@ -25,7 +25,10 @@ export interface Chasm {
 // "skiing" — normal play. "crashed" — brief pause after losing a life,
 // before respawning at the last checkpoint. "forfeited" — all nine lives
 // gone; the run is over (half XP once XP exists — see DESIGN.md).
-export type RunStatus = "skiing" | "crashed" | "forfeited";
+// "finished" — crossed the finish line: the run is won. Input stops driving
+// it, the skier coasts to a stop past the line, and after FINISH_LINGER the
+// client returns to the lobby (full XP once XP exists).
+export type RunStatus = "skiing" | "crashed" | "forfeited" | "finished";
 
 export interface SkiState {
   readonly distance: number;
@@ -107,6 +110,16 @@ export interface SkiState {
   readonly lastCheckpoint: number;
   readonly checkpoints: readonly number[];
   readonly chasms: readonly Chasm[];
+  // Where the slope ends. Crossing it (distance >= finishDistance) wins the
+  // run — status flips to "finished". Static layout, like chasms/checkpoints:
+  // it comes fresh from createInitialSkiState and is deliberately not saved,
+  // so retuning the slope length never leaves an old finish trapped in a save.
+  readonly finishDistance: number;
+  // Seconds left in the post-finish coast-out before the client auto-returns
+  // to the lobby (see FINISH_LINGER). Set on the finish frame, ticks down
+  // while "finished". Transient — not saved: a restore mid-coast resumes with
+  // 0 and the client returns immediately, same spirit as respawnTimer's kin.
+  readonly finishTimer: number;
 }
 
 // Exported for the client: audio scales wind/carve loudness off these
@@ -236,9 +249,43 @@ const AIR_SPIN_RATE = 6.5;
 // Half the skiable width. Widened 4 → 12 (director directive, 2026-07-22:
 // open up the skiable area — carving, hockey stops, and switch riding all
 // want room). The edge stays a hard clamp (director call, same day).
-// Exported for save.ts (restoring a save clamps lateral into range) and the
-// renderer (the visual lane and decor scatter key off it).
+// Since Slope 1's rock gate (see laneHalfWidth) this is the *maximum* /
+// default half-width: the lane never opens wider than this (widening would
+// push travel into the treeline the visuals scatter just past this edge), it
+// only pinches narrower at the gate. Exported for save.ts (restoring clamps
+// lateral to this max) and the renderer (the visual lane and decor scatter
+// key off it).
 export const LATERAL_LIMIT = 12;
+// The rock gate (Slope 1 "The Overlook", beat 5 — slope-mech, 2026-07-23):
+// slate spires pinch the lane briefly before the finish, "tension and framing
+// before the end" (DESIGN.md). Mechanically it's a distance-varying lateral
+// clamp — no new crash, just less room to maneuver — narrowing from the full
+// LATERAL_LIMIT down to ROCK_GATE_HALF_WIDTH at the gate center, smoothly over
+// ROCK_GATE_RAMP units each side (a raised cosine, so no wall snaps in). The
+// pinch only ever narrows, never widens (see LATERAL_LIMIT).
+//
+// SEAM NOTE (slope-mech → slope-vis): the *visual* lane + the spire art live
+// in skiScene.ts (slope-vis territory) and today read the constant
+// LATERAL_LIMIT, so the pinch is currently an invisible narrowing — the snow
+// and treeline don't follow it yet. laneHalfWidth is exported so slope-vis can
+// make the visual lane and the rock-gate spires track the real clamp. Parked
+// for them in IDEAS.md (slope-vis).
+const ROCK_GATE_DISTANCE = 560;
+const ROCK_GATE_HALF_WIDTH = 6;
+const ROCK_GATE_RAMP = 40;
+
+// The playable half-width at a given distance down the slope. LATERAL_LIMIT
+// everywhere except the rock-gate pinch. Exported for save.ts, the tests, and
+// slope-vis (the visual lane should follow this — see the seam note above).
+export function laneHalfWidth(distance: number): number {
+  const offset = Math.abs(distance - ROCK_GATE_DISTANCE);
+  if (offset >= ROCK_GATE_RAMP) {
+    return LATERAL_LIMIT;
+  }
+  // 1 at the gate center, 0 at the ramp edges — a smooth raised cosine.
+  const pinch = 0.5 * (1 + Math.cos((offset / ROCK_GATE_RAMP) * Math.PI));
+  return LATERAL_LIMIT - (LATERAL_LIMIT - ROCK_GATE_HALF_WIDTH) * pinch;
+}
 // Hold-to-charge jumping (director call, 2026-07-22): a tap gives the
 // minimum jump — exactly the old fixed jump, so quick reactions still clear
 // chasms — and holding loads a deeper crouch that launches on release, up
@@ -283,6 +330,16 @@ const GRAVITY = -18;
 const CHASM_CLEAR_HEIGHT = 0.4;
 export const STARTING_LIVES = 9;
 export const RESPAWN_DELAY = 1.5;
+// The finish (Slope 1 skeleton — slope-mech, 2026-07-23). The slope is finite
+// now: crossing FINISH_DISTANCE wins the run. Recommended ~800 units ≈ 75–90 s
+// at cruise (DESIGN.md) — the spine the whole track hangs on; tune freely.
+export const FINISH_DISTANCE = 800;
+// The coast-out after the line (director call, 2026-07-23: "coast, then
+// auto-return"). On finishing, input stops driving the run and the skier
+// glides to a stop; this long holds the moment — enough to coast down from a
+// boosted crossing (~4 s at COAST_DRAG) and read the banner — then main.ts
+// sends you back to the lobby. Tuning knob: shorter = snappier return.
+export const FINISH_LINGER = 4;
 
 // The heading a spin lands on: the nearest downhill-equivalent angle, in
 // (-π, π]. A completed 360 collapses back to ~0 and lands clean; a half
@@ -312,14 +369,30 @@ export function createInitialSkiState(): SkiState {
     lives: STARTING_LIVES,
     respawnTimer: 0,
     lastCheckpoint: 0,
-    // One checkpoint after each chasm you survive, so a crash only ever
-    // replays the hazard that killed you, not the whole slope.
-    checkpoints: [0, 26, 52],
+    // Slope 1 "The Overlook" laid out to the beat sheet (DESIGN.md) — the
+    // endless sandbox retired for a finite track (slope-mech, 2026-07-23).
+    // One checkpoint sits just before each chasm, so a crash only ever
+    // replays the hazard that killed you: warm-up (cp 0), chasm-2 (cp 150),
+    // the signature cliff jump (cp 285), chasm-4 (cp 420), and chasm-5 past
+    // the rock gate (cp 620). The stretch after cp 620 is a clean glide to
+    // the finish at 800 — no hazard, so no checkpoint needed there.
+    checkpoints: [0, 150, 285, 420, 620],
     chasms: [
-      { id: "chasm-1", start: 20, width: 3 },
-      { id: "chasm-2", start: 45, width: 3.5 },
-      { id: "chasm-3", start: 70, width: 4 },
+      // Beat 2 — the warm-up: one easy chasm to learn the jump.
+      { id: "chasm-1", start: 120, width: 3 },
+      // A modest gap on the run-in to the vista (an "extra" — director call,
+      // 2026-07-23: sprinkle a few so the long track isn't dead air).
+      { id: "chasm-2", start: 250, width: 3.5 },
+      // Beat 4 — THE signature cliff jump: a wide glacial crevasse, the run's
+      // payoff. Deliberately wider than the rest (5.5): a timed cruise tap
+      // only just fails it, so clearing it wants a charged jump or a boost.
+      { id: "chasm-3", start: 380, width: 5.5 },
+      // Two more back-half gaps escalating toward the finish (the "extras").
+      { id: "chasm-4", start: 500, width: 3.5 },
+      { id: "chasm-5", start: 660, width: 4 },
     ],
+    finishDistance: FINISH_DISTANCE,
+    finishTimer: 0,
   };
 }
 
@@ -364,6 +437,42 @@ function respawnAtCheckpoint(state: SkiState): SkiState {
 export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiState {
   if (state.status === "forfeited") {
     return state;
+  }
+
+  if (state.status === "finished") {
+    // The coast-out (director call, 2026-07-23): the line is crossed, input no
+    // longer drives the run. Speed eases to a stop through drag and the skier
+    // glides past the banner; when finishTimer expires the client returns to
+    // the lobby (main.ts). No steering, no jumping, no crashing past the line.
+    const finishTimer = Math.max(0, state.finishTimer - dt);
+    const speed =
+      state.speed > 0
+        ? Math.max(0, state.speed - COAST_DRAG * dt)
+        : Math.min(0, state.speed + COAST_DRAG * dt);
+    const travelSpeed = Math.abs(speed);
+    const distance = state.distance + travelSpeed * Math.cos(state.flightHeading) * dt;
+    const halfWidth = laneHalfWidth(distance);
+    const lateral = Math.max(
+      -halfWidth,
+      Math.min(
+        halfWidth,
+        state.lateral + travelSpeed * Math.sin(state.flightHeading) * dt,
+      ),
+    );
+    // Settle any airborne crossing back onto the snow — a jump can carry you
+    // over the line, and the coast shouldn't strand the skier mid-air.
+    const verticalVelocity = state.verticalVelocity + GRAVITY * dt;
+    const height = Math.max(0, state.height + verticalVelocity * dt);
+    return {
+      ...state,
+      finishTimer,
+      speed,
+      distance,
+      lateral,
+      height,
+      verticalVelocity: height <= 0 ? 0 : verticalVelocity,
+      prevJumpHeld: input.jump,
+    };
   }
 
   if (state.status === "crashed") {
@@ -544,8 +653,13 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   // body, not the path.
   const travelSpeed = Math.abs(speed);
   const distance = state.distance + travelSpeed * Math.cos(flightHeading) * dt;
+  // The lane can pinch with distance now (the rock gate — see laneHalfWidth),
+  // so the clamp is per-position. Clamping against the *new* distance means
+  // entering the pinch gently shepherds an edge-hugging skier inward over the
+  // ramp rather than snapping them.
+  const halfWidth = laneHalfWidth(distance);
   let lateral = state.lateral + travelSpeed * Math.sin(flightHeading) * dt;
-  lateral = Math.max(-LATERAL_LIMIT, Math.min(LATERAL_LIMIT, lateral));
+  lateral = Math.max(-halfWidth, Math.min(halfWidth, lateral));
 
   // Hold-to-charge: holding jump on the snow loads the crouch (charge only
   // ever accrues grounded — pressing mid-air does nothing, and a key still
@@ -619,6 +733,10 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
 
   // Chasms are the game's only crash now (turning round 3).
   const crashed = fellIntoAChasm(state.chasms, distance, height);
+  // Crossing the finish wins the run (a crash on the final frame takes
+  // precedence — but the last chasm ends well before the finish, so the two
+  // never overlap). Next frame the "finished" branch above coasts you out.
+  const finished = !crashed && distance >= state.finishDistance;
 
   return {
     distance,
@@ -638,11 +756,14 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     // it even through a crash — the respawn resets it, but the intervening
     // crashed frames shouldn't misremember a release as a press.
     prevJumpHeld: input.jump,
-    status: crashed ? "crashed" : "skiing",
+    status: crashed ? "crashed" : finished ? "finished" : "skiing",
     lives: crashed ? state.lives - 1 : state.lives,
     respawnTimer: crashed ? RESPAWN_DELAY : 0,
     lastCheckpoint,
     checkpoints: state.checkpoints,
     chasms: state.chasms,
+    finishDistance: state.finishDistance,
+    // The coast-out clock starts the frame the line is crossed.
+    finishTimer: finished ? FINISH_LINGER : 0,
   };
 }

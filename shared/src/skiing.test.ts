@@ -4,7 +4,10 @@ import {
   BOOST_SPEED,
   createInitialSkiState,
   downhillHeading,
+  FINISH_DISTANCE,
+  FINISH_LINGER,
   JUMP_CHARGE_TIME,
+  laneHalfWidth,
   LANDING_RECOVERY,
   LATERAL_LIMIT,
   MAX_JUMP_VELOCITY,
@@ -49,6 +52,10 @@ const nearChasm: SkiState = {
   lastCheckpoint: 0,
   checkpoints: [0, 26],
   chasms: [{ id: "c1", start: 20, width: 3 }],
+  // Far past anything these low-distance fixtures reach, so a test never
+  // finishes by accident. Finish-specific tests set their own.
+  finishDistance: 1000,
+  finishTimer: 0,
 };
 
 function skiUntilCrash(start: SkiState): SkiState {
@@ -1205,5 +1212,165 @@ describe("crashing and the cat's nine lives", () => {
     const next = stepSkiing(forfeited, { ...noInput, up: true, jump: true }, 1);
 
     expect(next).toEqual(forfeited);
+  });
+});
+
+describe("Slope 1: the finite track", () => {
+  // Cruising a hair short of the finish, no hazards in the way.
+  const nearFinish: SkiState = {
+    ...cruising,
+    distance: FINISH_DISTANCE - 1,
+    finishDistance: FINISH_DISTANCE,
+    speed: BASE_SPEED,
+  };
+
+  it("lays Slope 1 out as a finite track to the beat sheet", () => {
+    const s = createInitialSkiState();
+    expect(s.finishDistance).toBe(FINISH_DISTANCE);
+    expect(s.finishTimer).toBe(0);
+    expect(s.status).toBe("skiing");
+    // The signature cliff jump is the single widest gap, at beat 4.
+    const widest = Math.max(...s.chasms.map((c) => c.width));
+    const cliff = s.chasms.find((c) => c.width === widest);
+    expect(cliff?.start).toBe(380);
+    // Checkpoints start at the top and only ever ascend.
+    expect(s.checkpoints[0]).toBe(0);
+    const ascending = s.checkpoints.every(
+      (c, i) => i === 0 || c > (s.checkpoints[i - 1] ?? 0),
+    );
+    expect(ascending).toBe(true);
+    // Every chasm sits ahead of a checkpoint, so a crash only ever replays the
+    // hazard that killed you — never the whole slope.
+    for (const chasm of s.chasms) {
+      const priors = s.checkpoints.filter((c) => c < chasm.start);
+      expect(priors.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("finishes the run when the finish distance is crossed", () => {
+    const after = stepSkiing(nearFinish, noInput, 0.5);
+    expect(after.distance).toBeGreaterThanOrEqual(FINISH_DISTANCE);
+    expect(after.status).toBe("finished");
+    expect(after.finishTimer).toBeCloseTo(FINISH_LINGER);
+    // Winning keeps every life — it's not a crash.
+    expect(after.lives).toBe(STARTING_LIVES);
+  });
+
+  it("coasts to a stop and ignores all input after finishing", () => {
+    let state = stepSkiing(nearFinish, noInput, 0.5);
+    expect(state.status).toBe("finished");
+    const speedAtFinish = state.speed;
+    // Hammer every control — none of it drives the run once it's won.
+    for (let i = 0; i < 60; i++) {
+      state = stepSkiing(
+        state,
+        { ...noInput, up: true, left: true, boost: true, jump: true },
+        0.05,
+      );
+    }
+    expect(state.status).toBe("finished");
+    // Speed bled to a stop rather than holding cruise or boosting away.
+    expect(state.speed).toBeLessThan(speedAtFinish);
+    expect(state.speed).toBeCloseTo(0);
+    // Steering did nothing — the heading never left straight downhill.
+    expect(state.heading).toBe(nearFinish.heading);
+  });
+
+  it("runs the coast timer down to zero and holds there", () => {
+    let state = stepSkiing(nearFinish, noInput, 0.5);
+    for (let i = 0; i < 300 && state.finishTimer > 0; i++) {
+      state = stepSkiing(state, noInput, 0.05);
+    }
+    expect(state.finishTimer).toBe(0);
+    expect(state.status).toBe("finished");
+  });
+
+  it("the last chasm ends well before the finish — they never overlap", () => {
+    const s = createInitialSkiState();
+    const lastChasmEnd = Math.max(...s.chasms.map((c) => c.start + c.width));
+    expect(lastChasmEnd).toBeLessThan(s.finishDistance);
+  });
+});
+
+describe("Slope 1: the rock-gate pinch", () => {
+  it("is full width away from the gate and narrower at its center", () => {
+    expect(laneHalfWidth(0)).toBe(LATERAL_LIMIT);
+    expect(laneHalfWidth(FINISH_DISTANCE)).toBe(LATERAL_LIMIT);
+    const atGate = laneHalfWidth(560);
+    expect(atGate).toBeLessThan(LATERAL_LIMIT);
+    expect(atGate).toBeGreaterThan(0);
+  });
+
+  it("never opens wider than the maximum lane", () => {
+    for (let d = 0; d <= FINISH_DISTANCE; d += 5) {
+      expect(laneHalfWidth(d)).toBeLessThanOrEqual(LATERAL_LIMIT);
+    }
+  });
+
+  it("shepherds an edge-hugging skier inward through the pinch", () => {
+    // At the gate center, a skier pinned to the full-width edge is pulled in.
+    const atGate: SkiState = {
+      ...cruising,
+      distance: 560,
+      lateral: LATERAL_LIMIT,
+      speed: BASE_SPEED,
+    };
+    const after = stepSkiing(atGate, noInput, 0.02);
+    expect(after.lateral).toBeLessThan(LATERAL_LIMIT);
+    expect(after.lateral).toBeLessThanOrEqual(laneHalfWidth(after.distance) + 1e-9);
+
+    // Outside the pinch the full edge is still reachable.
+    const open: SkiState = { ...atGate, distance: 100 };
+    const afterOpen = stepSkiing(open, noInput, 0.02);
+    expect(afterOpen.lateral).toBeCloseTo(LATERAL_LIMIT);
+  });
+});
+
+// The signature cliff jump (beat 4) is meant to demand commitment — a wide
+// crevasse a bare tap can't clear. Sweep launch timing so the check is about
+// the jump's reach, not one lucky takeoff frame.
+function bestCaseClears(width: number, holdFrames: number): boolean {
+  for (let launchAt = 86; launchAt <= 99.6; launchAt += 0.1) {
+    let state: SkiState = {
+      ...cruising,
+      distance: 80,
+      speed: BASE_SPEED,
+      chasms: [{ id: "x", start: 100, width }],
+    };
+    let held = 0;
+    let released = false;
+    for (let i = 0; i < 800 && state.status === "skiing"; i++) {
+      let jump = false;
+      if (state.height <= 0 && !released) {
+        if (state.distance >= launchAt && held < holdFrames) {
+          jump = true;
+          held++;
+        } else if (held > 0) {
+          released = true; // this frame's release launches the loaded charge
+        }
+      }
+      state = stepSkiing(state, { ...noInput, jump }, 0.01);
+      if (state.distance >= 100 + width + 3) break;
+    }
+    if (state.status === "skiing" && state.distance >= 100 + width) return true;
+  }
+  return false;
+}
+
+describe("Slope 1: the signature cliff jump demands commitment", () => {
+  const cliffWidth = 5.5; // matches createInitialSkiState's chasm-3
+
+  it("clears a warm-up-sized gap on a bare tap", () => {
+    expect(bestCaseClears(3, 1)).toBe(true);
+  });
+
+  it("cannot clear the wide cliff crevasse on a bare tap", () => {
+    expect(bestCaseClears(cliffWidth, 1)).toBe(false);
+  });
+
+  it("clears the cliff crevasse with a full charge", () => {
+    expect(bestCaseClears(cliffWidth, Math.ceil(JUMP_CHARGE_TIME / 0.01))).toBe(
+      true,
+    );
   });
 });
