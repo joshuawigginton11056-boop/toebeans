@@ -3043,6 +3043,70 @@ the diagnosis above. The bible's transition note records round 1's
 verdict; realism snow remains unapproved, so the no-other-snow-work rule
 still holds.
 
+## (slope-vis) 2026-07-23 — Realism snow round 2: displaced geometry + GPU-carved trail depth
+
+Round 2 of the realism-snow test, built exactly to round 1's diagnosis.
+The director also supplied the paid reference they're going for:
+[BruteForce Snow & Ice Shader](https://assetstore.unity.com/packages/vfx/shaders/brute-force-snow-ice-shader-221389)
+($19.99). Two things worth recording about it: its signature feature is
+**interactive snow** — displaced snow that objects carve real deformation
+trails into via a height render-texture — and it is a **Unity shader
+asset**, so it *cannot* be dropped into Toebeans (a Three.js browser
+game) even if bought; the technique has to be rebuilt natively either
+way, which is what this round does, procedurally and free:
+
+- **The snowfield is real displaced geometry now.** The flat plane became
+  a graded-density grid (~205k static vertices: 9 cm columns across the
+  carve strip and around the skier, coarse on the flanks/far field),
+  vertex-displaced by a world-pinned height field — soft dunes, deep
+  wind-drifted on the flanks, groomed nearly flat inside the skiable
+  lane. The window recenters in vertex-grid steps so the surface never
+  shimmers as it slides.
+- **It casts its own shadows.** A displacement-aware depth material
+  renders the snow into the sun's shadow pass, so dunes self-shadow
+  their hollows under the 25° dawn light — the depth round 1's bump map
+  couldn't fake against this scene's bright ambient.
+- **Ski trails are carved depth, not paint.** Every grounded frame stamps
+  one soft capsule brush per ski (at `SKI_STANCE`, following the heading)
+  into a single-channel ring-buffer render-target (1024×4096 R8,
+  MAX-blended so overlaps merge). The snow shader maps brush coverage
+  onto a groove profile — core sunk 13 cm, displaced-snow shoulders
+  pushed up 4.5 cm beside it, and the skirts between the two skis meet
+  as a low center ridge like real tracks. Groove walls get real sun/
+  shadow shading from finite-difference normals over the full height
+  field (dunes + grooves + crust grain) — per-texel crisp, no more
+  canvas pixels, and no more 4 MB/frame canvas re-upload (the stamps are
+  a few uniforms). Airborne still lifts the pen; trails still persist
+  through respawns.
+- Carved cores wear carved snow #3 with a snow-shadow AO tint (also in
+  dune hollows); the glitter pass stays from round 1 (no complaint),
+  damped where grooves break the crust.
+- **Fixed a round-1 bug found in review:** starting a fresh run after a
+  long one left one-wrap-stale ring rows showing old grooves at wrong
+  world positions (the reclaim only handled downhill jumps). Jumps
+  larger than the window now clear fully in either direction; small
+  recedes (respawns) still keep your pre-crash tracks.
+- Checkpoint stripes and chasm slabs get a baked-in 6 cm lift so lane
+  relief can't poke through them (their factories own the geometry;
+  mechanics still owns positions).
+- **Seam addition** (per PARALLEL.md): `createEnvironment(scene)` →
+  `createEnvironment(scene, renderer)` — one commented, additive
+  call-site line in `skiRender.ts`; the trail stamper needs the renderer.
+  No new dependencies.
+- Watch-items for the playtest: skis ride ~13 cm above the groove floor
+  they just carved (may read floaty up close); self-shadow acne on the
+  displaced field if `normalBias` needs a bump; frame rate on Josh's GPU
+  (~400k tris × main + shadow pass — `SNOW_X_STEP`/`SNOW_Z_STEP` in
+  skiScene.ts are the dial if it chokes).
+- `npm run check` passes (84 tests). Live verification pending: the
+  in-app browser pane suspends when hidden (rAF never fires — same as
+  round 1), so the director opens `localhost:5303` themselves.
+
+**Next:** *(slope-vis)* director verdict on round 2. If it still falls
+short, the paid pack is *not* a fallback (Unity-only, above) — the next
+lever is CC0 photo snow textures layered onto this same displacement
+(ambientCG/Polyhaven, CREDITS rows per the bible's transition note).
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

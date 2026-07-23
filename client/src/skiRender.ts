@@ -76,7 +76,9 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   container.appendChild(renderer.domElement);
 
   // Weather, lights, sky, and the snowfield — the look is skiScene's.
-  const environment = createEnvironment(scene);
+  // (slope-visuals seam addition, 2026-07-23) the renderer rides along so
+  // the snow can carve ski-trail depth into its GPU height map each frame.
+  const environment = createEnvironment(scene, renderer);
 
   const player = new THREE.Group();
 

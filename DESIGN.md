@@ -160,9 +160,18 @@ interact with your space for more XP → repeat.
 >     too pixelated, there's no depth." (The ski trails themselves stay —
 >     they're the depth callout below — but need real carved depth, not
 >     painted lines.) Round 2 goes to displaced geometry (see ROADMAP
->     2026-07-23 for the full diagnosis); the director's paid
->     photo-texture pack is the comparison candidate if that still
->     falls short. Realism snow remains unapproved.
+>     2026-07-23 for the full diagnosis). Realism snow remains
+>     unapproved.
+>   - **Round 2 (displaced geometry, 2026-07-23): built, verdict
+>     pending.** Real vertex-displaced dunes that cast their own
+>     shadows, ski trails carved as actual depth into a GPU height map
+>     (sunk core, pushed-up shoulders, sun-shaded walls). Built to match
+>     the director's linked reference — the BruteForce Snow & Ice
+>     shader's "interactive snow" (see the ROADMAP entry; note the pack
+>     itself is Unity-only and can't be used in this engine, so the
+>     technique is rebuilt natively). If this round falls short, the
+>     next lever is CC0 photo snow textures layered onto the same
+>     displacement (those need CREDITS rows).
 >
 > The *Omno* references stay the target for mood, lighting, haze, and
 > palette. Signal red stays reserved. The bible's shape-language and
