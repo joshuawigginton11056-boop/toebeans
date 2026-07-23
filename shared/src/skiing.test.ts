@@ -454,10 +454,13 @@ describe("stepSkiing", () => {
   it("never travels uphill through a boosted turnaround — the round-5 bar", () => {
     // The boost × turnaround bug: turn backward while holding Shift and
     // the old model whipped the momentum through 180° — 3.5s of tips-first
-    // uphill travel at boost speed. The bar: you keep barreling downhill,
-    // now riding switch, at boost speed. Never uphill.
+    // uphill travel at boost speed. The round-5 bar still holds (never
+    // uphill), and round 6 raised it: the pivot passes through a spent
+    // moment at sideways — the scrub dumps the run — then boost rebuilds
+    // it riding switch.
     let state: SkiState = { ...cruising, speed: BOOST_SPEED };
     let sawSwitch = false;
+    let speedAtCrossing = Infinity;
     for (let i = 0; i < 200; i++) {
       // Steer hard until pointing backwards-ish, then just hold boost.
       const steering = Math.abs(downhillHeading(state.heading)) < 2.8;
@@ -469,38 +472,97 @@ describe("stepSkiing", () => {
       // The whole journey descends — no frame ever moves back up the hill.
       expect(next.distance).toBeGreaterThanOrEqual(state.distance - 1e-12);
       expect(next.status).toBe("skiing");
+      if (
+        Math.cos(state.heading) > 0 &&
+        Math.cos(next.heading) <= 0 &&
+        speedAtCrossing === Infinity
+      ) {
+        speedAtCrossing = Math.abs(state.speed);
+      }
       if (next.speed < 0) sawSwitch = true;
       state = next;
     }
 
     expect(sawSwitch).toBe(true);
     expect(Math.abs(downhillHeading(state.heading))).toBeGreaterThan(Math.PI / 2);
-    // Riding switch at boost speed — the magnitude survived the pivot.
+    // The scrub spent the run before the skis crossed sideways — even the
+    // boosted worst case arrives at a crawl (round 6).
+    expect(speedAtCrossing).toBeLessThan(1);
+    // ...and boost then rebuilds it riding switch at boost speed.
     expect(state.speed).toBeLessThan(-MAX_SPEED);
   });
 
-  it("carries its magnitude through the stance flip at the crossing", () => {
-    // One steer step across sideways at speed: the sign flips on the spot
-    // and the magnitude rides through (minus one frame of drag) — the
-    // pivot converts the run into a switch slide instead of scrubbing it.
-    const carving: SkiState = { ...cruising, heading: Math.PI / 2 - 0.01, speed: 10 };
+  it("skids speed off harder the further the skis turn off the fall line", () => {
+    // The round-6 model: turning IS braking in *rate*, not just target —
+    // held fully sideways sheds boost speed in well under a second, while
+    // the same shedding pointed down the fall line is a gentle coast.
+    const fast = { ...cruising, speed: BOOST_SPEED };
 
-    const state = stepSkiing(carving, { ...noInput, right: true }, 0.02);
+    let sideways: SkiState = { ...fast, heading: Math.PI / 2 };
+    let aligned: SkiState = fast;
+    for (let i = 0; i < 25; i++) {
+      sideways = stepSkiing(sideways, noInput, 0.02);
+      aligned = stepSkiing(aligned, noInput, 0.02);
+    }
 
-    expect(Math.abs(downhillHeading(state.heading))).toBeGreaterThan(Math.PI / 2);
-    expect(state.speed).toBeLessThan(-9.5);
-    expect(state.speed).toBeGreaterThan(-10);
+    // 0.5s sideways: a hockey stop — dead, not just slower.
+    expect(Math.abs(sideways.speed)).toBeLessThan(0.001);
+    // 0.5s aligned: still carrying most of the boost — plain coast drag
+    // (4 u/s²) is all that bites on the fall line.
+    expect(aligned.speed).toBeGreaterThan(BOOST_SPEED - 2 - 0.01);
   });
 
-  it("keeps the slow easing through zero below the flip epsilon", () => {
-    // A crawl across sideways (hockey-stop territory) doesn't flip — the
-    // speed just eases through zero the way rounds 3 and 4 built it.
+  it("arrives at the sideways crossing spent — no jerk for the flip to mirror", () => {
+    // Round 5 died on this: the crossing used to mirror ~13 u/s of lateral
+    // drift in one frame. Now the scrub drains the run on the approach, so
+    // the lateral velocity never jumps — the largest one-frame change over
+    // the whole boosted pivot stays under a couple of frames of braking.
+    let state: SkiState = { ...cruising, speed: BOOST_SPEED };
+    let prevLateralVelocity: number | null = null;
+    let maxJump = 0;
+    for (let i = 0; i < 200; i++) {
+      const steering = Math.abs(downhillHeading(state.heading)) < 2.8;
+      state = stepSkiing(state, { ...noInput, right: steering, boost: true }, 0.02);
+      const lateralVelocity = state.speed * Math.sin(state.heading);
+      if (prevLateralVelocity !== null) {
+        maxJump = Math.max(maxJump, Math.abs(lateralVelocity - prevLateralVelocity));
+      }
+      prevLateralVelocity = lateralVelocity;
+    }
+
+    expect(maxJump).toBeLessThan(2);
+  });
+
+  it("spends the run at a crossing the scrub never saw — the backstop flip dumps", () => {
+    // A held pivot can't reach the crossing fast (the scrub drains the
+    // approach), but landing a jump pointed near sideways at speed skips
+    // the approach entirely. Crossing then flips the stance — travel never
+    // turns uphill — and dumps the run to the flip epsilon instead of
+    // carrying the magnitude (round 5 carried it, mirroring ~10 u/s of
+    // lateral drift in one frame — the jerk that failed its playtest).
+    const landedSideways: SkiState = { ...cruising, heading: Math.PI / 2 - 0.01, speed: 10 };
+
+    const state = stepSkiing(landedSideways, { ...noInput, right: true }, 0.02);
+
+    expect(Math.abs(downhillHeading(state.heading))).toBeGreaterThan(Math.PI / 2);
+    // Riding switch no faster than the flip epsilon — spent, not reversed
+    // (the same frame's easing then pulls it onto the tiny downhill target).
+    expect(state.speed).toBeLessThan(0);
+    expect(state.speed).toBeGreaterThanOrEqual(-1);
+  });
+
+  it("converges through zero at a crawl crossing — never mirrors", () => {
+    // Below the flip epsilon there's no stance flip: a crawl across
+    // sideways just eases onto the tiny downhill pull (the scrub makes
+    // that convergence quick, but it's continuous — a mirror would land
+    // near -0.5).
     const crawling: SkiState = { ...cruising, heading: Math.PI / 2 - 0.01, speed: 0.5 };
 
     const state = stepSkiing(crawling, { ...noInput, right: true }, 0.02);
 
     expect(Math.abs(downhillHeading(state.heading))).toBeGreaterThan(Math.PI / 2);
-    expect(state.speed).toBeGreaterThan(0);
+    expect(state.speed).toBeLessThan(0.5);
+    expect(state.speed).toBeGreaterThan(-0.1);
   });
 
   it("turns faster while boosting", () => {

@@ -61,7 +61,23 @@ slope camera ever gets, so it's the natural inspection stage.
 - Keep the dawn-vignette lighting as is — the point is seeing the
   textures under the game's real light, up close.
 
-## (slope-mech) Turning round 6: sideways should scrub momentum — the stance flip jerks (playtest, 2026-07-22)
+## (slope-mech) ~~Turning round 6~~ — BUILT 2026-07-23 (the skid scrub)
+
+**(BUILT 2026-07-23 — see ROADMAP. Option 1, director-picked: the
+speed-loss rate ramps with sin² of how far the skis are off the fall
+line, from plain coast drag (4) at aligned to a hard skid at full
+sideways. The sketch's 12–15 guess for the sideways rate measured too
+weak — a boosted pivot still reached the crossing at ~10 u/s, which
+would re-create the round-5 jerk — so it shipped at 45: the boosted
+worst case now arrives at ~0.13 u/s, below the flip epsilon, and the
+easing-through-zero handles the crossing with no jerk at all. The
+stance flip stays as the never-uphill backstop, and now *dumps* to the
+epsilon instead of carrying magnitude — closing the one path that
+skipped the scrubbed approach (landing a jump pointed near sideways at
+speed, where a wiggle across ±π/2 would have mirrored full boost
+speed). Both predicted side effects landed: hockey stop from boost
+~0.4s, and W+Shift turnaround passes through a slow point and rebuilds
+— 2.2s back to full boost speed.)**
 
 **The verdict (director, on round 5):** "Momentum should be lost if the
 skis are sideways. Instead, it's jerking backwards while it should still
@@ -128,8 +144,8 @@ assertion stays exactly as is. The hockey-stop and below-epsilon tests
 should survive; "bleeds to a stop held fully sideways" will just
 converge faster.
 
-**Current state until round 6 lands:** round 5 is merged to master, so
-the jerky crossing is what's live.
+~~**Current state until round 6 lands:** round 5 is merged to master, so
+the jerky crossing is what's live.~~ *(Round 6 landed 2026-07-23.)*
 
 ## (bedroom) Where does the progression loop live now? (parked by director call, 2026-07-22)
 

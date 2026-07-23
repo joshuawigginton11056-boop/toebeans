@@ -26,10 +26,12 @@ export interface SkiState {
   // turned when the key is released (like real skiing — you steer back
   // yourself). There is no "turned too far" (turning round 3, director
   // redirect): carve past sideways and you pivot into riding switch,
-  // tails-first down the hill, instead of falling over — at speed the
-  // stance flips right at the crossing so the momentum never turns uphill
-  // (turning round 5), and below the flip epsilon the downhill pull just
-  // eases negative as before. On the snow the heading lives in (-π, π];
+  // tails-first down the hill, instead of falling over. Turning off the
+  // fall line skids speed away (turning round 6), so by the time the skis
+  // cross sideways the run is nearly spent and the speed just eases
+  // through zero; a residual-speed crossing flips the stance instead, so
+  // the momentum never turns uphill (round 5's surviving guarantee). On
+  // the snow the heading lives in (-π, π];
   // mid-air it can accumulate whole spins, and landing collapses it (see
   // downhillHeading).
   readonly heading: number;
@@ -81,6 +83,22 @@ const SKI_ACCEL = 4;
 const BOOST_ACCEL = 8;
 const COAST_DRAG = 4;
 const BRAKE_DECEL = 10;
+// The skid scrub (turning round 6, director verdict 2026-07-22: "momentum
+// should be lost if the skis are sideways"). The speed-loss rate ramps with
+// how far the skis are turned off the fall line — aligned coasting sheds at
+// plain COAST_DRAG, fully sideways skids at this rate, blended by sin² of
+// the heading (which is also symmetric for switch: tails-first down the
+// fall line is aligned too, no scrub). 45 is deliberately far above the
+// IDEAS sketch's 12–15 guess: measured against the boosted worst case
+// (BOOST_SPEED 16, boosted turn rate 2.52 rad/s → sideways in ~0.62s),
+// 15 still arrives at the crossing carrying ~10 u/s — which the stance
+// flip would mirror, re-creating the exact jerk that failed round 5's
+// playtest. At 45 the same pivot arrives carrying ~0.1 u/s: below the flip
+// epsilon, so the speed simply eases through zero and both round-5 jerks
+// (the lateral mirror, the re-fire reversal) dissolve with no special case
+// at the crossing. Side effect, deliberate: a full-sideways hockey stop
+// from boost speed now takes ~0.4s instead of ~4s.
+const SKID_SCRUB = 45;
 // Steering is a real turn (M2 heading session): holding left/right keeps
 // rotating the skis, up to fully sideways and beyond — there's no built-in
 // stop, and no fall either (turning round 3): past sideways you pivot into
@@ -101,14 +119,18 @@ const BOOST_TURN_MULTIPLIER = 1.4;
 // The stance flip (turning round 5): grounded travel follows the ski axis,
 // so a pivot at speed would rotate the momentum with the skis — carry it
 // past sideways and you'd be redirected tips-first up the hill (the boost ×
-// turnaround bug: 3.5s of uphill travel at 9+ u/s). Physically, pivoting
-// past sideways at speed means the skis rotate under you while you keep
-// sliding downhill — you're instantly riding switch. So when a grounded
-// pivot carries the heading across ±π/2 at meaningful speed, the speed
-// sign flips: the downhill component of travel never turns uphill, and the
-// run carries its magnitude into the switch slide. Below this epsilon the
-// old easing-through-zero stands, so slow deliberate pivots (hockey stop,
-// standstill pivot) behave exactly as before.
+// turnaround bug: 3.5s of uphill travel at 9+ u/s). When a grounded pivot
+// carries the heading across ±π/2 above this epsilon, the speed sign flips
+// so the downhill component of travel never turns uphill. Since round 6's
+// skid scrub, the flip is a backstop rather than the normal path: any held
+// pivot arrives at the crossing already scrubbed below this epsilon (see
+// SKID_SCRUB), where the easing-through-zero handles it. The flip only
+// fires on states that skip the scrubbed approach — chiefly landing a jump
+// pointed near sideways at speed — and it dumps the run to this epsilon
+// rather than carrying the magnitude (round 5's carry mirrored the lateral
+// drift, which is the jerk that failed its playtest; and crossing sideways
+// spending the run IS the round-6 model). So a crossing is never faster
+// than a crawl, whichever path reached it.
 const PIVOT_FLIP_MIN_SPEED = 1;
 // W means "downhill" (turning round 4, director call 2026-07-22). On top of
 // its speed-up meaning, holding W steers the skis home: the heading eases
@@ -278,35 +300,41 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   // target; sideways it's ~0 — turning IS braking, all the way down to a
   // hockey stop; pointed uphill it's negative — gravity pulls you
   // tails-first into riding switch. The cosine makes the whole range
-  // continuous: no mirror seam at sideways, speed just eases through zero.
-  // Speed only changes on the snow — airborne there's nothing to push
-  // against or brake with, so you land carrying your takeoff speed.
+  // continuous: no mirror seam at sideways, speed just eases through zero —
+  // and the skid scrub (round 6) makes the easing *rate* ramp toward a hard
+  // skid as the skis leave the fall line, so the approach to sideways
+  // dumps the momentum, not just the target. Speed only changes on the
+  // snow — airborne there's nothing to push against or brake with, so you
+  // land carrying your takeoff speed.
   let speed = state.speed;
   let flightHeading = state.flightHeading;
   if (grounded) {
-    // The stance flip (turning round 5): this frame's steering carried the
-    // skis across sideways at speed — momentum stays pointed down the hill
-    // and the stance flips instead, carrying the magnitude into a switch
-    // slide (or back out of one). See PIVOT_FLIP_MIN_SPEED.
+    // The stance flip (turning round 5, backstop since round 6): this
+    // frame's steering carried the skis across sideways with residual
+    // speed — the stance flips so travel never turns uphill, and the run
+    // dumps to the epsilon (crossing sideways spends the momentum). See
+    // PIVOT_FLIP_MIN_SPEED.
     if (
       Math.abs(speed) >= PIVOT_FLIP_MIN_SPEED &&
       Math.cos(headingBefore) * Math.cos(heading) < 0
     ) {
-      speed = -speed;
+      speed = -Math.sign(speed) * PIVOT_FLIP_MIN_SPEED;
     }
     const target = targetMagnitude * Math.cos(heading);
     const stepUp = target > speed;
     // Pick the easing rate by what this step does to the speed *magnitude*:
     // growing = something pulling you along (gravity down the axis, or the
-    // boost); shrinking = drag or the brake scrubbing it off.
+    // boost); shrinking = drag, the brake, or the skid — whichever bites
+    // hardest. The skid scrub ramps from plain drag on the fall line to a
+    // hard hockey-stop skid at full sideways (see SKID_SCRUB).
     const gainingMagnitude = (stepUp ? speed : -speed) >= 0;
+    const skidScrub =
+      COAST_DRAG + (SKID_SCRUB - COAST_DRAG) * Math.sin(heading) ** 2;
     const rate = gainingMagnitude
       ? input.boost
         ? BOOST_ACCEL
         : SKI_ACCEL
-      : input.down
-        ? BRAKE_DECEL
-        : COAST_DRAG;
+      : Math.max(input.down ? BRAKE_DECEL : COAST_DRAG, skidScrub);
     speed = stepUp
       ? Math.min(target, speed + rate * dt)
       : Math.max(target, speed - rate * dt);
