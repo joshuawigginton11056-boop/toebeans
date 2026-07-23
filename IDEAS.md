@@ -3,6 +3,31 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope-mech) Clamp the frame dt — background tabs teleport the run (2026-07-23)
+
+Noticed while verifying the camera rig: browsers suspend
+`requestAnimationFrame` in hidden/undisplayed tabs, and `main.ts`
+computes `dt = now - lastTime` with no ceiling — so on resume the loop
+feeds `stepSkiing` one enormous step (minutes, potentially) and the
+unattended skier teleports far downhill, usually straight into a chasm.
+Watched it happen: a fresh run came back from a stall already crashed
+with a life gone. Fix is a one-liner in the shared `main.ts` loop
+(`dt = Math.min(dt, 0.1)` or similar) but it's shared territory and
+deserves its own tiny chunk with a think about the right cap — a low cap
+also pauses the game during long frames (probably desirable: Vite
+hot-reload stalls, laptop sleep).
+
+## (slope-vis) Decor stops 30 units uphill — visible now that players can look back (2026-07-23)
+
+The camera rig (slope-mech, 2026-07-23) lets players drag a full
+half-turn to look uphill; `DECOR_AHEAD/DECOR_BEHIND` in `skiScene.ts`
+assume "the camera never looks back far" (30 units behind vs 170 ahead,
+fog far plane 150), so a deliberate uphill peek can catch the treeline
+ending well inside the fog. Brief and self-correcting (the look snaps
+back on release), so parked rather than fixed — if playtest catches it,
+the knob is `DECOR_BEHIND`, at whatever uphill reach the recycling
+window can afford.
+
 ## (slope-vis) Dressing the tired hop (from the locked-out-jump cue, 2026-07-23)
 
 A jump press during the landing lockout now plays a "tired attempt" —

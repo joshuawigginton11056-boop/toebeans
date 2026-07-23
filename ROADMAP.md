@@ -3970,6 +3970,96 @@ control (the missing second hazard), or purpose-built big jumps
 (director call whether still wanted now that spins are a control). Music
 still deliberately last, then the end-of-M2 tuning pass.
 
+## (slope-mech) 2026-07-23 — M2: camera views + drag look-around
+
+Director's ask: new camera views and the ability to look around. The
+slope's fixed camera became an eased orbit rig in `skiRender.ts` — all
+presentation-side, no sim or save changes (the camera deliberately isn't
+saved, same reasoning as the scrapped bedroom's follow camera).
+
+- **Four views, V cycles them** (`CAMERA_VIEWS`): **classic** — the
+  DESIGN.md three-quarter front framing, bit-for-bit the old fixed
+  numbers (offset (0, 4, 8), aimed 4 downhill), still the default;
+  **chase** — low and close off the ski tails, aimed over the shoulder;
+  **side** — a true profile from the skier's right, downhill running
+  screen left→right (the purest form of the design doc's 2.5D framing);
+  **far** — high and well back for the whole-slope tactical read. Every
+  parameter (azimuth/elevation/radius/aim offset) eases at `VIEW_EASE`,
+  so a switch swings instead of cutting.
+- **Drag to look around** (mouse or touch, pointer events on the slope
+  canvas): a rigid extra swing of the whole rig around the skier — yaw
+  to a full half-turn either way (you can check uphill), pitch clamped
+  so the camera never dips under the snow or gimbal-locks overhead. It's
+  a *peek*: releasing eases the look back home, so the camera can't be
+  stranded facing uphill mid-run. Sensitivity/snap-back are
+  `LOOK_SENSITIVITY` / `LOOK_EASE`; "drag right = look right" and
+  "drag down = look down" are the chosen (tunable) directions.
+- **Shared-territory edits, small and additive:** `main.ts` wires V to
+  `skiScene.cycleView()` (slope only — lobby ignores it); `hud.ts` adds
+  two hint chips (`V camera`, `Drag look around`).
+- `npm run check` passes (101 tests, no new sim surface to pin —
+  camera is render-side). Live-verified against the served worktree
+  (port 5302 again held by an earlier chat's server for this same
+  folder; screenshots mostly unavailable with the pane hidden, so
+  verification sampled the rendered canvas into color grids per view):
+  all four views produce distinct correct compositions — classic pink
+  sky over snow, chase dominated by the near skier, side showing
+  profile treeline over snow, far all-snow overhead — V wraps back to a
+  pixel-matching classic, drag-left pans into the treeline, drag-down
+  goes all-snow with the skier below, and both ease back to the exact
+  classic baseline on release. Zero console errors.
+- Two things noticed in passing, parked in IDEAS.md: the unclamped
+  frame `dt` after a background-tab stall (the unattended run teleported
+  into a chasm on resume), and decor only reaching 30 units uphill now
+  that players can look back (`DECOR_BEHIND`, slope-vis's).
+
+**What to playtest:** on the slope, tap V through the four views and
+drag (or touch-drag) to peek around. Feel questions: are these the
+*right* four views — keep all, cut any, add one? Should the drag look
+stay a snap-back peek, or persist until re-dragged? Is the drag
+direction right ("drag right = look right" — some players expect the
+inverse "grab the world")? And does the chase view want to follow the
+skier's heading through turns instead of staying downhill-locked (it
+would whip during spins — deliberately not attempted first pass)?
+
+**Playtest verdict (director, 2026-07-23): pre-built views are out;
+free camera control is in.** Two changes, to build in the next session
+(director call):
+
+- **Zoom, not views.** Instead of V cycling fixed framings, "you should
+  be able to zoom in or out as you please" — mouse wheel (pinch on
+  touch) driving the orbit radius through a clamped range, roughly
+  chase-close to far-out. The eased orbit rig survives; `CAMERA_VIEWS`
+  and the V key go (the hud chip and main.ts wiring too). Open call for
+  the session: should elevation/aim *scale with* the radius (close = low
+  over-the-shoulder, far = high tactical read) or hold fixed at the
+  classic angles? A radius-driven blend of round 1's view parameters
+  would keep each distance framed the way its old view was — probably
+  the right starting point, since each of those framings was tuned at
+  its distance.
+- **Mouse look without the click.** The director explicitly dislikes
+  click-drag on mouse — "the input is automatically recognized as the
+  camera." Touch keeps drag (his call too — "click to drag makes sense
+  for touchscreen"). Two implementations to weigh:
+  - **(a) Mouse-position look (recommended):** the cursor's offset from
+    canvas center maps to look yaw/pitch — centered mouse = camera home,
+    edges = full look. No button, no pointer lock; round 1's snap-back
+    peek becomes "move the mouse back." Wants a center deadzone so the
+    camera holds still during normal play, and the existing `LOOK_EASE`
+    smoothing so it never jitters with the hand.
+  - **(b) FPS-style relative mouselook:** accumulate `mousemove` deltas.
+    Needs pointer lock to escape screen edges, and pointer lock needs a
+    click-to-engage plus Esc-to-release — which reintroduces exactly the
+    ceremony the director just rejected. Only if (a) doesn't feel right.
+  - Either way the elevation clamps and easing from round 1 carry over,
+    and nothing else competes for the mouse on the slope (steering is
+    keys; the lobby's menu clicks are unaffected).
+
+**Next:** camera round 2 — free zoom + no-click mouse look (verdict
+above). Then tired-hop retune round 2 (faster, an actual small hop — see
+the previous entry's notes), then the round-10 queue: a finish line,
+tree limbs + crouch, or purpose-built big jumps.
+
 ## (slope-vis) 2026-07-23 — Shadow fix round 1 lands; verdict: the giant canopies are out — new tree search is next
 
 The director's ask: tree shadows were *moving*, and near-blanketing the
