@@ -1114,12 +1114,11 @@ function updateSnowTrail(
 // machine sees the identical slope.
 
 const DECOR_MODELS = {
-  // The mystical pines (director ask + sequoia-grove reference, 2026-07-23):
-  // MegaKit stylized pines replace the old amber-canopy PineTree_Snow set,
-  // which is retired from the scatter (files still in assets/ pending the
-  // look-pass). Scattered at three scales — giant trunks by the lane, mid
-  // fill, far silhouettes — so the canopy lives above the camera and the
-  // haze eats the treetops, like the reference.
+  // The mystical pines (director ask + sequoia-grove reference, 2026-07-23,
+  // recolored frosted-green): MegaKit stylized pines are the slope's tree,
+  // scattered at three scales — giant trunks by the lane, mid fill, far
+  // silhouettes — so the canopy lives above the camera and the haze eats the
+  // treetops, like the reference.
   pines: [
     "StylizedPine_1",
     "StylizedPine_2",
@@ -1127,14 +1126,10 @@ const DECOR_MODELS = {
     "StylizedPine_4",
     "StylizedPine_5",
   ],
-  birches: ["BirchTree_Snow_1", "BirchTree_Snow_2", "BirchTree_Snow_3", "BirchTree_Snow_5"],
-  deadBirches: [
-    "BirchTree_Dead_Snow_1",
-    "BirchTree_Dead_Snow_2",
-    "BirchTree_Dead_Snow_3",
-    "BirchTree_Dead_Snow_4",
-    "BirchTree_Dead_Snow_5",
-  ],
+  // The old Ultimate Nature Pack trees (amber-canopy PineTree_Snow, birches,
+  // dead birches) are retired from the scatter per the bible — the lingering
+  // birch/dead-birch rolls were removed 2026-07-23. Their .glb files stay in
+  // assets/slope/. Pines, rocks, and small ground props remain.
   rocks: [
     "Rock_Snow_1",
     "Rock_Snow_2",
@@ -1232,27 +1227,23 @@ const DECOR_BANDS: readonly DecorBand[] = [
       scale: 4.5 + random() * 2.5,
     }),
   },
-  // Near flank: the mixed treeline just past the lane edge — the visible
-  // cue for where the skiable area ends (hard-clamp call, 2026-07-22).
-  // Pines lead the mix now; birches thin to scattered warm accents so the
-  // grove stays cold and vast.
+  // Near flank: the treeline just past the lane edge — the visible cue for
+  // where the skiable area ends (hard-clamp call, 2026-07-22). Pines lead;
+  // rocks and filler props fill the gaps between them. The old birches and
+  // dead birches that used to thin through this mix are retired (2026-07-23).
   {
     key: "near",
     cellSize: 4,
     density: 1,
     spawn: (random) => {
       const roll = random();
-      const isTree = roll < 0.75;
+      const isTree = roll < 0.55;
       const models =
-        roll < 0.45
+        roll < 0.55
           ? DECOR_MODELS.pines
-          : roll < 0.63
-            ? DECOR_MODELS.birches
-            : roll < 0.75
-              ? DECOR_MODELS.deadBirches
-              : roll < 0.87
-                ? DECOR_MODELS.rocks
-                : DECOR_MODELS.filler;
+          : roll < 0.8
+            ? DECOR_MODELS.rocks
+            : DECOR_MODELS.filler;
       return {
         models,
         x: LANE_EDGE + 0.8 + random() * 9,
@@ -1262,13 +1253,14 @@ const DECOR_BANDS: readonly DecorBand[] = [
   },
   // Far flank: sparse oversized silhouettes for depth — the lonely-vast
   // target wants these thin; resist filling them in. Giants out here
-  // layer trunk behind trunk into the haze.
+  // layer trunk behind trunk into the haze. Pines only now (the dead
+  // birches that shared this band are retired).
   {
     key: "far",
     cellSize: 11,
     density: 0.8,
     spawn: (random) => ({
-      models: random() < 0.7 ? DECOR_MODELS.pines : DECOR_MODELS.deadBirches,
+      models: DECOR_MODELS.pines,
       x: LANE_EDGE + 11 + random() * 16,
       scale: (2.2 + random() * 1.6) * TREE_SCALE,
     }),

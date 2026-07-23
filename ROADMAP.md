@@ -4344,6 +4344,28 @@ zoom range actually free-feeling, or is 40 too far (skier gets small)?
 tired-hop entries above for the notes), then the round-10 queue: a finish
 line, tree limbs + crouch, or purpose-built big jumps.
 
+## (slope-vis) 2026-07-23 — Removed the lingering old trees (birches / dead birches); pines stay
+
+Director ask: **remove the previous trees** — the *old* Ultimate Nature Pack
+trees, not the frosted-green pines we just added. The bible had already
+declared the birches and dead birches out, but `BirchTree_Snow` /
+`BirchTree_Dead_Snow` were still rolling in the near and far scatter bands.
+Those rolls are now gone; the MegaKit frosted-green pines remain the slope's
+tree at all three scales (`giant` colonnade, `near` treeline, `far`
+silhouettes). Rocks and filler props still fill the gaps in the near band.
+
+- **First pass over-removed** — it stripped *every* tree including the new
+  pines (misread "previous trees"). Caught by Josh and corrected same
+  session: pines restored, only the old birch/dead-birch models pulled.
+- `DECOR_MODELS` drops the `birches` and `deadBirches` lists; their `.glb`
+  files stay in `assets/slope/` (nothing deleted). `pines`, `rocks`,
+  `filler` remain.
+- Only `client/src/skiScene.ts` and the docs changed. `npm run check`
+  passes; verified live off the running dev server that the served module
+  lists the pines and no longer references any birch model.
+
+Art Style Bible updated with a **"Trees, cleanup"** amendment.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

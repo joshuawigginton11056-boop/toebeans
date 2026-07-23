@@ -244,6 +244,15 @@ interact with your space for more XP → repeat.
 > "light passes through" or a sparser tree is still wanted is the
 > director's look-pass call; the new-tree *search* is paused, not
 > cancelled, pending it.
+>
+> **Trees, cleanup (2026-07-23 slope-vis session): the lingering old
+> trees finally leave the scatter — the frosted-green pines stay.** The
+> Ultimate Nature Pack birches and dead birches were declared out above
+> but were still rolling in the near/far bands; they're now removed in
+> code, matching that verdict. The MegaKit frosted-green pines remain the
+> slope's tree at all three scales (giant colonnade, near treeline, far
+> silhouettes). The retired `.glb` files stay in `assets/slope/`; nothing
+> was deleted.
 
 The binding reference for all art in the game. Written 2026-07-21 from the
 director's five *Omno* reference images and their notes on each. When
