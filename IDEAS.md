@@ -75,7 +75,106 @@ slope camera ever gets, so it's the natural inspection stage.
 - Keep the dawn-vignette lighting as is — the point is seeing the
   textures under the game's real light, up close.
 
-## (slope-mech) Turning round 6: sideways should scrub momentum — the stance flip jerks (playtest, 2026-07-22)
+## (slope-mech) Turning round 7: riding switch first-class + soften the skid (playtest, 2026-07-23)
+
+**The verdict (director, on round 6):** the round-5 jerk is gone, but
+"it feels abrupt" — and the real ask is bigger: **"I want to be able to
+turn around and continue down the slope backwards. Currently, when I go
+backwards I can only go base speed, and if I press W I flip forwards
+again."** Riding switch should be a first-class way down the hill, not
+just the aftermath of a pivot.
+
+**The new bar:** turn around smoothly, then *stay* backwards at full
+speed — lean and boost both working — until you choose to come back.
+
+**Diagnosis** (`shared/src/skiing.ts`):
+
+1. **"Only base speed backwards" is W being unavailable riding switch.**
+   The target magnitude is stance-symmetric (the cosine handles it), and
+   Shift-boost genuinely works backwards (16 u/s — worth re-checking at
+   playtest whether it *felt* broken). But the only speed lean is W, and
+   round 4 made W *seek the fall line* — so the one key that should mean
+   "faster" while backwards instead whips you through a 180. That's also
+   likely a chunk of the "abrupt": trying to speed up mid-switch fires
+   an unwanted full turnaround at 1.8+ rad/s through the scrub zone.
+2. **Round 4's bar and this ask directly conflict — needs a director
+   call.** Round 4's directive was "return from switch to forward on W
+   alone, never released" (there's a test pinning exactly that). The new
+   ask is that W must *not* flip you forward. Both cannot hold; one bar
+   has to be re-called.
+3. **The abruptness knob:** SKID_SCRUB is 45, tuned (measured, round 6)
+   so a boosted pivot arrives at the crossing below the flip epsilon.
+   But the backstop dump landed in the same session — crossings are
+   never-reversed regardless now — so 45 is no longer load-bearing for
+   correctness; it's pure feel. Caveat: plainly lowering it re-opens a
+   visible snap *at the crossing* (at 25, a boosted pivot arrives ~7 u/s
+   and the dump eats it in one frame — ~8 u/s of lateral change). The
+   gentler-without-snap option is a steeper curve, not a smaller peak.
+
+**Fix options for the build session (director picks):**
+
+1. **Stance-aware W** *(probably recommended)*: W always applies the
+   speed lean, and its seek targets the fall line *in your current
+   stance* — forward it eases heading → 0 as today; riding switch it
+   eases heading → ±π, so W backwards means "straighten out and go
+   faster backwards". W+steer holds the mirrored carve diagonals in
+   switch (π ∓ π/4). Coming back forward becomes a deliberate held
+   carve through sideways — which pays the skid toll and lands at the
+   epsilon, i.e. exactly the round-6 physics; whether that return path
+   feels fine (vs round 3's era, when it was clunky enough to spawn
+   round 4) is the headline playtest question. Inverts the round-4 bar
+   test and retires the exactly-backwards tie-break (dead backwards
+   becomes switch's *stable point*, not a boundary to dither across).
+2. **Seek only from forward stances**: keep round 4's seek when
+   |heading| < π/2; plain lean (no seek) when riding switch. Smaller
+   change, keeps more round-4 tests — but switch doesn't
+   self-straighten, and a sloppy diagonal backwards stance just stays
+   sloppy; the ±π/2 boundary sits in the scrub zone so the behavior
+   change there is at near-zero speed anyway.
+3. **Dedicated flip input**: W is always a pure lean; returning forward
+   gets its own control (double-tap, or hold S while switch). Most
+   explicit, but a new input on an already-full hint bar — probably
+   overkill if 1 or 2 lands well.
+
+**Softening options (composable with any of the above; may matter less
+once W stops firing surprise 180s):**
+
+- **sin² → sin⁴ on the scrub curve**: keeps the full 45 skid at dead
+  sideways (hockey stops stay decisive, crossings stay spent) but
+  roughly halves the bleed at a 45° carve (24.5 → 14 u/s²) — gentler
+  everywhere except the stop itself, no crossing snap re-opened.
+- **Lower SKID_SCRUB too** (e.g. ~30): softer stop, at the cost of a
+  modest dump at the crossing (~4–5 u/s of lateral change from a boosted
+  pivot). Numbers above; tune on the hill.
+- First ask the director *where* it felt abrupt: the mid-turn bleed,
+  the hockey stop, the switch slow-point, or the W-whip (fixed by part
+  2 alone).
+
+**Tests that must change:** option 1 inverts "returns from switch to
+forward running on W alone" and retires "breaks the exactly-backwards
+tie with a right turn"; "seeks the fall line the shortest way around"
+and "boosts the W-seek home too" re-target to the stance-aware goal;
+"keeps W a pure speed lean when already pointing downhill" survives and
+gains a switch twin. The round-6 scrub/dump/never-uphill tests all
+survive untouched.
+
+## (slope-mech) ~~Turning round 6~~ — BUILT 2026-07-23 (the skid scrub)
+
+**(BUILT 2026-07-23 — see ROADMAP. Option 1, director-picked: the
+speed-loss rate ramps with sin² of how far the skis are off the fall
+line, from plain coast drag (4) at aligned to a hard skid at full
+sideways. The sketch's 12–15 guess for the sideways rate measured too
+weak — a boosted pivot still reached the crossing at ~10 u/s, which
+would re-create the round-5 jerk — so it shipped at 45: the boosted
+worst case now arrives at ~0.13 u/s, below the flip epsilon, and the
+easing-through-zero handles the crossing with no jerk at all. The
+stance flip stays as the never-uphill backstop, and now *dumps* to the
+epsilon instead of carrying magnitude — closing the one path that
+skipped the scrubbed approach (landing a jump pointed near sideways at
+speed, where a wiggle across ±π/2 would have mirrored full boost
+speed). Both predicted side effects landed: hockey stop from boost
+~0.4s, and W+Shift turnaround passes through a slow point and rebuilds
+— 2.2s back to full boost speed.)**
 
 **The verdict (director, on round 5):** "Momentum should be lost if the
 skis are sideways. Instead, it's jerking backwards while it should still
@@ -142,8 +241,8 @@ assertion stays exactly as is. The hockey-stop and below-epsilon tests
 should survive; "bleeds to a stop held fully sideways" will just
 converge faster.
 
-**Current state until round 6 lands:** round 5 is merged to master, so
-the jerky crossing is what's live.
+~~**Current state until round 6 lands:** round 5 is merged to master, so
+the jerky crossing is what's live.~~ *(Round 6 landed 2026-07-23.)*
 
 ## (bedroom) Where does the progression loop live now? (parked by director call, 2026-07-22)
 

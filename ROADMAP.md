@@ -2733,6 +2733,110 @@ style + longer skis, always-on feet, angulation round 3 + the
 boot-containment fix, hair-roots + cat-tail), then music (still
 deliberately last), then the end-of-M2 tuning pass.
 
+## (slope-mech) 2026-07-23 — M2: turning round 6 — the skid scrub; sideways spends the run
+
+The round-5 jerk is dead. Director's pick from the parked sketch: **option
+1, the skid scrub** — the speed-loss rate now ramps with how far the skis
+are turned off the fall line. Coasting on the fall line sheds at the same
+gentle drag as ever; fully sideways is a hard hockey-stop skid. Turn
+toward sideways and the turn itself dumps your momentum — which is
+literally the director's sentence ("momentum should be lost if the skis
+are sideways"), and it makes the crossing jerk-free by construction: by
+the time the skis cross ±π/2, there's nothing left to jerk.
+
+- `/shared` `skiing.ts`: one new constant, `SKID_SCRUB`, blended against
+  `COAST_DRAG` by **sin² of the heading** (sin² is the natural "how
+  sideways are the skis" measure, and it's symmetric for switch — riding
+  tails-first down the fall line is aligned, no scrub). It applies only
+  when the speed *magnitude* is shrinking, so pushing off, boosting, and
+  riding a held diagonal are untouched; slalom swings near the fall line
+  barely feel it (sin² ≤ 0.25 inside ±30°).
+- **The tuned value is 45, not the sketch's 12–15 — measured, not
+  vibes.** Simulated against the boosted worst case (16 u/s, boosted turn
+  rate 2.52 rad/s → sideways in ~0.62s): at 15 the pivot still reaches
+  the crossing carrying ~10 u/s, which the stance flip would mirror —
+  re-creating the exact jerk that failed round 5's playtest. At 45 the
+  same pivot arrives at ~0.13 u/s — below the flip epsilon — so the
+  speed just eases through zero, no flip, no special case. The largest
+  one-frame lateral-velocity change over the whole boosted pivot is now
+  0.88 u/s; round 5's was ~27.
+- **The stance flip stays, demoted to a backstop — and it dumps now.**
+  Held pivots never trigger it anymore (they arrive spent), but a state
+  can still *skip* the scrubbed approach: land a jump pointed near
+  sideways at boost speed and wiggle across ±π/2. Round 5's flip would
+  mirror the full 16 u/s there — live-measured at a 25.7 u/s one-frame
+  lateral reversal, the re-fire jerk in miniature. The flip now dumps
+  the run to the flip epsilon (1 u/s) instead of carrying the magnitude:
+  travel still never turns uphill, and crossing sideways spends the run
+  whichever path reached it. That's round 6's model applied to the edge
+  case, not just the common path.
+- **Deliberate physics changes, both named in the sketch:** a hockey
+  stop from boost speed takes ~0.36s (was ~4s), and the W+Shift
+  turnaround now passes through a spent moment and rebuilds — ~2.2s
+  back to full boost speed, versus round 5's 1.24s carrying it through.
+  Momentum is lost when the skis go sideways; boost earns it back.
+- **No SAVE_VERSION bump** (no state-shape change) and **zero renderer
+  changes** — the rig's existing easing reads the smooth speed drain for
+  free, and the carve-hiss audio layer fades with the scrub
+  automatically.
+- Tests 82 → 84: the round-5 magnitude-carry test is gone (it pinned the
+  behavior the director rejected), replaced by the scrub ramp (sideways
+  dead in 0.5s while aligned coasts), the jerk-free boosted pivot (max
+  one-frame lateral change < 2 u/s across the whole turnaround), and the
+  backstop dump (a sideways landing crossing ends spent, never reversed).
+  The round-5 bar test keeps its frame-by-frame never-uphill assertion
+  verbatim and gains a crossing-speed < 1 assertion; the crawl-crossing
+  test now asserts continuity (no mirror) rather than the old slow rate,
+  since the scrub is precisely a faster rate.
+- `npm run check` (84 tests) and `npm run build` pass. Verified against
+  the real served modules on this session's own dev server (5302;
+  screenshots still time out — sixteenth session running): the boosted
+  turnaround measures 0.00s uphill, crossing at 0.134 u/s, max one-frame
+  lateral jump 0.88, ending riding switch at −15.27; the sideways-landing
+  wiggle shows zero fast reversals and 0.00s uphill (was a 25.7 u/s
+  mirror before the dump fix — caught by this verification, not the
+  tests, then pinned by one); the crawl crossing converges to −0.035
+  with no mirror; aligned coasting still measures exactly 14.00 after
+  0.5s. Zero console errors. What the scrub *feels* like is the eyeballs
+  item below.
+
+**What to playtest:** `npm run dev`, Enter to ski, hold Shift, and carve
+hard past sideways — the run should visibly die into the pivot, then
+rebuild as you ride switch: no backwards jerk, no reverse-then-forward
+stutter, no uphill travel. Then the feel questions: does turning-bleeds-
+speed read as skis biting or as glue (45 at full sideways is the bold
+end — dialing down is one number)? Is the ~0.4s hockey stop satisfying
+or abrupt? Does the W+Shift turnaround passing through a slow point feel
+like honest physics or like losing your flow (round 5 kept your speed
+through it; the director's model says it shouldn't)? And jump-spin to a
+near-sideways landing, then steer across: it should feel like catching
+an edge and settling, not snapping.
+
+**Playtest verdict (director, 2026-07-23): the jerk is fixed but the
+feel isn't there — turning round 7 opens.** In the director's words:
+"it feels abrupt," and the bigger ask — **"I want to be able to turn
+around and continue down the slope backwards. Currently, when I go
+backwards I can only go base speed, and if I press W I flip forwards
+again."** Riding switch is supposed to be a real way down the hill, not
+just the aftermath of a pivot. Diagnosis: the abruptness is SKID_SCRUB
+at 45 (tuned so crossings arrive spent — but the backstop dump landed in
+the same session, which changes that math); the base-speed cap backwards
+is W being unavailable riding switch (it's the only speed lean, and
+round 4 made it *seek* — so pressing it flips you forward, working
+exactly as round 4 designed it, which is now the problem); Shift-boost
+does work backwards, worth re-checking at playtest. Round 4's bar
+("return from switch on W alone") and this ask directly conflict — that
+needs an explicit director call. Full diagnosis + options parked in
+[IDEAS.md](IDEAS.md) as **turning round 7**.
+
+**Next:** turning round 7 (riding switch as a first-class stance +
+soften the skid — director picks from the sketched options, including
+the round-4 conflict call). After that the slope-mech queue: a finish
+line (prerequisite for XP, parked since 2026-07-20), tree limbs + the
+crouch control (the missing second hazard), or purpose-built big jumps
+(the 360 question). Music still deliberately last, then the end-of-M2
+tuning pass.
+
 ## (slope-vis) 2026-07-22 — Texture direction called + the sessions restructure
 
 Two connected director calls, one session: the game is getting **texture**,
