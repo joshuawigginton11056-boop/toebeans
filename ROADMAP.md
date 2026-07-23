@@ -3686,6 +3686,25 @@ share — keep the warm accents or go full cold grove?
 Style Bible rewrite (shape-language + asset-sourcing) — now with two
 concrete cases it must codify: painted-source packs and alpha-silhouette
 masks.
+
+**Look-pass verdict (director, 2026-07-23, this session):** the grove
+direction stands; two changes ordered, both recorded in the bible's
+transition note and queued for the next slope-vis session:
+
+1. **All previous trees go** — birches and dead birches leave the
+   slope scatter along with the already-retired amber pines; the grove
+   is stylized pines only. File deletion is blocked on the lobby,
+   which still displays three `PineTree_Snow` models (swap tagged for
+   the lobby session in IDEAS.md); until then the old files sit unused
+   in `assets/slope/` with their CREDITS rows.
+2. **Frosted canopy, not white** — the solid snow-white foliage is
+   rejected; the director wants frost with *visible green* beneath.
+   This adds a pine-green family to the palette by director call (the
+   game's first green — hex to be tuned live, then written into the
+   bible). Likely implementation: leaf silhouette keeps its alpha, RGB
+   carries a frost-over-green paint instead of flat white, or the
+   green comes from `PineSnow`'s baseColorFactor with frost painted in
+   the texture — next session decides on screen.
 ## (slope-mech) 2026-07-23 — M2: the landing lockout — no instant re-jump
 
 The director's directive, verbatim: "after landing from a jump, the
