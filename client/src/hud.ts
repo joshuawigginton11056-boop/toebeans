@@ -173,9 +173,10 @@ const SLOPE_HINTS: readonly Hint[] = [
   // The air trick (turning round 9) — Space's second meaning, mid-air.
   { key: "Space", label: "hold in air to spin" },
   { key: "Shift", label: "boost" },
-  // The camera rig (slope-mech): V cycles views, dragging peeks around.
-  { key: "V", label: "camera" },
-  { key: "Drag", label: "look around" },
+  // The camera rig (slope-mech, round 2): wheel/pinch zooms, and the mouse
+  // position looks around (touch drags) — no key, so one hint names each.
+  { key: "Scroll", label: "zoom" },
+  { key: "Mouse", label: "look around" },
   { key: "M", label: "mute" },
   { key: "Enter", label: "lobby" },
 ];

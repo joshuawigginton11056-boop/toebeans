@@ -4108,6 +4108,79 @@ bands for its silhouette, and live-verify shadows with round 1's fixes
 in: lane mostly sunlit, dappled light through the canopy, no crawl, no
 pop-in.
 
+## (slope-mech) 2026-07-23 — M2: camera round 2 (free zoom + no-click mouse look)
+
+Built the director's round-1 verdict: pre-built views out, free control
+in. The eased orbit rig from round 1 survives; only what drives it
+changed. Still all presentation-side — no sim or save changes.
+
+- **Zoom replaces views.** `CAMERA_VIEWS` and the V key are gone. The
+  camera is one downhill-facing orbit whose distance the player sets
+  continuously — mouse wheel (or two-finger pinch) drives the radius
+  through a clamped range `[MIN_RADIUS 4.6, MAX_RADIUS 15]`. Elevation
+  and aim don't hold fixed: they **blend off the radius** through three
+  knots (`ZOOM_KNOTS`, `framingForRadius`), so each distance stays framed
+  the way its round-1 view was tuned — close = the low over-the-shoulder
+  *chase*, the classic distance (the default, `DEFAULT_RADIUS`) = the
+  DESIGN.md three-quarter front, far = the high whole-slope read. This is
+  the director's own recommended starting point ("each framing was tuned
+  at its distance"); whether elevation should instead hold fixed is a
+  playtest question left open. Verified the classic distance reproduces
+  the old fixed camera offset **(0, 4, 8) bit-for-bit**, so the default
+  look is unchanged; chase/far/mid distances blend smoothly between.
+  (The round-1 *side* profile view had no place on a single zoom axis and
+  was dropped with the rest — mouse-look yaw covers looking sideways now.)
+- **Mouse look without the click** (director: "the input is automatically
+  recognized as the camera" — he dislikes click-drag on mouse). Chose
+  option (a) from the verdict, mouse-position look: the cursor's offset
+  from canvas center drives the look — centered = home, screen edges =
+  full look, no button and no pointer lock. A 15% center deadzone keeps
+  the camera still during normal play, and the offset is squared so
+  near-center is gentle and only a deliberate push to the edge reaches the
+  extremes. Max reach is round 1's (±π yaw so you can still check uphill,
+  ±1.3 pitch). Round 1's snap-back-on-release becomes "move the mouse
+  back"; leaving the canvas (onto the HUD) recenters too.
+- **Touch keeps drag, gains pinch** (director: "click to drag makes sense
+  for touchscreen"). Single-finger drag is round 1's peek unchanged
+  (eases home on release); a second finger switches to pinch-to-zoom, and
+  lifting back to one finger resumes the drag. Pointer bookkeeping tracks
+  which fingers are down (a `Map`) so mouse and touch never cross wires —
+  the `pointermove` handler forks on `event.pointerType`.
+- **Shared-territory edits, small:** `main.ts` drops the KeyV handler
+  (camera is all mouse/touch now); `hud.ts` swaps the two camera hint
+  chips (`V camera` / `Drag look around`) for `Scroll zoom` /
+  `Mouse look around`.
+- Added a zero-size guard in the mouse-look handler (skip when the canvas
+  hasn't been laid out — `getBoundingClientRect()` 0×0 would divide to
+  NaN and poison the look). A real full-window canvas never hits it;
+  found it while verifying against a hidden pane.
+- `npm run check` passes (101 tests, camera is render-side so no new sim
+  surface to pin). Live-verified against a throwaway Vite server (port
+  5302 was held by another chat's server for this same folder again, so a
+  temporary instance on 5312 stood in; the pane stays hidden here, which
+  pauses `requestAnimationFrame`, so verification drove real DOM events
+  and read the camera transform back through a temporary window hook,
+  since removed). Confirmed: wheel zooms and clamps at both ends; the
+  classic distance frames to exactly (0, 4, 8) and chase/far/mid blend;
+  mouse-position look is dead in the deadzone, reaches ∓π at the left/
+  right edges (correct "mouse right = look right" sign) and +1.3 at the
+  bottom, and recenters on mouse-leave; touch drag looks and snaps home,
+  and two-finger pinch zooms (spread = in, together = out) with the
+  drag↔pinch↔drag finger transitions all correct. Zero console errors.
+
+**What to playtest:** on the slope, scroll to zoom in and out and move
+the mouse around to look (no clicking). Feel questions: is the zoom range
+right (does chase-close feel too close, far-out too far)? Does the
+radius-driven framing feel good, or should the angle hold fixed as you
+zoom (the open question above)? Is the no-click mouse look comfortable or
+does the camera drift too eagerly during normal play — is the deadzone
+big enough, the squared ramp gentle enough? On a touchscreen: does pinch
+feel natural alongside the drag-look?
+
+**Next:** tired-hop retune round 2 (faster, an actual small hop — notes
+in that entry above), then the round-10 queue: a finish line, tree limbs
++ crouch, or purpose-built big jumps.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

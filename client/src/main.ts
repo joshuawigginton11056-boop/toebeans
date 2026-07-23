@@ -150,12 +150,9 @@ window.addEventListener("keydown", (event) => {
     );
     return;
   }
-  // Camera view cycling on the slope (slope-mech) — the rig itself lives
-  // in skiRender.ts; drag-to-look-around is wired there too.
-  if (event.code === "KeyV") {
-    if (mode === "slope") skiScene.cycleView();
-    return;
-  }
+  // Camera round 2 (slope-mech): the slope camera is all mouse/touch now —
+  // wheel/pinch zoom and no-click mouse-position look, wired in skiRender.ts.
+  // No keyboard camera control anymore (V cycling is gone).
   if (event.code === "Enter") {
     if (mode === "lobby") goSkiing();
     else backToLobby();
