@@ -42,6 +42,13 @@ import {
 // deliberately not saved — a restore starts uncharged, same as flightHeading.
 // Landing lockout (no bump): landingRecovery is transient too and not saved —
 // a restore resumes recovered, same spirit as jumpCharge.
+// Slope 1 finish (no bump): status gained a "finished" value, but that's a new
+// enum member, not a shape change — old v5 saves never carry it and still
+// decode, new ones decode under the added case. finishDistance is static
+// layout (comes fresh from createInitialSkiState, unsaved like chasms) and
+// finishTimer is transient (unsaved like respawnTimer's kin), so the saved
+// shape is unchanged. A save taken mid-coast restores with finishTimer 0 and
+// the client returns to the lobby at once — an acceptable heal.
 export const SAVE_VERSION = 5;
 
 export type SceneMode = "lobby" | "slope";
@@ -150,15 +157,21 @@ export function decodeSave(json: string): SaveData | null {
     return null;
   }
   const status = ski.status;
-  if (status !== "skiing" && status !== "crashed" && status !== "forfeited") {
+  if (
+    status !== "skiing" &&
+    status !== "crashed" &&
+    status !== "forfeited" &&
+    status !== "finished"
+  ) {
     return null;
   }
   const lives = ski.lives;
   if (!isFinite(lives) || !Number.isInteger(lives)) return null;
   if (lives < 0 || lives > STARTING_LIVES) return null;
-  // Consistency with how runs actually play out: you can't still be skiing
-  // with no lives, and a forfeit only ever happens once they're all gone.
-  if (status === "skiing" && lives < 1) return null;
+  // Consistency with how runs actually play out: you can't still be skiing (or
+  // have just finished) with no lives, and a forfeit only ever happens once
+  // they're all gone.
+  if ((status === "skiing" || status === "finished") && lives < 1) return null;
   if (status === "forfeited" && lives !== 0) return null;
 
   return {

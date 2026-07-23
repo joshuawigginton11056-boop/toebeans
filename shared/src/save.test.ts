@@ -26,8 +26,9 @@ const idleSkiInput = {
   spin: 0,
 } as const;
 
-// A mid-game snapshot with real history: a ski run past the first
-// checkpoint with one life already lost.
+// A mid-game snapshot: a ski run a short way down the slope (idle skiing for
+// six seconds coasts up to cruise but stops well short of the first chasm at
+// 120, so it's a clean in-progress run with all lives intact).
 function midGameSave() {
   let ski = createInitialSkiState();
   for (let i = 0; i < 60 * 6; i++) {
@@ -170,11 +171,12 @@ describe("save/load", () => {
 
   it("snaps a stale checkpoint down to one that exists today", () => {
     const { save } = midGameSave();
-    // 30 isn't a checkpoint in the current layout (they're 0, 26, 52) — a
-    // save from an old slope tune should land on 26, the nearest one passed.
-    const stale = { ...save, ski: { ...save.ski, lastCheckpoint: 30 } };
+    // 200 isn't a checkpoint in the current Slope 1 layout (0, 150, 285, 420,
+    // 620) — a save from an old slope tune should land on 150, the nearest one
+    // actually passed.
+    const stale = { ...save, ski: { ...save.ski, lastCheckpoint: 200 } };
     const restored = restoreSave(decodeSave(JSON.stringify(stale))!);
-    expect(restored.ski.lastCheckpoint).toBe(26);
+    expect(restored.ski.lastCheckpoint).toBe(150);
   });
 
   it("clamps out-of-range ski values back into today's legal ranges", () => {
@@ -227,7 +229,7 @@ describe("save/load", () => {
 
   it("restores a crashed run mid-pause so the respawn still happens", () => {
     let ski = createInitialSkiState();
-    // Ski straight into the first chasm at distance 20.
+    // Ski straight into the first chasm (the warm-up gap at distance 120).
     while (ski.status === "skiing") {
       ski = stepSkiing(ski, idleSkiInput, 1 / 60);
     }

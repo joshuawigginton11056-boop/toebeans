@@ -3,7 +3,17 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (slope-mech) Slope 1 "The Overlook" skeleton — the mechanics build (2026-07-23)
+## (slope-mech) ~~Slope 1 "The Overlook" skeleton — the mechanics build~~ — SKELETON BUILT 2026-07-23
+
+**BUILT 2026-07-23** (see the ROADMAP entry): items #1 (length + finish) and
+#2 (layout to the beats) landed, and #4 (variable width) was pulled forward as
+the rock-gate pinch (director call). Still open: **#3 route bending** (its own
+chunk — the sim still models distance as a straight axis) and, by design, #5
+grade stays flat. The `(slope-vis)` visuals half at the bottom is now unblocked
+— real finish distance (800) + beat positions exist to build against, and
+`laneHalfWidth(distance)` is exported for the visual lane / rock-gate spires to
+follow (the pinch is an invisible narrowing until they do). Original spec kept
+below for reference.
 
 The first real slope. Full design + beat sheet + rationale is in DESIGN.md
 ("The handcrafted slopes — Slope 1: The Overlook"). This entry is the

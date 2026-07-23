@@ -3,7 +3,8 @@
 A cozy 3D game: ski mountain slopes with your cat, earn XP, and decorate a
 home you customize together. Early build — the game opens on a menu lobby
 (a title screen with a snowy diorama behind it) and has one playable
-scene: the ski slope, with crashes, checkpoints, and the cat's 9 lives.
+scene: the ski slope — a finite run from the drop-in down to a finish,
+with crashes, checkpoints, and the cat's 9 lives.
 The slope wears the game's real art — painted snowy trees and rocks, dawn
 lighting, carved ski trails, a playable cast of 11 characters with your
 animated cat riding on your back — plus the real UI, synthesized sound,
@@ -44,7 +45,10 @@ out through a wide range at a fixed three-quarter angle; **click the
 slope** to grab the mouse and look around freely (the cursor hides; Esc
 lets go), or **drag** to peek on a touchscreen. Falling into a chasm costs one of the cat's
   9 lives and sends you back to the last checkpoint (ice-blue stripe);
-  lose all 9 and the run is forfeited. The nine cat faces in the top-left
+  lose all 9 and the run is forfeited. Ski all the way to the bottom and
+  you cross the finish: the run is complete, you coast to a stop, and it
+  takes you back to the lobby (the finish gate/arch art isn't built yet).
+  The nine cat faces in the top-left
   are the lives — each fades as it's spent — and the chips along the
   bottom show the controls. See [`assets/CREDITS.md`](assets/CREDITS.md)
   for where the models come from.
