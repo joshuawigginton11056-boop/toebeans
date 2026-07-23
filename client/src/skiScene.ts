@@ -340,7 +340,10 @@ function createSunBillboard(): THREE.Sprite {
 // can't reach past LATERAL_LIMIT, so the flanks need no trail resolution.
 const CARVE_HALF_WIDTH = LANE_EDGE + 1;
 const CARVE_TEX_WIDTH = 1024; // across the carve strip: ~2.7 cm per texel
-const CARVE_TEX_HEIGHT = 4096; // along the window: ~5.4 cm per texel
+// Along the window: ~2.7 cm per texel, matching the width so diagonal
+// grooves (turns) sample as cleanly as straight ones — at half this, carved
+// turns showed a bilinear staircase (director callout, 2026-07-23).
+const CARVE_TEX_HEIGHT = 8192;
 // Brush: full carve inside BRUSH_IN of the ski line, feathered to nothing
 // at BRUSH_OUT. With the skis 2×SKI_STANCE apart, the feathered skirts
 // meet between the grooves as a low pushed-up ridge — like real tracks.
@@ -355,14 +358,28 @@ const CARVE_SHOULDER = 0.045; // pushed-up snow beside the groove
 const DUNE_AMP_LANE = 0.08;
 const DUNE_AMP_FLANK = 0.8;
 const DUNE_TILE = 13; // world units per dune-texture tile (~3–6 m dunes)
+// Mid-scale lumps — the "random lumpiness" between dune and grain
+// (director ask, 2026-07-23): the same smooth dune canvas re-sampled at a
+// small tile, in the real geometry, so the lumps sit in silhouettes and
+// self-shadow. Kept subtle in the lane (groomed piste, and the lane
+// surface must stay under the markers' 6 cm lift).
+const LUMP_TILE = 4.3;
+const LUMP_AMP_LANE = 0.05;
+const LUMP_AMP_FLANK = 0.16;
 const GRAIN_TILE = 8; // world units per grain-texture tile
 const GRAIN_AMP = 0.05; // fine crust height — feeds normals, not geometry
+// A second, chunkier grain octave (same director ask) — shading-only
+// lumpiness at the half-meter scale.
+const GRAIN2_TILE = 2.6;
+const GRAIN2_AMP = 0.07;
 // Vertex grid spacing: fine inside the carve strip and around the skier,
 // coarse elsewhere. SNOW_Z_STEP doubles as the window's recenter snap (see
-// syncEnvironment). ~205k vertices — all static; only the shader moves
-// them. If a weak GPU ever chokes, these two are the dial.
+// syncEnvironment). ~305k vertices — all static; only the shader moves
+// them. If a weak GPU ever chokes, these two are the dial. Z sits near the
+// X spacing on purpose: with z at 0.2 the vertex grid staircased the
+// carved grooves whenever they ran diagonally (turns).
 const SNOW_X_STEP = 0.09;
-const SNOW_Z_STEP = 0.2;
+const SNOW_Z_STEP = 0.12;
 
 // One axis of vertex coordinates from (from, to, step) spans — each span
 // subdivides evenly at the nearest count to its requested step, landing
@@ -600,7 +617,14 @@ float snowProfile(float c) {
   float shoulder = smoothstep(0.03, 0.30, c) - smoothstep(0.30, 0.70, c);
   return shoulder * ${CARVE_SHOULDER.toFixed(3)} - snowCarveCore(c) * ${CARVE_DEPTH.toFixed(3)};
 }
-float snowHeight(vec2 w) { return snowDune(w) + snowProfile(snowCarve(w)); }
+float snowLump(vec2 w) {
+  float amp = mix(${LUMP_AMP_LANE.toFixed(3)}, ${LUMP_AMP_FLANK.toFixed(3)},
+    smoothstep(${LANE_EDGE.toFixed(1)}, 22.0, abs(w.x)));
+  return (texture2D(duneMap, w / ${LUMP_TILE.toFixed(1)}).r - 0.5) * amp;
+}
+float snowHeight(vec2 w) {
+  return snowDune(w) + snowLump(w) + snowProfile(snowCarve(w));
+}
 `;
 
 // Fragment-only: the full-detail height (adds crust grain) and its
@@ -609,7 +633,8 @@ float snowHeight(vec2 w) { return snowDune(w) + snowProfile(snowCarve(w)); }
 const SNOW_NORMAL_GLSL = `
 float snowHeightFine(vec2 w) {
   return snowHeight(w)
-    + (texture2D(grainMap, w / ${GRAIN_TILE.toFixed(1)}).r - 0.5) * ${GRAIN_AMP.toFixed(3)};
+    + (texture2D(grainMap, w / ${GRAIN_TILE.toFixed(1)}).r - 0.5) * ${GRAIN_AMP.toFixed(3)}
+    + (texture2D(grainMap, w / ${GRAIN2_TILE.toFixed(1)}).r - 0.5) * ${GRAIN2_AMP.toFixed(3)};
 }
 vec3 snowNormal(vec2 w) {
   float e = 0.05;
@@ -669,7 +694,7 @@ vSnowWorld = vec3(snowW.x, snowW.y + snowH, snowW.z);`,
   // Occlusion: dune hollows and groove interiors tint toward snow-shadow
   // blue (#2) — multiplied under the lighting, so sun and shade still play
   // on top. This is the depth cue ambient-bright lighting alone can't draw.
-  float hollow = clamp(-snowDune(vSnowWorld.xz) * 2.2, 0.0, 1.0);
+  float hollow = clamp(-(snowDune(vSnowWorld.xz) + snowLump(vSnowWorld.xz)) * 2.2, 0.0, 1.0);
   float ao = clamp(hollow * 0.45 + core * 0.4 + smoothstep(0.03, 0.35, carve) * 0.15, 0.0, 1.0);
   diffuseColor.rgb *= mix(vec3(1.0), vec3(0.851, 0.912, 1.0), ao);
 }`,
