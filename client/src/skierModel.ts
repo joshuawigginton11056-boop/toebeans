@@ -131,8 +131,12 @@ const SKI_BODY_DROP = { brake: 0.03, tuck: 0.16 };
 /** Hips shift back a touch in the tuck (butt back, chest forward). */
 const SKI_BODY_BACK = { brake: 0, tuck: 0.05 };
 
-/** Each foot this far off center — must match the ski positions below. */
-const SKI_STANCE = 0.13;
+/**
+ * Each foot this far off center — must match the ski positions below.
+ * Exported for skiScene's snow trails: the carved grooves ride at exactly
+ * the ski spacing, so the marks line up under the model.
+ */
+export const SKI_STANCE = 0.13;
 /** Feet ride this far above the snow: on top of the skis, inside the boots. */
 const SKI_FOOT_LIFT = 0.055;
 /**

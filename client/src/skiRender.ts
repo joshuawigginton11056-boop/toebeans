@@ -255,8 +255,14 @@ export function syncSkiSceneToState(
   handle.camera.lookAt(state.lateral, state.height, -state.distance - 4);
 
   // Atmosphere follows the run downhill — the offsets are skiScene's.
+  // (slope-visuals seam addition) the snow also gets the two numbers it
+  // needs to carve ski trails: which way the skis point, and whether
+  // they're on the snow at all.
   const anchor = new THREE.Vector3(state.lateral, 0, -state.distance);
-  syncEnvironment(handle.environment, anchor, handle.camera);
+  syncEnvironment(handle.environment, anchor, handle.camera, {
+    heading: state.heading,
+    grounded: state.height <= 0 && state.status === "skiing",
+  });
 }
 
 export function render(handle: SkiSceneHandle): void {

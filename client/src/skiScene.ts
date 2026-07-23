@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { LATERAL_LIMIT } from "@toebeans/shared";
+import { SKI_STANCE } from "./skierModel";
 
 // Everything about how the slope LOOKS lives in this file — palette,
 // lighting, sky, snow surface, decor, and the hazard/checkpoint mesh
@@ -34,6 +35,14 @@ const SUN_DIRECTION = new THREE.Vector3(-0.4, 0.5, -1).normalize();
 const SUN_BILLBOARD_DIRECTION = new THREE.Vector3(-0.4, 0.075, -1).normalize();
 
 export const SLOPE_LENGTH = 100;
+// The snowfield plane: one moving window of snow that follows the skier
+// (see syncEnvironment). The trail ring buffer below shares these numbers —
+// they define the world↔texture mapping, so they live here, named.
+const SNOWFIELD_WIDTH = 120;
+const SNOWFIELD_LENGTH = 220;
+// The window's center sits this far downhill of the skier: most of the
+// snow lies ahead, where the camera looks.
+const SNOWFIELD_LEAD = 50;
 // The visual lane derives from the sim's clamp — one extra unit each side,
 // so the skier's body never visibly overlaps the treeline while pinned at
 // the limit. (Was a separate hardcoded 10 when the limit was 4; deriving it
@@ -47,6 +56,17 @@ export interface SlopeEnvironment {
   readonly skyDome: THREE.Mesh;
   readonly sunBillboard: THREE.Sprite;
   readonly slope: THREE.Mesh;
+  readonly trail: SnowTrail;
+}
+
+// What the snow needs from the sim each frame to carve ski trails —
+// mechanics code passes this through syncEnvironment. See the seam note in
+// PARALLEL.md; the shape is deliberately two plain numbers-worth of state.
+export interface SnowTrailInput {
+  /** Ski direction on the snow, radians, 0 = straight downhill. */
+  readonly heading: number;
+  /** False in the air or during a crash — lifts the pen, breaking the grooves. */
+  readonly grounded: boolean;
 }
 
 // Builds the slope's weather and ground: fog, lights, sky, sun disc, and
@@ -105,37 +125,40 @@ export function createEnvironment(scene: THREE.Scene): SlopeEnvironment {
   scene.add(sunBillboard);
 
   // One wide snowfield; the skiable lane (SLOPE_WIDTH) sits in the middle
-  // and the decor lives on the flanks beyond it. The plane is featureless,
-  // so it quietly follows the skier's z (see syncEnvironment) — the snow
-  // never ends, and its far edge always sits past where the haze fully
-  // takes over.
+  // and the decor lives on the flanks beyond it. The plane quietly follows
+  // the skier's z (see syncEnvironment) — the snow never ends, and its far
+  // edge always sits past where the haze fully takes over.
+  //
+  // REALISM SNOW TEST (2026-07-23, split verdict follow-up): the surface
+  // itself is no longer featureless — soft procedural relief, sparkle-fleck
+  // roughness, and a view-dependent glitter pass (see the realism snow
+  // section below). The albedo stays flat sunlit snow: the verdict rejected
+  // painted *dapple* for snow, so all the realism rides on lighting
+  // response, not color blotches. Textures are pinned to the world in
+  // syncEnvironment as the plane recenters, so the snow never swims.
+  const snow = getSnowTextures();
   const slope = new THREE.Mesh(
-    new THREE.PlaneGeometry(120, 220),
-    new THREE.MeshStandardMaterial({ color: PALETTE.sunlitSnow }),
+    new THREE.PlaneGeometry(SNOWFIELD_WIDTH, SNOWFIELD_LENGTH),
+    new THREE.MeshStandardMaterial({
+      color: PALETTE.sunlitSnow,
+      bumpMap: snow.relief,
+      bumpScale: 0.35,
+      roughnessMap: snow.sparkle,
+      roughness: 1, // the map carries the value; 1 = don't scale it down
+    }),
   );
+  addSnowGlitter(slope.material as THREE.MeshStandardMaterial);
   slope.rotation.x = -Math.PI / 2;
-  slope.position.z = -50;
+  slope.position.z = -SNOWFIELD_LEAD;
   slope.receiveShadow = true;
   scene.add(slope);
 
-  // TEXTURE TEST: a painted snow patch spanning the lane just past the
-  // start — ski straight over it and compare against the flat snow on
-  // either side. Sits above the snowfield like the checkpoint stripes do.
-  const painted = getPaintedTextures();
-  const patch = new THREE.Mesh(
-    new THREE.PlaneGeometry(SLOPE_WIDTH, 12),
-    new THREE.MeshStandardMaterial({
-      map: painted.snowAlbedo,
-      bumpMap: painted.snowBump,
-      bumpScale: 0.35,
-    }),
-  );
-  patch.rotation.x = -Math.PI / 2;
-  patch.position.set(0, 0.015, -11);
-  patch.receiveShadow = true;
-  scene.add(patch);
+  // The ski trails: a transparent overlay riding the same window as the
+  // snowfield, carved into by updateSnowTrail each frame.
+  const trail = createSnowTrail();
+  scene.add(trail.mesh);
 
-  return { sun, skyDome, sunBillboard, slope };
+  return { sun, skyDome, sunBillboard, slope, trail };
 }
 
 // Atmosphere follows the run downhill. The sun light (and its shadow
@@ -147,10 +170,24 @@ export function syncEnvironment(
   environment: SlopeEnvironment,
   anchor: THREE.Vector3,
   camera: THREE.Camera,
+  trailInput?: SnowTrailInput,
 ): void {
   environment.sun.target.position.copy(anchor);
   environment.sun.position.copy(anchor).addScaledVector(SUN_DIRECTION, 70);
-  environment.slope.position.z = anchor.z - 50;
+  const centerZ = anchor.z - SNOWFIELD_LEAD;
+  environment.slope.position.z = centerZ;
+  // Pin the snow's surface textures to the world as the plane recenters
+  // under them: a texel at world z samples at (repeat.y × -z/length)
+  // regardless of where the plane sits, so the relief never swims. The
+  // trail overlay uses the same trick with repeat 1 — that's what makes the
+  // ring-buffer canvas line up with the world (see trailCanvasY).
+  const snow = getSnowTextures();
+  for (const texture of [snow.relief, snow.sparkle]) {
+    texture.offset.y = -texture.repeat.y * (0.5 + centerZ / SNOWFIELD_LENGTH);
+  }
+  environment.trail.mesh.position.z = centerZ;
+  environment.trail.texture.offset.y = -(0.5 + centerZ / SNOWFIELD_LENGTH);
+  if (trailInput) updateSnowTrail(environment.trail, anchor, trailInput);
   environment.skyDome.position.copy(camera.position);
   environment.sunBillboard.position
     .copy(camera.position)
@@ -252,6 +289,369 @@ function createSunBillboard(): THREE.Sprite {
   );
   sprite.scale.setScalar(34);
   return sprite;
+}
+
+// ---------------------------------------------------------------------------
+// REALISM SNOW TEST (2026-07-23) — the snow half of the split verdict (see
+// the Art Style Bible's status note in DESIGN.md): snow should read as real
+// snow — fine sparkle, soft relief, believable sunlit white — while keeping
+// the two snow palette colors as its family. This is the *procedural*
+// candidate: everything below is generated in code (no image files, no
+// CREDITS rows), built to compare against a paid photo-texture pack before
+// spending on one. Three pieces:
+//
+//   1. Surface relief + sparkle flecks: tileable canvases driving the
+//      snowfield's bump and roughness maps. Color stays flat sunlit snow —
+//      the verdict rejected painted dapple, so realism rides on lighting
+//      response only.
+//   2. Glitter: a shader pass that gives random micro-cells of the snow a
+//      mirror facet — the ones aligned between the sun and the camera flash
+//      as you move. That view-dependent twinkle is the thing bump maps
+//      can't fake and the biggest single "real snow" tell.
+//   3. Ski trails: the director's explicit ask ("the snow had no depth — no
+//      footprints, no ski trails carved into it"). A ring-buffer canvas
+//      overlay rides the snowfield window; every grounded frame stamps two
+//      groove segments at the rig's exact ski positions (SKI_STANCE). Core
+//      is carved snow (#3), flanked by a snow-shadow spill and a sunlit lip
+//      highlight on the sun side, so the grooves read as depth under the
+//      fixed dawn light. Airborne frames lift the pen — jump gaps carve
+//      themselves, which is itself the speed cue the references show.
+
+interface SnowTextures {
+  readonly relief: THREE.CanvasTexture; // bump height — dunes + fine grain
+  readonly sparkle: THREE.CanvasTexture; // roughness — matte with shiny flecks
+}
+
+let snowTextures: SnowTextures | null = null;
+
+function getSnowTextures(): SnowTextures {
+  if (snowTextures) return snowTextures;
+
+  const random = makeRandom(20260723);
+  const makeTexture = (
+    size: number,
+    draw: (ctx: CanvasRenderingContext2D) => void,
+  ): THREE.CanvasTexture => {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    draw(ctx);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    return texture;
+  };
+  // Soft radial-gradient stamp, drawn through a 3×3 wrap so the canvas
+  // tiles seamlessly. Gradients, not hard blobs: hard edges read as paint
+  // (the rejected direction); gradients read as wind-settled snow.
+  const softBlob = (
+    ctx: CanvasRenderingContext2D,
+    size: number,
+    x: number,
+    y: number,
+    r: number,
+    value: number,
+    alpha: number,
+  ): void => {
+    for (const dx of [-size, 0, size]) {
+      for (const dy of [-size, 0, size]) {
+        const px = x + dx;
+        const py = y + dy;
+        const gradient = ctx.createRadialGradient(px, py, 0, px, py, r);
+        gradient.addColorStop(0, `rgba(${value},${value},${value},${alpha})`);
+        gradient.addColorStop(1, `rgba(${value},${value},${value},0)`);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(px - r, py - r, r * 2, r * 2);
+      }
+    }
+  };
+
+  // Height field around neutral 128: three scales of soft dune, then fine
+  // surface grain. The repeat below puts one tile across ~8 world units, so
+  // the large dunes land around 2–3 m — gentle rolling relief, and the long
+  // dawn light does the rest.
+  const relief = makeTexture(512, (ctx) => {
+    ctx.fillStyle = "#808080";
+    ctx.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 14; i++) {
+      softBlob(
+        ctx, 512, random() * 512, random() * 512,
+        90 + random() * 70, random() < 0.5 ? 102 : 154, 0.5,
+      );
+    }
+    for (let i = 0; i < 44; i++) {
+      softBlob(
+        ctx, 512, random() * 512, random() * 512,
+        24 + random() * 36, random() < 0.5 ? 98 : 158, 0.45,
+      );
+    }
+    for (let i = 0; i < 130; i++) {
+      softBlob(
+        ctx, 512, random() * 512, random() * 512,
+        6 + random() * 10, random() < 0.5 ? 93 : 163, 0.5,
+      );
+    }
+    // Fine grain: the granular top crust.
+    for (let i = 0; i < 900; i++) {
+      const v = 108 + random() * 40;
+      ctx.fillStyle = `rgba(${v},${v},${v},0.6)`;
+      ctx.fillRect(random() * 512, random() * 512, 1 + random(), 1 + random());
+    }
+  });
+
+  // Roughness: matte base (~0.66) with patchy sheen and sparse near-mirror
+  // flecks — the flecks catch the sun's specular as secondary sparkle on
+  // top of the shader glitter.
+  const sparkle = makeTexture(256, (ctx) => {
+    ctx.fillStyle = "#a8a8a8";
+    ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 60; i++) {
+      softBlob(
+        ctx, 256, random() * 256, random() * 256,
+        18 + random() * 30, random() < 0.5 ? 140 : 190, 0.4,
+      );
+    }
+    for (let i = 0; i < 380; i++) {
+      const v = 30 + random() * 55; // low roughness = shiny fleck
+      ctx.fillStyle = `rgb(${v},${v},${v})`;
+      ctx.fillRect(random() * 256, random() * 256, 1, 1);
+    }
+  });
+
+  // One relief tile per ~8 units, sparkle flecks at ~2 cm.
+  relief.repeat.set(SNOWFIELD_WIDTH / 8, SNOWFIELD_LENGTH / 8);
+  sparkle.repeat.set(SNOWFIELD_WIDTH / 5, SNOWFIELD_LENGTH / 5);
+
+  snowTextures = { relief, sparkle };
+  return snowTextures;
+}
+
+// The glitter pass: every ~3.5 cm cell of snow owns one random micro-facet;
+// a cell flashes sun-glow white when its facet mirrors the sun into the
+// camera, so the field twinkles as the run moves — the view-dependent
+// sparkle real snow has. Fades out by ~45 units (distant cells go
+// sub-pixel and would alias) where the haze owns the look anyway. Known
+// simplification: glitter ignores cast shadows (a tree's shadow still
+// twinkles faintly) — parked in IDEAS.md.
+function addSnowGlitter(material: THREE.MeshStandardMaterial): void {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.sunDir = { value: SUN_DIRECTION.clone() };
+    shader.vertexShader =
+      "varying vec3 vSnowWorld;\n" +
+      shader.vertexShader.replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvSnowWorld = (modelMatrix * vec4(position, 1.0)).xyz;",
+      );
+    shader.fragmentShader =
+      "varying vec3 vSnowWorld;\nuniform vec3 sunDir;\n" +
+      shader.fragmentShader.replace(
+        "#include <lights_fragment_end>",
+        `#include <lights_fragment_end>
+{
+  vec2 cell = floor(vSnowWorld.xz * 28.0);
+  vec3 cellHash = fract(sin(vec3(
+    dot(cell, vec2(127.1, 311.7)),
+    dot(cell, vec2(269.5, 183.3)),
+    dot(cell, vec2(419.2, 371.9)))) * 43758.5453);
+  vec3 facet = normalize(vec3(cellHash.x - 0.5, 0.65, cellHash.y - 0.5));
+  vec3 toCamera = normalize(cameraPosition - vSnowWorld);
+  float flash = pow(max(dot(facet, normalize(toCamera + sunDir)), 0.0), 64.0);
+  float gate = step(0.78, cellHash.z);
+  float fade = 1.0 - smoothstep(16.0, 45.0, length(cameraPosition - vSnowWorld));
+  // Sun-glow tinted (#FFF4DA) — the bible's brightest value.
+  reflectedLight.directSpecular += vec3(1.0, 0.957, 0.855) * (flash * gate * fade * 1.6);
+}`,
+      );
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The ski trails. World↔canvas mapping: the overlay plane spans the lane
+// (SLOPE_WIDTH) by the snowfield window length, and its texture is offset
+// in syncEnvironment so texture row = -z/SNOWFIELD_LENGTH regardless of
+// where the window sits. That turns the canvas into a ring buffer along z:
+// grooves persist in place as the window slides past, and rows are
+// reclaimed (cleared) as they re-enter at the leading edge — which sits
+// ~160 units downhill of the skier, fully swallowed by the haze, so the
+// reclaim is never visible.
+
+const TRAIL_TEX_WIDTH = 512; // across the lane: ~20 px per unit
+const TRAIL_TEX_HEIGHT = 2048; // along the window: ~9 px per unit
+
+// Groove colors, all in the snow family: carved snow (#3) core, a spill of
+// displaced snow between #1 and #2, and a near-#1 sunlit lip. Opaque
+// strokes on purpose — translucent ones double-darken where segments join.
+const TRAIL_CORE = "#afc2de";
+const TRAIL_SPILL = "#e6eaf0";
+const TRAIL_LIP = "#fffdf8";
+// The lip highlight sits on the groove edge facing the sun: the sun's xz
+// direction (-0.4, -1) mapped into canvas axes, ~1.6 px out from the core.
+const TRAIL_LIP_OFFSET = { x: -0.6, y: -1.5 } as const;
+
+// Per-ski pen: current tip and the point before it (the previous segment
+// gets its lip re-stroked so the next segment's spill can't eat it).
+interface TrailPen {
+  prev: THREE.Vector2 | null;
+  curr: THREE.Vector2 | null;
+}
+
+export interface SnowTrail {
+  readonly mesh: THREE.Mesh;
+  readonly ctx: CanvasRenderingContext2D;
+  readonly texture: THREE.CanvasTexture;
+  readonly pens: [TrailPen, TrailPen];
+  /** Furthest-downhill z whose canvas rows have been reclaimed so far. */
+  leadingZ: number | null;
+}
+
+function createSnowTrail(): SnowTrail {
+  const canvas = document.createElement("canvas");
+  canvas.width = TRAIL_TEX_WIDTH;
+  canvas.height = TRAIL_TEX_HEIGHT;
+  const ctx = canvas.getContext("2d")!;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapT = THREE.RepeatWrapping; // the ring dimension
+  texture.colorSpace = THREE.SRGBColorSpace;
+  // The canvas re-uploads every stamped frame — skip mipmap regeneration
+  // (distant trail lives in the haze anyway) and let anisotropy keep the
+  // grooves crisp at the camera's grazing angle.
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.anisotropy = 4;
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(SLOPE_WIDTH, SNOWFIELD_LENGTH),
+    new THREE.MeshStandardMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false, // composite over the snow; never fight its depth
+    }),
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  // Above the snowfield, below the chasm slabs (0.01) and checkpoint
+  // stripes (0.02) — a groove never overdraws a hole in the ground.
+  mesh.position.set(0, 0.005, -SNOWFIELD_LEAD);
+  mesh.receiveShadow = true;
+  return { mesh, ctx, texture, pens: [{ prev: null, curr: null }, { prev: null, curr: null }], leadingZ: null };
+}
+
+const fract = (v: number): number => v - Math.floor(v);
+// World z → canvas row. flipY is on (three's canvas default), so texture
+// row -z/length lands at canvas y = (1 - fract(-z/length)) * height.
+const trailCanvasY = (z: number): number =>
+  (1 - fract(-z / SNOWFIELD_LENGTH)) * TRAIL_TEX_HEIGHT;
+const trailCanvasX = (x: number): number =>
+  ((x + SLOPE_WIDTH / 2) / SLOPE_WIDTH) * TRAIL_TEX_WIDTH;
+
+// Called every frame from syncEnvironment. Reclaims ring rows entering the
+// window, then stamps one groove segment per ski while the skis are down.
+function updateSnowTrail(
+  trail: SnowTrail,
+  anchor: THREE.Vector3,
+  input: SnowTrailInput,
+): void {
+  const { ctx } = trail;
+  let drew = false;
+
+  // Reclaim: rows newly entering at the leading (downhill, haze-hidden)
+  // edge still hold grooves from one ring-wrap ago — wipe them. When the
+  // window recedes instead (a respawn), leadingZ stays put: the rows
+  // re-entering uphill hold the *previous pass's* real grooves, which is
+  // exactly what should still be on the snow there.
+  const lead = anchor.z - SNOWFIELD_LEAD - SNOWFIELD_LENGTH / 2;
+  if (trail.leadingZ === null || trail.leadingZ - lead > SNOWFIELD_LENGTH) {
+    ctx.clearRect(0, 0, TRAIL_TEX_WIDTH, TRAIL_TEX_HEIGHT); // fresh window
+    trail.leadingZ = lead;
+    drew = true;
+  } else if (lead < trail.leadingZ) {
+    const rowWorld = SNOWFIELD_LENGTH / TRAIL_TEX_HEIGHT;
+    for (let z = trail.leadingZ; z >= lead - rowWorld; z -= rowWorld) {
+      ctx.clearRect(0, trailCanvasY(z) - 2, TRAIL_TEX_WIDTH, 4);
+    }
+    trail.leadingZ = lead;
+    drew = true;
+  }
+
+  if (!input.grounded) {
+    // Pen up: airborne or crashed. The groove break is the jump, visibly.
+    for (const pen of trail.pens) {
+      pen.prev = null;
+      pen.curr = null;
+    }
+  } else {
+    // Ski positions: the stance offset perpendicular to the heading. With
+    // travel = (sin h, -cos h) in xz (the sim's convention), perpendicular
+    // is (cos h, sin h).
+    const perpX = Math.cos(input.heading);
+    const perpZ = Math.sin(input.heading);
+    for (const [i, side] of [-1, 1].entries()) {
+      const pen = trail.pens[i]!;
+      const pos = new THREE.Vector2(
+        anchor.x + perpX * side * SKI_STANCE,
+        anchor.z + perpZ * side * SKI_STANCE,
+      );
+      if (pen.curr === null) {
+        pen.curr = pos; // touchdown — next frame starts the groove
+      } else if (pen.curr.distanceTo(pos) > 4) {
+        pen.prev = null; // teleport (respawn safety net) — restart the line
+        pen.curr = pos;
+      } else if (pen.curr.distanceTo(pos) > 0.015) {
+        drawGroove(ctx, pen.prev, pen.curr, pos);
+        pen.prev = pen.curr;
+        pen.curr = pos;
+        drew = true;
+      } // else: standing still — don't pile up round caps
+    }
+  }
+
+  if (drew) trail.texture.needsUpdate = true;
+}
+
+// One groove step: spill under core under lip, round caps so joints and
+// jump landings stay clean. The lip is re-stroked over the previous segment
+// too — the fresh segment's spill overlaps the last joint, and without the
+// re-stroke it would erase the lip there, leaving dashes.
+function drawGroove(
+  ctx: CanvasRenderingContext2D,
+  prev: THREE.Vector2 | null,
+  from: THREE.Vector2,
+  to: THREE.Vector2,
+): void {
+  const H = TRAIL_TEX_HEIGHT;
+  const ax = trailCanvasX(from.x);
+  const ay = trailCanvasY(from.y);
+  // Unwrap the other points' rows to from's neighborhood so segments that
+  // cross the ring seam draw as one straight stroke (the ±H copies below
+  // paint whichever half lands back on the canvas).
+  const unwrapY = (z: number): number => {
+    let y = trailCanvasY(z);
+    if (y - ay > H / 2) y -= H;
+    if (ay - y > H / 2) y += H;
+    return y;
+  };
+  const bx = trailCanvasX(to.x);
+  const by = unwrapY(to.y);
+  const line = (
+    x1: number, y1: number, x2: number, y2: number,
+    width: number, style: string, dx = 0, dy = 0,
+  ): void => {
+    ctx.strokeStyle = style;
+    ctx.lineWidth = width;
+    for (const off of [-H, 0, H]) {
+      ctx.beginPath();
+      ctx.moveTo(x1 + dx, y1 + dy + off);
+      ctx.lineTo(x2 + dx, y2 + dy + off);
+      ctx.stroke();
+    }
+  };
+  ctx.lineCap = "round";
+  line(ax, ay, bx, by, 4.5, TRAIL_SPILL);
+  line(ax, ay, bx, by, 2.4, TRAIL_CORE);
+  const { x: lx, y: ly } = TRAIL_LIP_OFFSET;
+  if (prev) {
+    line(trailCanvasX(prev.x), unwrapY(prev.y), ax, ay, 1.1, TRAIL_LIP, lx, ly);
+  }
+  line(ax, ay, bx, by, 1.1, TRAIL_LIP, lx, ly);
 }
 
 // ---------------------------------------------------------------------------
@@ -394,22 +794,20 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// TEXTURE TEST (2026-07-22, direction session) — remove or promote after
-// the director's verdict. The Art Style Bible's no-texture rule is amended
-// (see DESIGN.md): stylized painted + procedural surface detail, palette
-// family kept. Everything below is generated in code — no image files, no
-// license rows.
+// TEXTURE TEST (2026-07-22, direction session) — the 2026-07-22 verdict
+// split: painted detail on trees/rocks/props is APPROVED (rollout across
+// all 24 slope models is its own upcoming chunk); the painted *snow* patch
+// was rejected in favor of realism (now the REALISM SNOW section above),
+// and its canvases are gone from here. Everything below is generated in
+// code — no image files, no license rows.
 //
 // The converted GLBs carry NO UV coordinates (the OBJ→GLB palette tool
 // dropped them), so the trees can't wear an image texture the normal way.
 // Instead the painted canvases are sampled *triplanar* — by object-space
 // position, blended across the three axes by the surface normal — which
-// needs no UVs and keeps the paint glued to each tree. The snow patch is a
-// plane (planes have UVs), so it samples its canvas the normal way.
+// needs no UVs and keeps the paint glued to each tree.
 
 interface PaintedTextures {
-  readonly snowAlbedo: THREE.CanvasTexture;
-  readonly snowBump: THREE.CanvasTexture;
   readonly bark: THREE.CanvasTexture;
   readonly dapple: THREE.CanvasTexture;
   readonly grain: THREE.CanvasTexture;
@@ -462,63 +860,6 @@ function getPaintedTextures(): PaintedTextures {
   };
 
   const random = makeRandom(20260722);
-
-  // Painted snow: sunlit-snow base, soft value dapple, the palette's blue
-  // creeping into micro-hollows, and sparse near-sun-glow sparkle. All
-  // inside the two snow colors' family.
-  const snowAlbedo = makeTexture(
-    256,
-    (ctx) => {
-      ctx.fillStyle = "#f8f5ef";
-      ctx.fillRect(0, 0, 256, 256);
-      for (let i = 0; i < 70; i++) {
-        const x = random() * 256;
-        const y = random() * 256;
-        const r = 10 + random() * 20;
-        const squish = 0.45 + random() * 0.4;
-        ctx.fillStyle = random() < 0.5 ? "#ebe5da" : "#fffdf8";
-        ctx.globalAlpha = 0.5;
-        tiled(ctx, 256, x, y, (px, py) => blob(ctx, px, py, r, squish));
-      }
-      for (let i = 0; i < 40; i++) {
-        const x = random() * 256;
-        const y = random() * 256;
-        const r = 4 + random() * 8;
-        ctx.fillStyle = "#d3dff0";
-        ctx.globalAlpha = 0.42;
-        tiled(ctx, 256, x, y, (px, py) => blob(ctx, px, py, r, 0.55));
-      }
-      ctx.globalAlpha = 1;
-      for (let i = 0; i < 90; i++) {
-        const x = random() * 256;
-        const y = random() * 256;
-        ctx.fillStyle = random() < 0.6 ? "#ffffff" : "#fff4da";
-        ctx.fillRect(x, y, 1 + random(), 1 + random());
-      }
-    },
-    true,
-  );
-  // The bump is its own soft blob field — height data, not color.
-  const snowBump = makeTexture(
-    256,
-    (ctx) => {
-      ctx.fillStyle = "#808080";
-      ctx.fillRect(0, 0, 256, 256);
-      for (let i = 0; i < 70; i++) {
-        const x = random() * 256;
-        const y = random() * 256;
-        const r = 5 + random() * 14;
-        const v = random() < 0.5 ? 104 : 152;
-        ctx.fillStyle = `rgb(${v},${v},${v})`;
-        ctx.globalAlpha = 0.4;
-        tiled(ctx, 256, x, y, (px, py) =>
-          blob(ctx, px, py, r, 0.5 + random() * 0.3),
-        );
-      }
-      ctx.globalAlpha = 1;
-    },
-    false,
-  );
 
   // The triplanar canvases are value-MODULATION maps, painted around
   // neutral gray (128 ≈ ×1.0 in the shader) — strokes darker and lighter
@@ -596,11 +937,7 @@ function getPaintedTextures(): PaintedTextures {
     false,
   );
 
-  // The snow patch tiles ~3 units per repeat across the lane.
-  snowAlbedo.repeat.set(8, 4);
-  snowBump.repeat.set(8, 4);
-
-  paintedTextures = { snowAlbedo, snowBump, bark, dapple, grain };
+  paintedTextures = { bark, dapple, grain };
   return paintedTextures;
 }
 
@@ -608,7 +945,7 @@ function getPaintedTextures(): PaintedTextures {
 // are (repeats per unit), and how hard they press (0..1).
 const DETAIL_BY_MATERIAL: Record<
   string,
-  { map: keyof Omit<PaintedTextures, "snowAlbedo" | "snowBump">; scale: number; strength: number }
+  { map: keyof PaintedTextures; scale: number; strength: number }
 > = {
   White: { map: "bark", scale: 1.6, strength: 0.85 }, // birch trunk
   Black: { map: "bark", scale: 1.6, strength: 0.85 }, // birch trunk bands
