@@ -4679,6 +4679,47 @@ lobby→slope switch, and the overlay canvas is correctly created, positioned,
 splat frequency/opacity — is the director's pane call; the knobs are all named
 constants at the top of the spray/lens tuning blocks.
 
+## (slope-vis) 2026-07-23 — Director verdict on spray/splash: half-right — both need a follow-up
+
+Look-pass came back: **"the blue spray looks good in the sun, but hard to see
+in shadows; also still no screen splat."** One tuning miss and one shipped bug.
+Both diagnosed here; the build is deferred to a fresh session (this entry is the
+hand-off). Nothing changed in code yet.
+
+- **Spray invisible in shadow — a flat tint can't win both lightings.** By the
+  bible's own lighting construction, flat snow *in shadow* renders as
+  snow-shadow blue `#D3DFF0` — which is exactly the color the plume was set to
+  last chunk. So the same choice that made it read in the sun makes it vanish in
+  shadow (blue powder on blue snow). A single flat color is stuck *between* the
+  two snow values (`#D3DFF0` shadow, `#F8F5EF` sun) and loses against whichever
+  it matches. The fix has to give the plume an internal value break that reads
+  against *either* background — the plan:
+  - **Per-grain two-tone** (front-runner): mix bright sunlit-white `#F8F5EF` and
+    cool shadow-blue `#D3DFF0` grains in the same plume, so it always contains
+    both values and stands out on sun *and* shadow. Needs a per-particle color
+    attribute (the material's `color` is one uniform today) or a second point
+    system — both palette-legal, no new hues, no bible change. Or,
+  - **Lighting-aware tint** (heavier): sample the shadow map / sun visibility in
+    the particle shader and tint per grain — more correct, more code; probably
+    overkill vs. the two-tone.
+- **The lens splash renders nothing — a canvas-gradient transform bug.** Root
+  cause found (not a tuning problem): in `updateLensSplash`'s draw loop the
+  radial gradient is created in absolute coords, `createRadialGradient(s.x, s.y,
+  …)`, but the fill runs under `ctx.translate(s.x, s.y); ctx.scale(1, 1.25)`.
+  Canvas gradients are transformed by the CTM at *paint* time, so the gradient
+  center lands at ~device `(2·s.x, 2.25·s.y)` while the arc is drawn at `(s.x,
+  s.y)` — the arc only ever samples the gradient's far transparent tail, so
+  every splat fills with `rgba(tint, 0)` and is invisible. **Fix:** build the
+  gradient in the same local space the arc is drawn in — center it at `(0,0)`
+  *inside* the `save()/translate` block (`createRadialGradient(0,0,0, 0,0,
+  s.r)`). Emission/lifetime/positioning logic all look correct; it's purely the
+  paint. (This shipped unverified because the Browser pane pauses the render
+  loop when hidden — see the prior entry; a composited frame would have caught
+  it. Worth a real look-pass on the next one.)
+
+`npm run check` still passes; no code changed this session. Both fixes are
+small and localized to `skiScene.ts`; see the updated IDEAS follow-ups.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

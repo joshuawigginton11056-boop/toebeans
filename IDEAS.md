@@ -154,19 +154,29 @@ this is the trick-landing flourish riding on top of it.)
 The ski-trail spray + screen flurries landed and merged. Open threads on
 them, all `skiScene.ts`:
 
-- ~~**Powder density look-pass.**~~ **DONE 2026-07-23** (see ROADMAP: "Spray
-  reads in the sun + a lens splash"). Director callout "hard to see, especially
-  in the sun" cashed this in: plume cooled to snow-shadow blue for a value break
-  against sunlit white, plus denser (`SPRAY_PEAK_ALPHA` 0.52, `SPRAY_BASE_RATE`
-  2200, pool 4000). Count + alpha only — size still untouched (the "white orbs"
-  ceiling). Whether it now matches the near-opaque reference walls is the
-  director's pane call; the knobs are named constants if he wants more.
-- **Lens splash — LANDED 2026-07-23** (same ROADMAP entry). A 2D overlay canvas:
-  snow splats on the "lens" while carving at speed, dripping/melting/fading.
-  Open follow-ups if the director wants them: tie a heavier one-shot splat to
-  the **landing "poof"** below (share the impulse hook); and the splat tint
-  (`LENS_TINT`) / frequency (`LENS_SPLAT_RATE`, `LENS_PEAK_ALPHA`) are all his
-  pane call.
+- **Spray must read in BOTH sun and shadow — OPEN (director verdict 2026-07-23:
+  "good in the sun, hard to see in shadows").** The cool snow-shadow-blue tint
+  (`SPRAY_COLOR` = `#D3DFF0`) fixed the sun but broke the shadow case: shadowed
+  snow renders as *that exact blue* by the bible's lighting construction, so the
+  plume vanishes on it. A flat color is stuck between the two snow values and
+  loses against whichever it matches. **Plan (front-runner): per-grain two-tone
+  — mix bright `#F8F5EF` and cool `#D3DFF0` grains** so the plume always carries
+  both values and stands out on either background. Needs a per-particle color
+  attribute (the material's `color` is one uniform now) or a second point
+  cloud; both palette-legal, no bible change. Heavier alternative: lighting-
+  aware per-grain tint (sample the shadow map in the particle shader). Density
+  (`SPRAY_PEAK_ALPHA` 0.52, `SPRAY_BASE_RATE` 2200, pool 4000) is fine — this is
+  a *contrast* problem, not a density one. See ROADMAP 2026-07-23 verdict entry.
+- **Lens splash renders nothing — BUG, fix identified (director 2026-07-23:
+  "still no screen splat").** Not tuning — a canvas-gradient transform bug in
+  `updateLensSplash`: the radial gradient is built at absolute `(s.x, s.y)` but
+  filled under `translate(s.x,s.y)+scale(1,1.25)`, so the gradient is offset off
+  the arc and every splat fills fully transparent. **Fix: create the gradient at
+  `(0,0)` inside the `save()/translate` block** (`createRadialGradient(0,0,0,
+  0,0, s.r)`). Everything else (emission, lifetime, placement, visibility-
+  mirroring) is correct. After it's visible, then tune tint (`LENS_TINT`) /
+  frequency (`LENS_SPLAT_RATE`, `LENS_PEAK_ALPHA`) and consider tying a heavier
+  one-shot splat to the **landing "poof"** below (share the impulse hook).
 - **Landing "poof" puff.** A one-shot outward burst of the same powder on
   touchdown from a jump (and on the trick-landing slide). The emitter's already
   there; it needs an impulse hook off the airborne→grounded transition (the
