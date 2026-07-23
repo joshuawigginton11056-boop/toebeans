@@ -117,6 +117,10 @@ interact with your space for more XP → repeat.
   isometric/axonometric side-scroller with a three-quarter front
   perspective — you clearly see what's ahead, and (multiplayer phase only)
   behind you, the friend you just passed getting crushed by a snowball.
+  *(As of the slope-mech camera rounds in ROADMAP, that three-quarter
+  front is the fixed **base** framing of a player-controlled orbit: scroll/
+  pinch freely zooms the distance, and mouse look — Pointer Lock — or a
+  touch drag swings the view around, including uphill behind you.)*
 - **Detail touches — skiing:** skis carve marks into the snow; a visible
   snow trail changes with speed.
 - **Detail touches — environments:** colors run warm or dark depending on

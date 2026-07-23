@@ -39,7 +39,10 @@ same spot and run. Controls:
   launch) and, held again mid-air, spins the body for 180s and 360s; land
   backwards and you're riding switch, not crashing. Landings take a
   short beat before you can jump again. **Shift** boosts, and
-  commits harder into turns. Falling into a chasm costs one of the cat's
+  commits harder into turns. **Scroll (or pinch)** zooms the camera in and
+out through a wide range at a fixed three-quarter angle; **click the
+slope** to grab the mouse and look around freely (the cursor hides; Esc
+lets go), or **drag** to peek on a touchscreen. Falling into a chasm costs one of the cat's
   9 lives and sends you back to the last checkpoint (ice-blue stripe);
   lose all 9 and the run is forfeited. The nine cat faces in the top-left
   are the lives — each fades as it's spent — and the chips along the
