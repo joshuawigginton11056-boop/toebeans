@@ -3329,6 +3329,174 @@ on-screen before/after behind it.
 the unblocked Art Style Bible rewrite (shape-language + asset-sourcing)
 and the approved painted-detail rollout across the 24 slope models;
 snow-cap check on the trees rides with that look-reconciliation pass.
+## (slope-mech) 2026-07-23 — M2: turning round 8 — the landing grip window + the air 180/360
+
+Landings slide now, and the air trick exists. Director's picks from the
+round-8 sketch: **option 1 (the landing grip window)** for the slippage,
+and for the 180 — held A/D air steering **stays** as fine re-aim under the
+discrete trick, the spin side follows the **last steered direction**, a
+second double-tap **stacks to a 360**, and a grounded double-tap stays
+deliberately nothing.
+
+- **The grip window** (`shared/src/skiing.ts`): `flightHeading`'s grounded
+  meaning is promoted to "the direction the run is actually traveling" —
+  it eases onto the ski axis at a new `GRIP_RATE` (3.5 rad/s) instead of
+  snapping. The rate is chosen *above* the fastest possible steer (boosted
+  turn = 2.52 rad/s), so ordinary grounded carving can never fall behind
+  the skis: rounds 5–7 physics are bit-for-bit unchanged outside a
+  landing (measured, below). A landing is where a real angle gap exists —
+  touch down with the skis turned off the flight line and you keep
+  sliding the way you were flying while the skis bite in; a bigger angle
+  slides longer for free (rate-based, no timer). Stance changes (the
+  backstop flip, speed easing through zero) snap instead of easing — the
+  travel direction of ~zero speed is meaningless, and easing across the
+  half-turn jump would swing the slide through angles nobody traveled.
+- **The slip bleeds.** The round-6 skid scrub's misalignment is now the
+  *worse* of two angles: skis off the fall line (rounds 6–7, unchanged)
+  and skis off the travel direction (new — skis sideways to your motion
+  plow). So a hard diagonal landing slides *and* sheds speed, which is
+  what makes the grip read as the skis biting in rather than ice.
+- **The air 180/360**: `SkiInput` gains a one-frame `flip: -1 | 0 | 1`.
+  The *client* (`main.ts`) owns the gesture — two Space presses within
+  250ms, both airborne (grounded presses reset the pair; auto-repeat
+  ignored, so holding a charge can't drumroll), spin side from the last
+  steer key pressed, default right. The sim just adds π to the airborne
+  heading: stacking works because mid-air heading accumulates whole
+  spins, and the existing landing collapse + stance rule do the rest — a
+  single 180 lands riding switch at full speed (the compound the
+  directives asked for), a stacked 360 lands clean and fast. **This
+  answers the parked 360 question with control design** — big jumps are
+  now purely an airtime question, not a trick-enabler one.
+- One new hint chip (`hud.ts`, shared territory): `Space ×2 · air 180`.
+  The 360 stack is left for players to discover.
+- **No SAVE_VERSION bump** (no state-shape change — `flip` is input, not
+  state) and **zero renderer changes**: the rig's existing heading easing
+  rolls the 180 as a visible spin (the sign picks the direction), and
+  skis-pointing-one-way-while-sliding-another falls out of the pose
+  wiring for free. A restore mid-slip grips instantly (save.ts comment
+  updated) — same transient-state spirit as losing a mid-air spin.
+- Tests 85 → 90: the director's exact repro pinned (tap-jump holding
+  right lands ~1.48 rad off the flight line; first grounded frame's
+  lateral velocity < 2, vs the 7.96 the hard lock measured), a
+  hand-built hard landing (rate-limited redirect with max one-frame
+  lateral change < 1, never-uphill through the whole slide, speed bled
+  below 3, grip completing), the flip (±π toward its sign, airborne
+  only, grounded reserved as nothing), the 360 stack (accumulates to 2π,
+  lands clean at full speed), and the 180-lands-switch compound. Two
+  hand-built fixtures gained a matching `flightHeading` (it has grounded
+  meaning now; the takeoff-freeze and sideways-descent tests assumed the
+  old snap).
+- `npm run check` (90 tests) and `npm run build` pass. Verified against
+  the real served modules on this session's own dev server (5302;
+  screenshots still time out — seventeenth session running): the repro
+  lands at 1.476 off flight 0.036 and the first grounded frame's lateral
+  velocity is **0.752 u/s (was 7.96)**, max one-frame change 0.752, the
+  slide lasts 0.42s with **zero uphill frames**, speed bleeding to 0.76;
+  flip → π exactly, stacked → 2π, landing clean at speed 8; a single
+  flip lands at −8 riding switch and descends; grounded flip does
+  nothing; and the regression set is *identical to round 7's live
+  measurements* — aligned coast exactly 14.00, boosted pivot crossing
+  3.742 → −0.620 with max lateral jump 4.361 ending −15.3. Zero console
+  errors; the `Space ×2` chip is in the DOM. **The one piece live
+  verification couldn't reach:** the double-tap *timing* detection runs
+  off real keydown events + the rAF loop, and the preview pane suspends
+  rAF — the handler dispatches without throwing, but whether 250ms feels
+  right is a hands-on item below.
+
+**What to playtest:** `npm run dev`, Enter to ski. First the director's
+own repro: jump and hold A or D — you should now slide along your flight
+line for a beat while the skis bite onto the diagonal, shedding some
+speed as they do, instead of snapping. Then the trick: double-tap Space
+mid-air for a 180 (it spins toward the side you last steered), land
+switch, keep riding; double-tap twice in one big jump for a 360. The
+feel questions: is 0.4s of slide on a hard landing the right "bit" (one
+number — GRIP_RATE — dials it); does bleeding speed during the slide
+read as skis biting or as punishment; do 180s come out when you want
+them and never by accident (the 250ms window is the knob); and does
+spin-toward-last-steer match your instinct? Round 7's questions went
+unremarked last playtest and stay open: switch as a stance, W-as-faster
+backwards, and the boosted-crossing bite (unchanged this round).
+
+**Playtest verdict (director, 2026-07-23): the double-tap 180 is
+rejected** — "no I hate it. How about instead we just hold Space in air
+to spin (faster spin than on ground turn)." The discrete trick input
+goes; air rotation becomes a held control at a trick rate. The landing
+grip window went unremarked and stands. Built the same day as turning
+round 9, below.
+
+## (slope-mech) 2026-07-23 — M2: turning round 9 — held-Space air spin replaces the double-tap
+
+Round 8's double-tap 180 lasted one playtest. The director's redirect,
+verbatim: "hold Space in air to spin (faster spin than on ground turn)"
+— so the trick is now a *held* control, not a gesture: press and hold
+Space mid-air and the body whips around; let go to stop; land at
+whatever angle you've got (the round-8 landing collapse, stance rule,
+and grip window — all unremarked and kept — sort out the touchdown).
+
+- `SkiInput.flip` became `spin: -1 | 0 | 1` — held, not one-frame. The
+  client's double-tap detection (the 250ms window, the airborne-press
+  pairing) is deleted; the client now just reports the spin side while
+  Space is held: the held steer key wins, else the last steered
+  direction (carrying over the round-8 director call), default right.
+- New `AIR_SPIN_RATE = 6.5` rad/s — ~2.6× the boosted carve (1.8
+  plain / 2.52 boosted), unmistakably a trick. Sized against real
+  airtime: a tap jump (~0.78s) fits a 180 with room to spare (~0.48s),
+  a full-charge jump (~1.22s) fits a 360 with margin for the re-press
+  (you release Space to launch, so spinning needs a fresh press).
+  Deliberate echo, worth remembering: turning round 3 *removed* a
+  9 rad/s air-trick rate in favor of one-rate-everywhere; the director
+  has now asked the fast air rate back, as Space's second meaning
+  instead of a hair-trigger on the steer keys. 6.5 is the knob.
+- While the spin is held it owns the rotation — held steer and the
+  mid-air W-seek wait their turn — one rotation channel at a time. No
+  authority scaling: a body spin isn't an edge carve. Flight stays
+  ballistic throughout; heading accumulates whole turns, so holding
+  longer than a 360 is a 540, and the landing collapse handles any of
+  it.
+- Grounded Space is untouched: hold-to-charge, and only that. One
+  known compound, deliberately kept: keep holding Space through a
+  spin's touchdown and the landing starts a jump charge (that's the
+  existing held-through-landing rule) — release then fires a jump.
+  Chainable tricks, or an accidental hop; playtest question below.
+- Hint chip: `Space ×2 · air 180` → `Space · hold in air to spin`.
+- **No SAVE_VERSION bump** (input change only) and **zero renderer
+  changes** — the rig's heading easing was already rolling the sim's
+  heading; a continuous spin is easier for it than round 8's π jump.
+- Tests hold at 90: the three flip tests became three spin tests (trick
+  rate beats the boosted carve and mirrors by side; a full-charge jump
+  fits a 360 with air to spare and lands clean-forward at full speed;
+  a released half spin lands riding switch and keeps descending). All
+  round-8 grip-window tests survive untouched.
+- `npm run check` (90 tests) and `npm run build` pass. Verified against
+  the real served module on this session's dev server (5302): spin
+  measures exactly 6.5 rad/s both sides (2.58× the boosted carve),
+  lateral stays 0 through a spin (ballistic), grounded Space charges
+  0.1s without turning a degree, the full-charge 360 completes in 0.98s
+  of spin with height to spare and lands at heading 0.087 forward at
+  speed 8, and the half spin lands at −8 riding switch with zero uphill
+  frames. The updated hint chip is in the DOM; zero console errors.
+  Same standing caveat: the pane suspends rAF, so what the spin *feels*
+  like under real keys is the playtest.
+
+**What to playtest:** `npm run dev`, Enter to ski. Jump, then hold
+Space in the air — you spin toward the side you last steered (hold A or
+D mid-air to pick). Let go to stop the spin; land whatever you've got —
+a half spin lands you riding switch, a full 360 (needs a charged jump)
+lands clean. The feel questions: is 6.5 rad/s the right trick speed —
+snappy enough to be fun, slow enough to stop where you meant (one
+number dials it)? Does hold-to-spin feel better than the double-tap
+did? Is spin-toward-last-steer still right, or does it ever surprise
+you? And the compound: if you're still holding Space when you land, the
+jump charge starts loading and release hops — chainable or annoying?
+The round-8 slippage questions stand too: is 0.4s of landing slide
+right, and does bleeding speed while sliding read as the skis biting?
+
+**Next:** the slope-mech queue — a finish line (prerequisite for XP,
+parked since 2026-07-20), tree limbs + the crouch control (the missing
+second hazard), or purpose-built big jumps (now purely an airtime/level-
+design question — spins are answered by controls; director call whether
+big jumps are still wanted). Music still deliberately last, then the
+end-of-M2 tuning pass.
 
 ## Milestones
 

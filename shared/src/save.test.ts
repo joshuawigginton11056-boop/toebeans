@@ -23,7 +23,8 @@ const idleSkiInput = {
   down: false,
   jump: false,
   boost: false,
-};
+  spin: 0,
+} as const;
 
 // A mid-game snapshot with real history: a ski run past the first
 // checkpoint with one life already lost.

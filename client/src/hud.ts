@@ -170,6 +170,8 @@ const SLOPE_HINTS: readonly Hint[] = [
   // Hold-to-charge: the hold is the half of the control a player can't
   // guess from "jump" alone.
   { key: "Space", label: "hold to jump" },
+  // The air trick (turning round 9) — Space's second meaning, mid-air.
+  { key: "Space", label: "hold in air to spin" },
   { key: "Shift", label: "boost" },
   { key: "M", label: "mute" },
   { key: "Enter", label: "lobby" },

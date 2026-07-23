@@ -222,10 +222,11 @@ export function restoreSave(save: SaveData): RestoredGame {
       // turns). No range clamp anymore — with the fall removed (turning
       // round 3), every angle in (-π, π] is a legal place to stand.
       heading,
-      // Not saved (transient air state): re-derive the travel direction the
-      // way the next grounded frame would. A save taken mid-air loses the
-      // spin offset and resumes flying the way it faces — an acceptable
-      // heal, same spirit as clamping a stale position.
+      // Not saved (transient state): re-derive the travel direction as if
+      // gripped. A save taken mid-air loses the spin offset and resumes
+      // flying the way it faces; one taken mid-landing-slip (turning round
+      // 8) resumes already gripped — acceptable heals, same spirit as
+      // clamping a stale position.
       flightHeading: downhillHeading(heading + (speed < 0 ? Math.PI : 0)),
       height: Math.max(0, save.ski.height),
       verticalVelocity: save.ski.verticalVelocity,

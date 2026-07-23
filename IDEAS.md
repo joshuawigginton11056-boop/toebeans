@@ -3,140 +3,15 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (slope-mech) Turning round 8: landing slippage + the air 180 (playtest, 2026-07-23)
+## (slope-vis) Ski-trick flourishes for the air spin (from turning rounds 8–9, 2026-07-23)
 
-Two directives from the same playtest — they compound (double-Space →
-180 → land switch → slide through the grip), so they're one session.
-
-**Directive 1 (slippage):** "I feel like there's not enough slippage
-when I land. I jump and hold A (to go left) or D (to go right), and the
-skis go perfectly in that direction. I feel like I should slide forward
-a bit before going perfectly diagonal."
-
-**Directive 2 (the air 180):** "I want to stop holding A and D to turn
-[in the air] — instead I want to double-Space while in air to do a full
-180."
-
-**The new bar:** touch down and keep sliding along the direction you
-were flying for a beat, the skis gripping *into* the new line rather
-than teleporting the momentum onto it — and mid-air rotation becomes a
-discrete trick input (double-tap Space → a clean 180), not a held
-steer.
-
-**Diagnosis** (`shared/src/skiing.ts`, measured on the live build):
-grounded travel is hard-locked to the ski axis — `travelHeading =
-heading`, every frame, no exceptions — so the model has no concept of
-velocity direction separate from ski direction on the snow. The landing
-frame therefore redirects 100% of the run's momentum onto wherever the
-skis point, in one frame: the director's exact repro (cruise at 8,
-tap-jump, hold D through the flight) lands at heading 1.48 rad off a
-0.04 flight direction, and the lateral velocity jumps **0.29 → 7.96 u/s
-in a single frame**. A full-charge version lands past sideways and
-instantly redirects −6.1 u/s the *other* way. There is no slip phase
-anywhere in the model — sharp grounded steers have the same instant
-grip (round 7's boosted-crossing "bite" is this same hard lock showing
-through the backstop dump) — but landing is where the angle gap is
-biggest, so it's where the missing slip is felt.
-
-**Fix options for the build session (director picks):**
-
-1. **Landing grip window** *(probably recommended — smallest change
-   that hits the bar)*: on touchdown, travel continues along the flight
-   direction and *eases* onto the ski axis at a `GRIP_RATE` (rad/s).
-   Rate-based easing gets angle-scaling for free — a big-angle landing
-   slides visibly longer than a small correction, with no timer. While
-   the slip lasts, key the round-6 skid scrub off the **slip angle**
-   (skis vs. travel) instead of heading-off-fall-line — "skis sideways
-   to your motion sheds speed" is literally round 6's model, so a hard
-   diagonal landing both slides *and* bleeds, which should read as the
-   skis biting in. Grounded-only play never enters the window, so
-   rounds 5–7 physics and tests stay untouched; the never-uphill
-   guarantee holds because both ends of the ease (flight direction,
-   grounded travel direction) are downhill-facing by construction —
-   assert it anyway. State cost: one transient field (or promote
-   `flightHeading`'s grounded meaning, which its comment already claims
-   is "the current travel direction"); not saved, no SAVE_VERSION bump,
-   same spirit as `jumpCharge`.
-2. **Velocity direction as first-class state — the full drift model:**
-   grounded travel *always* follows its own eased direction, gripping
-   toward the ski axis at a rate high enough that ordinary carving
-   feels unchanged. Landing slip falls out as a special case of the
-   general rule; sharp steers get a whiff of drift; and round 7's
-   boosted-crossing bite likely dissolves into a fast slip instead of a
-   one-frame dump (a real point in its favor). Cost: it rewrites the
-   ground the stance flip (round 5) and the skid scrub (round 6) were
-   built on — both assume travel locked to the axis — so it's a bigger
-   session with real retune risk across the whole turning saga.
-3. **Fixed slide timer:** for `SLIP_TIME` (~0.3s) after touchdown,
-   blend travel linearly from flight direction to ski axis. Two
-   constants, trivially predictable — but angle-independent (a 10°
-   correction slides as long as a 130° whip), which is exactly the
-   un-physical flavor the rate-based option 1 avoids for the same
-   implementation size. Probably only worth it if option 1's tuning
-   fights back.
-
-**The air 180 — sketch and open questions (directive 2):**
-
-- **Input plumbing:** Space is already the jump key, but a press while
-  airborne currently does nothing (charge is grounded-only), so the
-  gesture is free — the *client* detects two Space presses within a
-  window (~250ms) while airborne and passes a one-frame `flip` flag in
-  `SkiInput`; the sim stays pure (no timers-across-frames hidden in
-  state for input detection). A Space press still held through the
-  landing starts a jump load exactly as today.
-- **Sim effect:** flight stays ballistic (the 180 turns the body, not
-  the path — the existing `flightHeading` model handles this already);
-  the heading gains π. Either instantly (the rig's existing easing
-  rolls the body through, same trick that made round 5's snap-targets
-  read smoothly) or via a short sim-side spin (~0.25s). Instant-in-sim
-  is the smaller build; call it at the session.
-- **Landing math already works:** a 180 from forward flight lands
-  tips-against-travel → switch stance, which is round 3's landing rule
-  untouched — and with directive 1 in, it lands *sliding*, which is
-  the compound feel the director is asking for.
-- **Open director calls for the build session:**
-  1. Does held A/D *air* steering go away entirely (180s are the only
-     air rotation — cleanest read of "stop holding A and D to turn"),
-     or stay as fine re-aim under the discrete 180? Removing it also
-     removes round 7's mid-air W-seek half, and retires the
-     "jumping while steering lands a modest line adjustment" behavior.
-     Grounded A/D steering is untouched either way.
-  2. Spin *visual* direction (the end heading is the same either way):
-     fixed side, or toward the last steer input?
-  3. Does a second double-tap in the same jump stack to a 360? (This
-     would answer the parked 360 question with control design instead
-     of moon-jump airtime — a full charge's 1.24s is plenty for two
-     discrete 180s.)
-  4. Grounded double-tap: reserved as nothing (recommended — keep the
-     charge system's meaning clean)?
-
-**Renderer note:** zero `skiRender.ts` changes required for the slip
-path itself (positions come from the sim), and skis-pointing-one-way-
-while-sliding-another falls out of the existing pose wiring for free —
-the drift should *read* immediately. The 180 likewise rides the rig's
-existing heading easing; a dedicated spin flourish (tuck, cat-hold-on
-pose) is slope-vis territory. Carve-spray / slip audio flourishes are
-slope-vis territory too; park separately if wanted.
-
-**Tests that must change:** the two landing-stance tests gain slip
-assertions (lateral velocity ramps over the grip window — pin the
-0.29 → 7.96 one-frame jump as the anti-goal); new tests for slide
-scaling with landing angle, slip decaying to locked travel, and
-never-uphill through the slip. The round-5/6/7 pivot-and-crossing
-tests survive untouched under option 1; under option 2 most of them
-need re-deriving. For the 180: new tests for flip-only-while-airborne,
-the π heading change, ballistic path unchanged through the flip, and
-landing switch off a flipped jump; if air A/D goes away, the air-turn
-tests ("turns at the same rate in the air", "re-aims mid-air from a
-standstill hop", "jumping while steering lands a modest line
-adjustment", the mid-air W-seek test) get retired or re-derived, and
-the hint bar needs a chip for the double-tap (shared-territory edit,
-`hud.ts`).
-
-**Round-7 questions still open (unremarked this playtest, re-ask with
-round 8's):** does switch feel like a real stance; W-as-faster vs
-W-as-flip instinct; 45° carve flow under sin⁴; and the boosted-crossing
-bite (edge-work or snap?) — note option 2 above may moot that last one.
+The slope has an air trick now: hold Space mid-air and the body spins at
+a trick rate (180s, 360s, more if you hold it), landing switch or clean.
+The sim and the rig's default heading easing carry it, but it's begging
+for presentation: a dedicated spin pose (tuck the body, cat visibly
+holding on), carve-spray when a landing slides through the round-8 grip
+window, and spin/slip/landing audio flourishes to match. All
+`skierModel.ts` / `skiScene.ts` / `audio.ts` territory.
 
 ## (slope-vis) Realistic snow — the follow-up test (director verdict, 2026-07-22)
 

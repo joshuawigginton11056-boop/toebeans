@@ -24,6 +24,7 @@ const noInput: SkiInput = {
   down: false,
   jump: false,
   boost: false,
+  spin: 0,
 };
 
 // Positioned just short of a chasm so crash tests need only a couple dozen
@@ -347,7 +348,9 @@ describe("stepSkiing", () => {
   });
 
   it("freezes the travel direction on the takeoff frame", () => {
-    let state: SkiState = { ...cruising, heading: 0.5 };
+    // flightHeading matches the heading: a gripped grounded state (round 8
+    // gave flightHeading a grounded meaning — hand-built fixtures set it).
+    let state: SkiState = { ...cruising, heading: 0.5, flightHeading: 0.5 };
     state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
     state = stepSkiing(state, noInput, 0.02); // release launches
     expect(state.height).toBeGreaterThan(0);
@@ -400,6 +403,134 @@ describe("stepSkiing", () => {
 
     // …and the next grounded frame keeps descending the hill.
     const next = stepSkiing(state, noInput, 0.05);
+    expect(next.distance).toBeGreaterThan(state.distance);
+  });
+
+  it("slides through a diagonal landing instead of snapping onto the skis", () => {
+    // The round-8 bar (director, 2026-07-23): "I jump and hold A or D, and
+    // the skis go perfectly in that direction. I should slide forward a
+    // bit before going perfectly diagonal." The exact repro: cruise, tap
+    // jump, hold right through the flight (~1.4 rad of re-aim), touch
+    // down — round 7's hard lock redirected the momentum in one frame
+    // (lateral velocity 0.29 → 7.96 measured); the grip window keeps the
+    // first grounded frames traveling the way you were flying.
+    let state = cruising;
+    state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    state = stepSkiing(state, { ...noInput, right: true }, 0.02); // launch
+    expect(state.height).toBeGreaterThan(0);
+    while (state.height > 0) {
+      state = stepSkiing(state, { ...noInput, right: true }, 0.02);
+    }
+    expect(state.heading).toBeGreaterThan(1); // landed well off the flight line
+
+    const prev = state;
+    state = stepSkiing(state, noInput, 0.02);
+    const firstLateralVelocity = (state.lateral - prev.lateral) / 0.02;
+    expect(Math.abs(firstLateralVelocity)).toBeLessThan(2);
+  });
+
+  it("grips a landing on at a rate — bleeding as the skis bite, never uphill", () => {
+    // A hand-built hard landing: skis 1.3 rad off the flight direction.
+    const landing: SkiState = {
+      ...cruising,
+      heading: 1.3,
+      flightHeading: 0,
+      height: 0.05,
+      verticalVelocity: -5,
+    };
+    let state = stepSkiing(landing, noInput, 0.05); // touches down forward
+    expect(state.speed).toBe(BASE_SPEED);
+
+    let prevLateralVelocity = 0; // touched down traveling the fall line
+    let maxJump = 0;
+    let minDistanceStep = Infinity;
+    for (let i = 0; i < 50; i++) {
+      const next = stepSkiing(state, noInput, 0.02);
+      const lateralVelocity = (next.lateral - state.lateral) / 0.02;
+      maxJump = Math.max(maxJump, Math.abs(lateralVelocity - prevLateralVelocity));
+      minDistanceStep = Math.min(minDistanceStep, next.distance - state.distance);
+      prevLateralVelocity = lateralVelocity;
+      state = next;
+    }
+
+    // Rate-limited redirect: no single frame teleports the momentum (the
+    // hard lock measured ~7.7 u/s in one frame on this angle).
+    expect(maxJump).toBeLessThan(1);
+    // Both ends of the ease face downhill — the slide never climbs.
+    expect(minDistanceStep).toBeGreaterThanOrEqual(0);
+    // The skis biting in sheds speed: a hard diagonal landing slides AND
+    // bleeds — it doesn't carry cruise speed onto the new line.
+    expect(Math.abs(state.speed)).toBeLessThan(3);
+    // And the grip completes: travel is back under the skis.
+    expect(Math.abs(downhillHeading(state.heading - state.flightHeading))).toBeLessThan(1e-9);
+  });
+
+  it("spins on the held jump key in the air — faster than any ground turn", () => {
+    // Turning round 9 (director redirect, 2026-07-23): hold Space airborne
+    // to spin, at a trick rate well past what the skis can carve.
+    const airborne: SkiState = { ...cruising, height: 1, verticalVelocity: 2 };
+
+    const right = stepSkiing(airborne, { ...noInput, jump: true, spin: 1 }, 0.1);
+    const left = stepSkiing(airborne, { ...noInput, jump: true, spin: -1 }, 0.1);
+    expect(right.heading).toBeGreaterThan(0.4);
+    expect(left.heading).toBeCloseTo(-right.heading, 10);
+    // Unmistakably a trick: at least twice the fastest (boosted) carve.
+    const carved = stepSkiing(
+      cruising,
+      { ...noInput, right: true, boost: true },
+      0.1,
+    );
+    expect(right.heading).toBeGreaterThan(2 * carved.heading);
+    // The flight path doesn't bend — the spin turns the body, not the travel.
+    expect(right.lateral).toBeCloseTo(0, 10);
+
+    // Grounded, a held Space is the jump charge and only that — no spin.
+    const grounded = stepSkiing(cruising, { ...noInput, jump: true, spin: 1 }, 0.1);
+    expect(grounded.heading).toBe(0);
+    expect(grounded.jumpCharge).toBeCloseTo(0.1, 5);
+  });
+
+  it("fits a full 360 inside a full-charge jump, with air to spare", () => {
+    // Charge fully, launch, re-press and hold the spin: the whole turn
+    // accumulates before touchdown (the rate is sized for exactly this),
+    // and releasing near clean lands forward at full speed.
+    let state = cruising;
+    for (let i = 0; i < 50; i++) {
+      state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    }
+    state = stepSkiing(state, noInput, 0.02); // release launches
+    expect(state.height).toBeGreaterThan(0);
+
+    let frames = 0;
+    while (state.heading < 2 * Math.PI && state.height > 0 && frames++ < 200) {
+      state = stepSkiing(state, { ...noInput, jump: true, spin: 1 }, 0.02);
+    }
+    expect(state.heading).toBeGreaterThanOrEqual(2 * Math.PI); // the 360 fits…
+    expect(state.height).toBeGreaterThan(0); // …before the snow arrives
+
+    while (state.height > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    // The full turn collapses away — landed near clean, forward, full speed.
+    expect(Math.abs(state.heading)).toBeLessThan(0.5);
+    expect(state.speed).toBe(BASE_SPEED);
+  });
+
+  it("lands a half spin riding switch, still sliding downhill", () => {
+    // Spin to backwards, let go, touch down: tips against the travel is
+    // round 3's stance rule, and the trick itself costs no speed.
+    let state: SkiState = { ...cruising, height: 1.2, verticalVelocity: 3 };
+    while (state.heading < Math.PI && state.height > 0) {
+      state = stepSkiing(state, { ...noInput, jump: true, spin: 1 }, 0.02);
+    }
+    expect(state.heading).toBeGreaterThanOrEqual(Math.PI);
+
+    while (state.height > 0) {
+      state = stepSkiing(state, noInput, 0.02);
+    }
+    expect(state.speed).toBe(-BASE_SPEED); // tails-first, nothing lost
+
+    const next = stepSkiing(state, noInput, 0.1);
     expect(next.distance).toBeGreaterThan(state.distance);
   });
 
@@ -751,8 +882,11 @@ describe("stepSkiing", () => {
 
   it("slows the descent as the skis point across the hill", () => {
     const straight = stepSkiing(cruising, noInput, 0.1);
+    // Gripped sideways stand: travel already on the ski axis (a landing
+    // that PUT you sideways would still be sliding — that's the round-8
+    // slip tests below).
     const sideways = stepSkiing(
-      { ...cruising, heading: Math.PI / 2 },
+      { ...cruising, heading: Math.PI / 2, flightHeading: Math.PI / 2 },
       noInput,
       0.1,
     );

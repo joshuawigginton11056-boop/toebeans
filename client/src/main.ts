@@ -129,6 +129,12 @@ let autosaveTimer = 0;
 
 const heldKeys = new Set<string>();
 
+// The air spin's side (turning round 9): holding Space airborne spins the
+// body — toward the steer key held right now, else the last steered
+// direction (director call, 2026-07-23), defaulting right before any
+// steer. The sim takes the side as an input and owns everything else.
+let lastSteerSide: -1 | 1 = 1;
+
 window.addEventListener("keydown", (event) => {
   if (event.code === "KeyM") {
     muted = audio.toggleMuted();
@@ -149,18 +155,28 @@ window.addEventListener("keydown", (event) => {
     else backToLobby();
     return;
   }
+  if (event.code === "ArrowLeft" || event.code === "KeyA") lastSteerSide = -1;
+  if (event.code === "ArrowRight" || event.code === "KeyD") lastSteerSide = 1;
   heldKeys.add(event.code);
 });
 window.addEventListener("keyup", (event) => heldKeys.delete(event.code));
 
 function readSkiInput(): SkiInput {
+  const left = heldKeys.has("ArrowLeft") || heldKeys.has("KeyA");
+  const right = heldKeys.has("ArrowRight") || heldKeys.has("KeyD");
+  const jump = heldKeys.has("Space");
+  // The spin side: a held steer key wins (both held = the last pressed),
+  // else the last steered direction. The sim only spins airborne — on the
+  // snow a held Space stays the jump charge.
+  const spin = jump ? (left && !right ? -1 : right && !left ? 1 : lastSteerSide) : 0;
   return {
-    left: heldKeys.has("ArrowLeft") || heldKeys.has("KeyA"),
-    right: heldKeys.has("ArrowRight") || heldKeys.has("KeyD"),
+    left,
+    right,
     up: heldKeys.has("ArrowUp") || heldKeys.has("KeyW"),
     down: heldKeys.has("ArrowDown") || heldKeys.has("KeyS"),
-    jump: heldKeys.has("Space"),
+    jump,
     boost: heldKeys.has("ShiftLeft") || heldKeys.has("ShiftRight"),
+    spin,
   };
 }
 
