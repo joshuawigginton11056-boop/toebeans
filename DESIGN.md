@@ -155,6 +155,14 @@ interact with your space for more XP → repeat.
 >   the same dawn lighting. What "realism" means in practice (photo-based
 >   CC0 textures vs. procedural sparkle/normal detail) is the next
 >   slope-visuals test; it has not been seen or approved yet.
+>   - **Round 1 (procedural bump + sparkle + canvas ski trails,
+>     2026-07-23): NOT approved** — "the snow is flat, the trails are
+>     too pixelated, there's no depth." (The ski trails themselves stay —
+>     they're the depth callout below — but need real carved depth, not
+>     painted lines.) Round 2 goes to displaced geometry (see ROADMAP
+>     2026-07-23 for the full diagnosis); the director's paid
+>     photo-texture pack is the comparison candidate if that still
+>     falls short. Realism snow remains unapproved.
 >
 > The *Omno* references stay the target for mood, lighting, haze, and
 > palette. Signal red stays reserved. The bible's shape-language and

@@ -5,6 +5,20 @@ land here instead of in code.
 
 ## (slope-vis) Realistic snow — the follow-up test (director verdict, 2026-07-22)
 
+> **Status 2026-07-23: route 2 (procedural) was built and failed the
+> director's eye** — "flat, pixelated trails, no depth" (full diagnosis
+> in ROADMAP 2026-07-23). Round 2 = *displaced geometry*: subdivided
+> snowfield, vertex-displaced dunes, hollows AO-tinted shadow blue, and
+> ski trails carved as real depressions in that heightfield (stamped via
+> GPU brushes into a render-target the vertex shader samples — also
+> kills round 1's 4 MB/frame canvas re-upload). Route 1 (photo textures)
+> is the fallback comparison; the director has a **paid** pack candidate
+> (ask for the link when needed) — the CC0 sources below get checked
+> first if it comes to buying vs. downloading. Round-1 tangents parked:
+> the glitter pass ignores cast shadows (a tree's shadow still twinkles
+> faintly); landing "poof" puffs and sideways carve-spray tied to carve
+> angle would sell the trails further once depth works.
+
 The texture test's split verdict: trees promoted, but **"I'm going for
 realism snow"** — the painted dapple patch is out. What the realism test
 needs to settle, sketched for the build session:

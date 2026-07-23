@@ -2875,6 +2875,70 @@ texture showcase vignette. Then the parked slope-vis list (gear style +
 longer skis, always-on feet, angulation round 3 + boot fix, hair-roots +
 cat-tail), music (still last), then the end-of-M2 tuning pass.
 
+## (slope-vis) 2026-07-23 — Realism snow round 1: procedural surface + carved ski trails — verdict: not there yet
+
+The realism-snow test the split verdict called for. Context from the
+director: they found a realistic snow **asset pack, but it's costly** —
+the directive was to try building the look for free first. This round is
+the fully-procedural candidate (all code-generated, zero image files,
+zero CREDITS rows), in `skiScene.ts`'s realism-snow section:
+
+- **Soft relief:** the snowfield plane keeps its flat sunlit-snow color
+  (the verdict rejected painted dapple for snow) but wears a procedural
+  multi-scale bump map — dunes at ~2–3 m, mid lumps, fine crust grain.
+- **Fine sparkle:** two layers — shiny micro-flecks in a roughness map,
+  plus a glitter shader pass (random ~3.5 cm snow cells each own a mirror
+  micro-facet; the ones aligned between sun and camera flash sun-glow
+  white, so the field twinkles in motion).
+- **Ski trails — the director's oldest callout** ("the snow had no depth —
+  no footprints, no ski trails"): a ring-buffer canvas overlay rides the
+  moving snowfield window; every grounded frame stamps two groove
+  segments at the rig's exact ski spacing (`SKI_STANCE`, now exported
+  from `skierModel.ts`) — carved-snow core, snow-shadow spill, sunlit lip
+  on the sun-facing edge. Airborne lifts the pen, so **jumps leave real
+  gaps in the trail**; trails persist ~220 units and survive respawns
+  (your pre-crash tracks are still there past the checkpoint).
+- The rejected painted snow patch and its canvases are **removed**; the
+  approved tree/rock triplanar test pairs stay (their rollout across all
+  24 models is still its own coming chunk).
+- **Seam addition** (per PARALLEL.md): `syncEnvironment` takes an optional
+  `{heading, grounded}` — one commented, additive call-site change in
+  `skiRender.ts` (slope-mechanics file). No new dependencies.
+- `npm run check` passes (82 tests). Live playtest ran in the director's
+  own Chrome (the in-app browser pane suspends the page when not
+  displayed — rAF never fires — so the director opened
+  `localhost:5303` themselves and pasted a screenshot).
+
+**Playtest verdict (director, 2026-07-23): "this is progress, but it's
+not realistic. the snow is flat, the trails are too pixelated. there's no
+depth."** Trails exist and track the skis correctly (visible in the
+screenshot: parallel grooves, curves, persistence) — but the look fails
+the realism bar. Honest diagnosis for round 2:
+
+1. **Snow reads flat because bump mapping can't carry this scene.** The
+   lighting rig deliberately pushes ambient close to sunlit white, so
+   normal perturbation shifts brightness only a few percent — no
+   silhouettes, no self-shadowing, no depth. Round 2 should displace
+   *real geometry*: a subdivided snowfield with vertex-displaced dunes,
+   computed normals, and shadow-blue AO tinting in the hollows.
+2. **Trails are pixelated because a 2D canvas at ~20 px/unit shows raw
+   texels at camera distance**, and the 1 px lip strokes read as white
+   pixel dust. Round 2: carve the trail as *actual depth* — stamp into a
+   height texture that the displaced snowfield samples, so grooves get
+   real shadowed walls — and stamp with soft GPU brushes into a
+   render-target (also kills the 4 MB/frame canvas re-upload).
+3. **Sparkle drew no complaint** — keep the glitter pass, retune after
+   displacement.
+
+If round 2's geometry approach still falls short of the director's eye,
+evaluate the paid pack properly (get the link from the director; image
+textures mean CREDITS rows per the bible's transition note).
+
+**Next:** *(slope-vis)* realism snow round 2 — displacement-based, per
+the diagnosis above. The bible's transition note records round 1's
+verdict; realism snow remains unapproved, so the no-other-snow-work rule
+still holds.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
