@@ -147,17 +147,23 @@ export interface SkiSceneHandle {
 const TIP_DURATION = 0.35;
 
 // The tired hop's shape (the sim's TIRED_HOP_DURATION clock drives it): a
-// jump press eaten by the landing lockout sinks the spent legs into a deep
-// labored crouch (TIRED_DIP, in tuck units — retuned 2026-07-23 from 0.35,
-// which read as a stutter; at cruise the baseline tuck is ~0.33, so this
-// bottoms out near a full crouch), holds the strain at the bottom, then a
-// feeble push extends the legs (TIRED_EXTEND) and lifts the whole rig a few
-// centimeters (TIRED_LIFT, world units — a real tap jump flies ~1.4, so the
-// hop reads as pathetic on purpose) before gravity wins and everything
-// settles. All knobs: deeper dip = wearier legs, more lift = more hop.
+// jump press eaten by the landing lockout gives a quick wind-up crouch on the
+// spent legs (TIRED_DIP, in tuck units — at cruise the baseline tuck is ~0.33,
+// so this bottoms out near a full crouch), then a feeble push that extends the
+// legs (TIRED_EXTEND) and actually pops the whole rig off the snow (TIRED_LIFT,
+// world units) before gravity wins and everything settles. Retuned round 2
+// (director verdict 2026-07-23: "by deep i meant an actual small hop"): the
+// old shape sank slow and *held* the strain at the bottom, reading as a
+// grounded buckle — that hold is gone, the wind-up is quick, and the lift is
+// the event. A real tap jump flies ~1.4, so TIRED_LIFT ~0.3 (a fifth of that)
+// still reads as a pathetic little hop that lands going nowhere. All knobs:
+// deeper dip = wearier legs, more lift = more hop, TIRED_DIP_FRACTION = how
+// much of the cue is the wind-up before the hop.
 const TIRED_DIP = 0.65;
 const TIRED_EXTEND = 0.2;
-const TIRED_LIFT = 0.07;
+const TIRED_LIFT = 0.3;
+// Fraction of the cue spent on the quick wind-up crouch; the rest is the hop.
+const TIRED_DIP_FRACTION = 0.3;
 
 export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   const scene = new THREE.Scene();
@@ -477,22 +483,20 @@ export function syncSkiSceneToState(
   let tiredLift = 0;
   if (state.tiredHop > 0) {
     const attempt = 1 - state.tiredHop / TIRED_HOP_DURATION;
-    if (attempt < 0.45) {
-      // The sink: knees give slowly under the press, easing to a stop at
-      // the bottom of the labored crouch (sin ends flat at π/2).
-      tiredTuck = TIRED_DIP * Math.sin((Math.PI / 2) * (attempt / 0.45));
-    } else if (attempt < 0.6) {
-      // The strain: held deep at the bottom — the legs trying and failing
-      // to find the push. The wobble layer keeps it alive.
-      tiredTuck = TIRED_DIP;
+    if (attempt < TIRED_DIP_FRACTION) {
+      // The quick wind-up: knees drop fast under the press, easing to a stop
+      // at the bottom of the crouch (sin ends flat at π/2). No hold at the
+      // bottom anymore — it flows straight into the hop.
+      tiredTuck = TIRED_DIP * Math.sin((Math.PI / 2) * (attempt / TIRED_DIP_FRACTION));
     } else {
-      // The feeble push and collapse: up out of the crouch, a weak leg
-      // extension under a few centimeters of lift, and gravity wins —
-      // everything settles back to exactly baseline. At boost speeds the
-      // baseline tuck is already near full and the sink clamps invisible,
-      // so this half — the lift arc and the extension dipping *below*
-      // baseline — is what carries the read there.
-      const p = (attempt - 0.6) / 0.4;
+      // The hop — the event: legs push up out of the crouch, the whole rig
+      // pops off the snow (a real little arc, cat and shadow riding it), a
+      // weak leg extension dips below baseline near the top, and gravity wins,
+      // settling everything back to exactly baseline. At boost speeds the
+      // baseline tuck is already near full and the wind-up clamps invisible,
+      // so the lift arc plus the extension below baseline is what carries the
+      // read there.
+      const p = (attempt - TIRED_DIP_FRACTION) / (1 - TIRED_DIP_FRACTION);
       tiredLift = TIRED_LIFT * Math.sin(Math.PI * p);
       tiredTuck =
         p < 0.5

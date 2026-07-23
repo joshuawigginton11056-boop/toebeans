@@ -4409,6 +4409,112 @@ drop-in and the finish arch — then the vista reveal and the signature
 crevasse art. All gated on the skeleton existing so pieces place against a
 real, finite track.
 
+## (slope-mech) 2026-07-23 — Tired-hop retune round 2 (faster, an actual small hop)
+
+Built the round-2 verdict on the failed-jump cue: *"it's not fast enough now.
+by deep i meant an actual small hop."* The previous version sank slow and
+**held** the strain at the bottom, reading as a grounded buckle; this makes it
+a quick spent-legs attempt that pops a real little hop and lands going nowhere.
+Went with approach (a) from the retune notes — presentation-only, no real sim
+hop — so every lockout guarantee still holds by construction (the sim's height
+never leaves the ground).
+
+- **Faster:** `TIRED_HOP_DURATION` (in `skiing.ts`) 0.8 → **0.5s**. Still ≥
+  `LANDING_RECOVERY` (0.3), so the one-attempt-per-lockout ordering test holds
+  untouched (it waits the clock out dynamically). No state-shape change, **no
+  SAVE_VERSION bump**.
+- **A real hop, not a buckle** (all in `skiRender.ts`): dropped the strain-hold
+  phase entirely; the wind-up crouch is now quick (new `TIRED_DIP_FRACTION`
+  0.3 — the first ~0.15s) and the **hop is the event** (the remaining ~0.35s).
+  Raised `TIRED_LIFT` 0.07 → **0.3** world units, so the whole rig genuinely
+  pops off the snow — a real tap jump flies ~1.4, so this is a fifth of that,
+  pathetic on purpose. The rig group lifts, so the cat rides it and the shadow
+  detaches (reads airborne). Kept `TIRED_DIP` 0.65 and `TIRED_EXTEND` 0.2.
+- **Verified the shaping math** (the change is a deterministic rig-local offset
+  shaped off the sim's `tiredHop` clock): quick wind-up to a full 0.65 crouch
+  by attempt 0.30, continuous into the hop at the phase boundary (tuck
+  0.65→0.65, lift 0→0), lift peaks at the full 0.30 mid-hop (attempt 0.65),
+  legs extend to −0.156 below baseline on the way down, and everything settles
+  to *exactly* 0 at the end. `npm run check` passes (101 tests). Live feel
+  under real keys is the playtest's call as always — this pane suspends
+  `requestAnimationFrame`, and port 5302 was held by another chat's server for
+  this same worktree.
+
+**What to playtest:** `npm run dev`, Enter to ski. Jump, land, and press jump
+again during the landing beat — the skier should now give a quick crouch and
+pop a small hop off the snow that goes nowhere, instead of the slow grounded
+buckle. Feel questions: is 0.5s the right speed (still too slow / now too
+snappy?), is the hop the right height (`TIRED_LIFT` 0.3 — more air or less?),
+and does dropping the strain hold read as "spent legs" or has it lost the
+weariness? All three are one-line tunes.
+
+**Playtest note (director, 2026-07-23):** found a bug in this same cue —
+holding the space bar to spin in the air and landing while *still holding*
+it plays the tired hop as if you're trying to jump, even though you never
+re-pressed. The trigger is level-triggered (`input.jump` held) rather than
+edge-triggered (a fresh press), so a key carried through the jump counts as
+a failed attempt on touchdown. Parked for its own session — full cause and
+fix routes in IDEAS.md (top entry).
+
+**Next:** *fix the held-jump tired-hop bug above* (its own session, director
+call). Then the round-10 queue — a finish line (prerequisite for XP, parked
+since 2026-07-20), tree limbs + the crouch control (the missing second
+hazard), or purpose-built big jumps. Recommend the finish line after the bug,
+since it unblocks the most downstream work (XP).
+
+## (slope-mech) 2026-07-23 — Fixed the held-jump tired-hop bug (rising edge)
+
+Fixed the bug the director found in the last entry: holding Space to spin in
+the air and touching down *still holding* played the tired hop, as if you'd
+tried and failed to jump — even though you never re-pressed. The trigger was
+level-triggered (fires on `input.jump` being down during the landing lockout),
+so a key carried through the jump counted as a fresh attempt the instant the
+lockout began. Went with route 1 from the IDEAS entry — a rising edge inside
+the sim — so the whole fix stays in owned territory (`skiing.ts` +
+`skiing.test.ts`), no shared `main.ts` edit.
+
+- **The edge** (`skiing.ts`): new transient `SkiState.prevJumpHeld` records
+  the previous frame's raw jump input, set to `input.jump` every frame. The
+  tired-hop trigger now requires `input.jump && !prevJumpHeld` — a genuine
+  up→down during the lockout — instead of just "key down". A key held through
+  from the air is no longer an edge, so it raises no cue; it waits out the
+  lockout and starts a fresh charge, exactly as the charge path already
+  promised. A real press *during* the lockout still fires. Reset to `false` in
+  both `createInitialSkiState` and the checkpoint respawn.
+- **No `SAVE_VERSION` bump.** `prevJumpHeld` is transient input bookkeeping and
+  joins `jumpCharge`/`landingRecovery`/`tiredHop`/`flightHeading` in *not*
+  being written to the save whitelist (`save.ts` snapshots an explicit field
+  list, and `restoreSave` rebuilds from `createInitialSkiState`, so the field
+  is present and starts `false` on every restore). Save shape unchanged.
+- **Test** (`skiing.test.ts`, now 102): a jump key held continuously from
+  mid-air through touchdown and several frames into the lockout starts no
+  `tiredHop`; then a fresh press (release one frame, press) *during that same
+  lockout* still fires it at full. Guards both halves — the fix sharpens the
+  trigger without killing the locked-out-attempt feedback. `npm run check`
+  passes (typecheck + 102 tests).
+
+Not live-verified under real keys: the bug needs a held key at the exact
+landing frame, timing this suspended-`requestAnimationFrame` pane can't drive,
+and port 5302 was held by another chat's server for this worktree. The
+deterministic test reproduces the exact held-through-landing sequence, so the
+logic is pinned; the *feel* of the real cue is unchanged (presentation math
+untouched) and stays the playtest's call.
+
+**Next:** the round-10 queue, director's recommended order — the **finish
+line** first (prerequisite for XP, parked since 2026-07-20; unblocks the most
+downstream M3 work), then tree limbs + the crouch control (the missing second
+hazard) or purpose-built big jumps. The `dt`-clamp fix (IDEAS, background tabs
+teleport the run) is a separate small shared-`main.ts` chunk worth taking
+soon.
+
+**Follow-up parked immediately after this fix (director, 2026-07-23):** the
+tired-hop *animation* should finish before the next jump is allowed — right
+now the 0.3s lockout ends ~0.2s before the 0.5s cue does, so a jump can fire
+(and cancel the bob) while it's still playing. Gate the jump on `tiredHop` too;
+full routes in IDEAS.md. Its own session.
+
+## Milestones
+
 Tracking toward the v1.0 web launch scope in
 [DESIGN.md](DESIGN.md#scope-v10--v1x--steam). Check items off as sessions
 land them; each session still gets its own dated log entry above.

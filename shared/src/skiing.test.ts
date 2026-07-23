@@ -42,6 +42,7 @@ const nearChasm: SkiState = {
   jumpCharge: 0,
   landingRecovery: 0,
   tiredHop: 0,
+  prevJumpHeld: false,
   status: "skiing",
   lives: STARTING_LIVES,
   respawnTimer: 0,
@@ -267,6 +268,44 @@ describe("stepSkiing", () => {
       expect(state.height).toBe(0);
       expect(state.jumpCharge).toBe(0);
     }
+  });
+
+  it("ignores a jump key held through the landing — no cue without a fresh press", () => {
+    // The air-spin hold (round 9): the player holds Space to spin, and can
+    // still be holding it on touchdown. That held key is a leftover from the
+    // jump they already took, not a fresh attempt, so it must NOT fire the
+    // tired hop (bug, 2026-07-23 — the trigger used to be level-, not
+    // edge-triggered).
+
+    // Charge a frame and release to launch.
+    let state = stepSkiing(cruising, { ...noInput, jump: true }, 0.02);
+    state = stepSkiing(state, noInput, 0.02);
+    expect(state.height).toBeGreaterThan(0);
+
+    // Mid-air, press Space and HOLD it every frame straight through the
+    // touchdown (main.ts maps the held key to the spin input; input.jump
+    // stays true the whole way down).
+    const holdJump = { ...noInput, jump: true };
+    while (state.height > 0) {
+      state = stepSkiing(state, holdJump, 0.02);
+    }
+
+    // We land into the lockout — but the held-through key raises no cue,
+    // this frame or the next several deep inside it.
+    expect(state.landingRecovery).toBeGreaterThan(0);
+    expect(state.tiredHop).toBe(0);
+    for (let i = 0; i < 3; i++) {
+      state = stepSkiing(state, holdJump, 0.02);
+      expect(state.landingRecovery).toBeGreaterThan(0);
+      expect(state.tiredHop).toBe(0);
+    }
+
+    // A genuine fresh press *during* the same lockout still answers — the fix
+    // sharpens the trigger to a rising edge, it doesn't kill the feedback.
+    state = stepSkiing(state, noInput, 0.02);
+    expect(state.landingRecovery).toBeGreaterThan(0);
+    state = stepSkiing(state, holdJump, 0.02);
+    expect(state.tiredHop).toBe(TIRED_HOP_DURATION);
   });
 
   it("fits one tired attempt per lockout — a second press can't restart it", () => {

@@ -48,6 +48,35 @@ real depth, upgrading the flat chasm slab), the rock-gate spires, and
 scatter composed to the beats instead of pure procedural. I build these
 against the real finish distance + beat positions once they exist.
 
+## (slope-mech) Tired hop should block the next jump until the animation finishes (2026-07-23)
+
+**Director, 2026-07-23** (right after the held-jump edge fix landed): *"tired
+hop animation needs to finish playing before allowing next jump. will fix
+later."*
+
+Today the jump gate is the landing lockout alone — `landingRecovery`
+(`LANDING_RECOVERY` = 0.3s). The tired-hop cue runs longer on purpose:
+`tiredHop` (`TIRED_HOP_DURATION` = 0.5s, deliberately ≥ the lockout so one
+press can't restart it). So once the lockout ends there's a ~0.2s tail where
+the tired-hop bob is still animating but the player can already charge and
+launch a fresh jump. Worse, a real launch during that tail currently
+*cancels* the bob — that's the existing "cancels a leftover cue on a real
+launch — takeoff owns the body" behavior (comment + test in `skiing.ts` /
+`skiing.test.ts`). Josh wants the opposite: while the tired hop is playing,
+the next jump stays locked out until it finishes.
+
+**Fix direction (its own session):** gate the jump on `tiredHop` as well as
+`landingRecovery` — no charge or launch while `tiredHop > 0`. Two routes:
+extend the lockout to cover the whole cue, or add `tiredHop > 0` to the
+grounded jump guard in `stepSkiing` (the `if (grounded)` block). Either way it
+reverses the current "a launch mid-cue clears it early" intent — that test and
+its comment must be rewritten to the new behavior (the launch now *waits* for
+the cue instead of owning the body through it). Keep the one-attempt-per-lockout
+invariant intact, and mind that a key held across the whole cue shouldn't
+auto-launch the instant it ends (reuse the rising-edge logic from the
+2026-07-23 fix if needed). Presentation is already handled — the renderer
+shapes the bob off the `tiredHop` clock; this is purely a sim-gate change.
+
 ## (slope-mech) Clamp the frame dt — background tabs teleport the run (2026-07-23)
 
 Noticed while verifying the camera rig: browsers suspend
