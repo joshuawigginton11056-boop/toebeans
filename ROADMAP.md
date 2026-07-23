@@ -3126,9 +3126,39 @@ direction. Two refinements asked in the same breath, landed same day:
   plus a second, chunkier shading-only grain octave at the half-meter
   scale.
 
-**Next:** *(slope-vis)* the snow verdict unblocks the Art Style Bible's
+**Refinement follow-up (director, 2026-07-23, after the merge):
+"neither change is apparent."** The two tweaks shipped but didn't read
+on screen. Honest state: the fixes were shipped *without* live
+verification of their visible effect (the session couldn't render — see
+above), which is exactly the situation the verify-with-a-unique-marker
+rule exists for. Leads for the next slope-vis session, most-likely
+first:
+
+1. **Verify the served code first** (hard-refresh 5173, confirm a
+   marker) before touching tuning — rule out a stale-module false
+   negative before believing any knob is too weak.
+2. **Lumpiness:** the chosen amplitudes are plausibly just invisible
+   where the director looks — the groomed lane got ±2.5 cm (by design,
+   under the markers' 6 cm lift) and the flanks ±8 cm against dunes that
+   already swing ±40 cm. Crank `LUMP_AMP_*`/`GRAIN2_AMP` to obviously-
+   too-much, confirm the mechanism on screen, then dial back to taste —
+   and reconsider the lane's marker-lift ceiling if the lane needs real
+   texture (raise `MARKER_LIFT` together with `LUMP_AMP_LANE`).
+3. **Wavy turns:** isotropic resolution (this chunk) may not have been
+   the actual artifact. Remaining candidates, roughly in order: the
+   finite-difference normal shading aliasing along diagonal groove
+   walls (epsilon 5 cm vs 2.7 cm texels — try matching them, or a
+   2-tap-blurred carve sample); shadow-map acne/striping on displaced
+   geometry read as "jagged" (try `normalBias` up from 0.05); the
+   per-frame straight brush segments scalloping under MAX blending on
+   tight arcs; and the grooves' deliberate stance *weave* reading as
+   wobble. Get a screenshot of the artifact from the director before
+   picking — one look would likely disambiguate all four.
+
+**Next:** *(slope-vis)* the follow-up above (verify-first, then tune
+visibly). After it: the snow verdict unblocks the Art Style Bible's
 parked rewrite (shape-language + asset-sourcing sections, per the
-transition note) — and the approved painted-detail rollout across all 24
+transition note), and the approved painted-detail rollout across all 24
 slope models is still queued. Snow-cap check on the trees (IDEAS.md)
 belongs to the same look-reconciliation pass.
 

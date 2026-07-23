@@ -170,12 +170,14 @@ interact with your space for more XP → repeat.
 >     — the BruteForce Snow & Ice shader's "interactive snow" (see the
 >     ROADMAP entry; the pack itself is Unity-only and can't be used in
 >     this engine, so the technique is rebuilt natively, procedurally,
->     zero image files). Two same-day refinements also landed: isotropic
->     resolution so carved *turns* don't staircase, and mid-scale
->     lumpiness in geometry + shading. **Realism snow is settled; the
->     bible's shape-language and asset-sourcing rewrite (below) is now
->     unblocked** and waits on its own session, along with the
->     approved painted-detail rollout across the 24 slope models.
+>     zero image files). Two refinements the director asked for with the
+>     verdict — de-jag carved *turns*, more random lumpiness — were
+>     attempted same day but **"neither change is apparent"** (director);
+>     they're the open follow-up, with diagnosis leads in the ROADMAP
+>     entry. **Realism snow as a direction is settled; the bible's
+>     shape-language and asset-sourcing rewrite (below) is now
+>     unblocked** and waits on its own session, along with the approved
+>     painted-detail rollout across the 24 slope models.
 >
 > The *Omno* references stay the target for mood, lighting, haze, and
 > palette. Signal red stays reserved. With the snow verdict in
