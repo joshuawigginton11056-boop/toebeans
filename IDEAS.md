@@ -133,9 +133,34 @@ The slope has an air trick now: hold Space mid-air and the body spins at
 a trick rate (180s, 360s, more if you hold it), landing switch or clean.
 The sim and the rig's default heading easing carry it, but it's begging
 for presentation: a dedicated spin pose (tuck the body, cat visibly
-holding on), carve-spray when a landing slides through the round-8 grip
+holding on), a landing-slide carve-spray *burst* through the round-8 grip
 window, and spin/slip/landing audio flourishes to match. All
-`skierModel.ts` / `skiScene.ts` / `audio.ts` territory.
+`skierModel.ts` / `skiScene.ts` / `audio.ts` territory. (The everyday
+ski-trail spray now exists — see the loose-snow ROADMAP entry, 2026-07-23;
+this is the trick-landing flourish riding on top of it.)
+
+## (slope-vis) Loose-snow follow-ups (from the spray/flurries chunk, 2026-07-23)
+
+The ski-trail spray + screen flurries landed and merged. Open threads on
+them, all `skiScene.ts`:
+
+- **Powder density look-pass.** The merged spray reads as a light-to-moderate
+  mist; the director's reference images are near-opaque powder *walls* off a
+  hard carve. Denser is a knob away — the safe dials are `SPRAY_PEAK_ALPHA`
+  (0.38 now), `SPRAY_BASE_RATE` (1600/s), and pool size — but watch the ceiling:
+  the first pass over-shot into "white orbs" when grains were too big/opaque, so
+  push count and alpha before size. Await the director's pane call.
+- **Landing "poof" puff.** A one-shot outward burst of the same powder on
+  touchdown from a jump (and on the trick-landing slide). The emitter's already
+  there; it needs an impulse hook off the airborne→grounded transition (the
+  renderer knows it via `jumpMemory`; a small additive seam signal, or infer it
+  the same anchor-motion way the spray does).
+- **Particle point-size vs. live fov.** `particleSizeScale()` bakes the fov
+  (50°) and viewport height at load; a `resize` handler updates it, but a live
+  fov change (none today) wouldn't. Cheap to drive off the camera each frame if
+  it ever matters.
+- **Spray ignores cast shadows** (same simplification as the snow glitter) —
+  a plume under a tree still lights fully. Almost certainly not worth fixing.
 
 ## (slope-vis) Realistic snow — the follow-up test (director verdict, 2026-07-22)
 
@@ -150,8 +175,9 @@ window, and spin/slip/landing audio flourishes to match. All
 > (ask for the link when needed) — the CC0 sources below get checked
 > first if it comes to buying vs. downloading. Round-1 tangents parked:
 > the glitter pass ignores cast shadows (a tree's shadow still twinkles
-> faintly); landing "poof" puffs and sideways carve-spray tied to carve
-> angle would sell the trails further once depth works.
+> faintly). Sideways carve-spray tied to carve angle **is now built** (the
+> loose-snow ROADMAP entry, 2026-07-23); landing "poof" puffs (a burst on
+> touchdown) are still open — see the loose-snow follow-ups entry below.
 
 The texture test's split verdict: trees promoted, but **"I'm going for
 realism snow"** — the painted dapple patch is out. What the realism test

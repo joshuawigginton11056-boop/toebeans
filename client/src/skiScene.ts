@@ -183,6 +183,10 @@ export function createEnvironment(
   slope.customDepthMaterial = createSnowDepthMaterial(trail.target.texture);
   scene.add(slope);
 
+  // Loose snow: the rooster-tail spray off the skis and the ambient
+  // screen flurries (see the VISUAL EFFECTS section below).
+  createSnowEffects(scene);
+
   return { sun, skyDome, sunBillboard, slope, trail };
 }
 
@@ -237,6 +241,10 @@ export function syncEnvironment(
   environment.sunBillboard.position
     .copy(camera.position)
     .addScaledVector(SUN_BILLBOARD_DIRECTION, 150);
+  // Loose snow — spray kicked off the skis, flurries drifting past the
+  // lens. Reads the skier's speed straight off the anchor's motion (no new
+  // seam field) and its own frame clock; see updateSnowEffects.
+  updateSnowEffects(anchor, camera, trailInput);
 }
 
 // The snow is displaced geometry now, and these flat markers used to sit
@@ -1105,6 +1113,487 @@ function updateSnowTrail(
   }
   renderer.setClearColor(scratchClearColor, prevAlpha);
   renderer.setRenderTarget(prevTarget);
+}
+
+// ---------------------------------------------------------------------------
+// VISUAL EFFECTS — loose snow (slope-vis, 2026-07-23). Two particle systems,
+// both DESIGN.md "speed is visible" / "snow remembers" callouts and the
+// carve-spray idea parked in IDEAS.md:
+//
+//   1. SPRAY — the rooster tail kicked off the skis. Emits from the two ski
+//      contacts while grounded and moving, more the faster you go and the
+//      harder you carve; particles fly up-and-back, fall under gravity, and
+//      fade. The carved groove is the snow that *stays*; this is the snow
+//      that *flies*.
+//   2. FLURRIES — loose flakes drifting past the camera. Gusty (long calm
+//      stretches, the occasional swelling patch) and stronger when zoomed in
+//      — a flake right by the lens sells "you're down in it". Recycled in a
+//      world-axis box that rides the camera, drifting relative to it so they
+//      streak past as the run picks up speed.
+//
+// Both stay inside slope-visuals territory: no seam change. The skier's
+// speed is read from the anchor's frame-to-frame motion (mechanics already
+// moves it), and dt comes from an internal clock — nothing new crosses from
+// skiRender.ts. All procedural: one soft-dot canvas, no image files.
+
+// Spray tuning — a fine billowing powder plume (director reference, 2026-07-23:
+// snowboard/ski powder sprays). The look is a *cloud*, so the numbers are
+// "many, tiny, faint, slow": thousands of small low-alpha grains that expand
+// and hang like real powder rather than a few ballistic blobs. Speeds are
+// world units/sec; the sim cruises ~8, boosts ~16 (BASE_SPEED / BOOST_SPEED).
+const SPRAY_MAX = 2800; // big pool — a hard fast carve fills most of it
+const SPRAY_MIN_SPEED = 2.5; // below this the skis just glide — no kick-up
+const SPRAY_FULL_SPEED = 14; // spray saturates around here
+const SPRAY_BASE_RATE = 1600; // grains/sec at full spray, both skis
+const SPRAY_LIFE = 0.7; // seconds — powder hangs before it settles
+const SPRAY_LIFE_VAR = 0.3;
+// Powder is light: weak gravity, strong air drag, so the plume decelerates
+// into a floating billow instead of arcing like thrown sand.
+const SPRAY_GRAVITY = 2.6;
+const SPRAY_DRAG = 2.2; // per-second velocity damping (air resistance)
+const SPRAY_TURB = 2.0; // random roil that keeps the cloud from looking rigid
+const SPRAY_GROW = 2.4; // each grain expands to ~this× as it billows out
+const SPRAY_PEAK_ALPHA = 0.38; // faint per grain — density builds the body
+// A respawn teleports the anchor a whole run in one frame — that reads as an
+// absurd speed. Anything past this is a jump, not skiing: emit nothing.
+const SPRAY_TELEPORT_SPEED = 40;
+
+// Flurry tuning. The recycle box is world-axis-aligned and centered on the
+// camera, so flakes surround it no matter which way the look points.
+const FLURRY_MAX = 300;
+const FLURRY_HALF_X = 9;
+const FLURRY_HALF_Z = 9;
+const FLURRY_UP = 5;
+const FLURRY_DOWN = 4;
+const FLURRY_FALL = 0.7; // world units/sec of gentle settling
+const FLURRY_WIND_X = 0.5;
+
+// Both systems draw as soft round sprites through this one shader. Point size
+// is world-radius attenuated to pixels; a near-camera fade keeps a flake from
+// ever splatting full-screen across the lens (only flurries get that close —
+// spray always sits out at the skier). Fog is applied manually (a plain
+// ShaderMaterial gets none of three's auto-fog): spray melts into the haze at
+// a far zoom, flurries never do (they live right at the camera).
+const PARTICLE_VERT = `
+attribute float aSize;
+attribute float aAlpha;
+uniform float sizeScale;
+uniform float fogNear;
+uniform float fogFar;
+varying float vAlpha;
+varying float vFog;
+void main() {
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  float dist = max(-mv.z, 0.001);
+  gl_PointSize = clamp(aSize * sizeScale / dist, 1.0, 140.0);
+  gl_Position = projectionMatrix * mv;
+  // Fade points hugging the lens (< ~1.3 units) so a flake never flashes the
+  // whole screen white; spray is always farther out, so it's untouched.
+  vAlpha = aAlpha * smoothstep(0.15, 1.3, dist);
+  vFog = 1.0 - smoothstep(fogNear, fogFar, dist);
+}
+`;
+const PARTICLE_FRAG = `
+uniform sampler2D map;
+uniform vec3 color;
+uniform float globalAlpha;
+varying float vAlpha;
+varying float vFog;
+void main() {
+  float a = texture2D(map, gl_PointCoord).a * vAlpha * vFog * globalAlpha;
+  if (a < 0.01) discard;
+  gl_FragColor = vec4(color, a);
+}
+`;
+
+let particleDot: THREE.CanvasTexture | null = null;
+
+// The soft dot both systems sprite: white, full-ish core feathering to zero.
+// Only its alpha is used, so colorspace is irrelevant here.
+function getParticleDot(): THREE.CanvasTexture {
+  if (particleDot) return particleDot;
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const g = ctx.createRadialGradient(
+    size / 2, size / 2, 0, size / 2, size / 2, size / 2,
+  );
+  // A soft wispy falloff with NO flat core — a hard core read as an "orb"
+  // (director callout). Each grain is faint; the powder plume's body comes
+  // from thousands of them overlapping, the way real spray builds volume.
+  g.addColorStop(0, "rgba(255,255,255,0.85)");
+  g.addColorStop(0.25, "rgba(255,255,255,0.5)");
+  g.addColorStop(0.55, "rgba(255,255,255,0.18)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  particleDot = new THREE.CanvasTexture(canvas);
+  return particleDot;
+}
+
+// World-radius → pixels: half the viewport height over tan(halfFov). The
+// camera's fov is the renderer default 50°; recomputed on resize below.
+function particleSizeScale(): number {
+  return (0.5 * window.innerHeight) / Math.tan((50 * Math.PI) / 180 / 2);
+}
+
+function createSnowParticleMaterial(opts: {
+  fogNear: number;
+  fogFar: number;
+}): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      map: { value: getParticleDot() },
+      // Sunlit snow #F8F5EF as straight sRGB components: a plain ShaderMaterial
+      // writes gl_FragColor verbatim to the sRGB framebuffer (three appends no
+      // output-encoding to custom shaders), so these land as the palette color.
+      color: { value: new THREE.Vector3(0xf8 / 255, 0xf5 / 255, 0xef / 255) },
+      sizeScale: { value: particleSizeScale() },
+      fogNear: { value: opts.fogNear },
+      fogFar: { value: opts.fogFar },
+      globalAlpha: { value: 1 },
+    },
+    vertexShader: PARTICLE_VERT,
+    fragmentShader: PARTICLE_FRAG,
+    transparent: true,
+    depthWrite: false, // soft snow blends over the scene; depth-test still on
+  });
+}
+
+interface SpraySystem {
+  readonly points: THREE.Points;
+  readonly positions: Float32Array;
+  readonly sizes: Float32Array; // the DISPLAYED size (grows over life)
+  readonly spawnSize: Float32Array; // the size at birth, before billowing
+  readonly alphas: Float32Array;
+  readonly vel: Float32Array; // 3 per particle
+  readonly life: Float32Array;
+  readonly maxLife: Float32Array;
+  cursor: number;
+  emitAccum: number; // fractional particles carried between frames
+}
+
+interface FlurrySystem {
+  readonly points: THREE.Points;
+  readonly positions: Float32Array;
+  readonly offset: Float32Array; // 3 per flake, camera-relative, world axes
+  readonly material: THREE.ShaderMaterial;
+}
+
+let spray: SpraySystem | null = null;
+let flurry: FlurrySystem | null = null;
+
+// Per-frame skier/camera memory (module-level, like decorState/snowTextures).
+const effectsClock = new THREE.Clock();
+const prevAnchor = new THREE.Vector3();
+let haveAnchor = false;
+const prevCamPos = new THREE.Vector3();
+let haveCam = false;
+let flurryTime = 0;
+
+function createSnowEffects(scene: THREE.Scene): void {
+  // --- Spray: an empty pool, filled as the skis carve ---
+  const sPos = new Float32Array(SPRAY_MAX * 3);
+  const sSize = new Float32Array(SPRAY_MAX);
+  const sAlpha = new Float32Array(SPRAY_MAX); // starts all-0 = nothing drawn
+  const sGeo = new THREE.BufferGeometry();
+  sGeo.setAttribute(
+    "position",
+    new THREE.BufferAttribute(sPos, 3).setUsage(THREE.DynamicDrawUsage),
+  );
+  sGeo.setAttribute(
+    "aSize",
+    new THREE.BufferAttribute(sSize, 1).setUsage(THREE.DynamicDrawUsage),
+  );
+  sGeo.setAttribute(
+    "aAlpha",
+    new THREE.BufferAttribute(sAlpha, 1).setUsage(THREE.DynamicDrawUsage),
+  );
+  const sMat = createSnowParticleMaterial({ fogNear: 45, fogFar: 150 });
+  const sPoints = new THREE.Points(sGeo, sMat);
+  sPoints.frustumCulled = false; // the shader places points; bounds are stale
+  sPoints.renderOrder = 3;
+  scene.add(sPoints);
+  spray = {
+    points: sPoints,
+    positions: sPos,
+    sizes: sSize,
+    spawnSize: new Float32Array(SPRAY_MAX),
+    alphas: sAlpha,
+    vel: new Float32Array(SPRAY_MAX * 3),
+    life: new Float32Array(SPRAY_MAX),
+    maxLife: new Float32Array(SPRAY_MAX),
+    cursor: 0,
+    emitAccum: 0,
+  };
+
+  // --- Flurries: pre-scattered in the recycle box (seeded, though they drift
+  // immediately, so the seed only fixes the very first frame) ---
+  const random = makeRandom(20260723);
+  const fPos = new Float32Array(FLURRY_MAX * 3);
+  const fSize = new Float32Array(FLURRY_MAX);
+  const fAlpha = new Float32Array(FLURRY_MAX);
+  const fOff = new Float32Array(FLURRY_MAX * 3);
+  for (let i = 0; i < FLURRY_MAX; i++) {
+    fOff[i * 3] = (random() * 2 - 1) * FLURRY_HALF_X;
+    fOff[i * 3 + 1] = -FLURRY_DOWN + random() * (FLURRY_UP + FLURRY_DOWN);
+    fOff[i * 3 + 2] = (random() * 2 - 1) * FLURRY_HALF_Z;
+    fSize[i] = 0.02 + random() * 0.05;
+    fAlpha[i] = 0.4 + random() * 0.6; // per-flake base, scaled by the gust
+  }
+  const fGeo = new THREE.BufferGeometry();
+  fGeo.setAttribute(
+    "position",
+    new THREE.BufferAttribute(fPos, 3).setUsage(THREE.DynamicDrawUsage),
+  );
+  fGeo.setAttribute("aSize", new THREE.BufferAttribute(fSize, 1));
+  fGeo.setAttribute("aAlpha", new THREE.BufferAttribute(fAlpha, 1));
+  // Fog off (near/far far past anything): flurries live at the lens.
+  const fMat = createSnowParticleMaterial({ fogNear: 9000, fogFar: 10000 });
+  fMat.uniforms.globalAlpha!.value = 0; // the gust brings them in
+  const fPoints = new THREE.Points(fGeo, fMat);
+  fPoints.frustumCulled = false;
+  fPoints.renderOrder = 4;
+  scene.add(fPoints);
+  flurry = { points: fPoints, positions: fPos, offset: fOff, material: fMat };
+
+  window.addEventListener("resize", () => {
+    const s = particleSizeScale();
+    sMat.uniforms.sizeScale!.value = s;
+    fMat.uniforms.sizeScale!.value = s;
+  });
+}
+
+function smoothstep01(a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+// Wrap v into [lo, hi) — the flurry recycle, so a flake leaving one face of
+// the box re-enters the opposite one.
+function wrapRange(v: number, lo: number, hi: number): number {
+  const r = hi - lo;
+  return lo + (((v - lo) % r) + r) % r;
+}
+
+// Called every frame from syncEnvironment. Derives the skier's world speed
+// from the anchor's motion (no seam field needed), then drives both systems.
+function updateSnowEffects(
+  anchor: THREE.Vector3,
+  camera: THREE.Camera,
+  trailInput?: SnowTrailInput,
+): void {
+  const dt = Math.min(0.05, effectsClock.getDelta()); // clamp tab-refocus jumps
+  if (dt <= 0) return;
+
+  let speed = 0;
+  let velX = 0;
+  let velZ = 0;
+  if (haveAnchor) {
+    velX = (anchor.x - prevAnchor.x) / dt;
+    velZ = (anchor.z - prevAnchor.z) / dt;
+    speed = Math.hypot(velX, velZ);
+    if (speed > SPRAY_TELEPORT_SPEED) {
+      speed = 0; // a respawn/teleport, not a run — don't spray a burst
+      velX = 0;
+      velZ = 0;
+    }
+  }
+  prevAnchor.copy(anchor);
+  haveAnchor = true;
+
+  if (spray) updateSpray(dt, anchor, speed, velX, velZ, trailInput);
+  if (flurry) updateFlurries(dt, camera, anchor);
+}
+
+function updateSpray(
+  dt: number,
+  anchor: THREE.Vector3,
+  speed: number,
+  velX: number,
+  velZ: number,
+  trailInput?: SnowTrailInput,
+): void {
+  const s = spray!;
+  const grounded = trailInput?.grounded ?? false;
+  const heading = trailInput?.heading ?? 0;
+
+  if (grounded && speed > SPRAY_MIN_SPEED) {
+    const speedF = Math.min(
+      1,
+      (speed - SPRAY_MIN_SPEED) / (SPRAY_FULL_SPEED - SPRAY_MIN_SPEED),
+    );
+    // How sideways the motion is: a hard carve throws its velocity across the
+    // fall line, which both fans the spray wider and kicks up more of it.
+    const sideF = speed > 0.01 ? Math.min(1, Math.abs(velX) / speed) : 0;
+    const inv = 1 / Math.max(speed, 0.001);
+    const tx = velX * inv; // travel direction (unit, xz)
+    const tz = velZ * inv;
+    const px = -tz; // across the travel direction
+    const pz = tx;
+    // The two ski contacts, offset perpendicular to the heading like the
+    // trail pens do.
+    const perpX = Math.cos(heading);
+    const perpZ = Math.sin(heading);
+
+    // The ski axis (which way the skis point) — spray kicks off the edge
+    // *along the ski*, so grains are spread down the ski toward the tail, not
+    // bunched at a point under the boots.
+    const skiFwdX = Math.sin(heading);
+    const skiFwdZ = -Math.cos(heading);
+
+    s.emitAccum += SPRAY_BASE_RATE * speedF * (1 + 1.4 * sideF) * dt;
+    let n = Math.floor(s.emitAccum);
+    s.emitAccum -= n;
+    while (n-- > 0) {
+      const ski = Math.random() < 0.5 ? -1 : 1;
+      emitSprayParticle(
+        anchor, ski, perpX, perpZ, skiFwdX, skiFwdZ, tx, tz, px, pz, speedF, sideF,
+      );
+    }
+  }
+
+  // Integrate the live grains and write their attributes. Powder physics:
+  // weak gravity, strong air drag, and a little turbulence, so each grain
+  // decelerates and floats — the plume billows and hangs. Each grain also
+  // expands (SPRAY_GROW) and thins (alpha → 0) as it ages, so the cloud
+  // swells and dissipates like real spray instead of vanishing as dots.
+  const { positions, vel, life, maxLife, sizes, spawnSize, alphas } = s;
+  const drag = Math.max(0, 1 - SPRAY_DRAG * dt);
+  for (let i = 0; i < SPRAY_MAX; i++) {
+    if (life[i]! <= 0) {
+      if (alphas[i] !== 0) alphas[i] = 0;
+      continue;
+    }
+    life[i]! -= dt;
+    if (life[i]! <= 0) {
+      alphas[i] = 0;
+      continue;
+    }
+    vel[i * 3]! = vel[i * 3]! * drag + (Math.random() - 0.5) * SPRAY_TURB * dt;
+    vel[i * 3 + 1]! = vel[i * 3 + 1]! * drag - SPRAY_GRAVITY * dt;
+    vel[i * 3 + 2]! =
+      vel[i * 3 + 2]! * drag + (Math.random() - 0.5) * SPRAY_TURB * dt;
+    positions[i * 3]! += vel[i * 3]! * dt;
+    positions[i * 3 + 1]! += vel[i * 3 + 1]! * dt;
+    positions[i * 3 + 2]! += vel[i * 3 + 2]! * dt;
+    const t = life[i]! / maxLife[i]!; // 1 at birth → 0 at death
+    // Billow out: small at birth, expanding toward SPRAY_GROW× as it ages.
+    sizes[i] = spawnSize[i]! * (1 + SPRAY_GROW * (1 - t));
+    // Densest just off the edge, thinning as it drifts and spreads.
+    alphas[i] = SPRAY_PEAK_ALPHA * Math.min(1, t * 1.5);
+  }
+  s.points.geometry.attributes.position!.needsUpdate = true;
+  s.points.geometry.attributes.aSize!.needsUpdate = true;
+  s.points.geometry.attributes.aAlpha!.needsUpdate = true;
+}
+
+function emitSprayParticle(
+  anchor: THREE.Vector3,
+  ski: number,
+  perpX: number, // across the stance (ski-to-ski)
+  perpZ: number,
+  skiFwdX: number, // along the ski (nose direction)
+  skiFwdZ: number,
+  tx: number, // travel direction (unit)
+  tz: number,
+  px: number, // across the travel direction
+  pz: number,
+  speedF: number,
+  sideF: number,
+): void {
+  const s = spray!;
+  const i = s.cursor;
+  s.cursor = (s.cursor + 1) % SPRAY_MAX;
+  const r = Math.random;
+  // ORIGIN: the ski edge, on the snow. Start at the ski's stance offset, then
+  // slide down the ski toward the tail (where it carves and throws snow) and
+  // a touch onto its outer edge — so the plume rises off the skis, not the
+  // boots (director callout).
+  const alongTail = 0.05 + r() * 0.75; // metres back down the ski
+  const outEdge = r() * 0.12; // onto the outer edge
+  const px0 =
+    anchor.x + perpX * ski * (SKI_STANCE + outEdge) - skiFwdX * alongTail;
+  const pz0 =
+    anchor.z + perpZ * ski * (SKI_STANCE + outEdge) - skiFwdZ * alongTail;
+  s.positions[i * 3] = px0 + (r() - 0.5) * 0.05;
+  s.positions[i * 3 + 1] = 0.0 + r() * 0.03; // at the snow, not boot height
+  s.positions[i * 3 + 2] = pz0 + (r() - 0.5) * 0.05;
+  // VELOCITY: a fountain off the edge — up and back (against travel), fanned
+  // across it. Modest launch speeds; drag turns them into a hanging billow.
+  const back = (0.8 + 1.4 * r()) * (0.4 + 0.6 * speedF);
+  const up = 1.6 + 2.2 * r();
+  const fan = (0.4 + 2.0 * sideF) * r() * (r() < 0.5 ? 1 : -1);
+  s.vel[i * 3] = -tx * back + px * fan + (r() - 0.5) * 0.8;
+  s.vel[i * 3 + 1] = up;
+  s.vel[i * 3 + 2] = -tz * back + pz * fan + (r() - 0.5) * 0.8;
+  const ml = SPRAY_LIFE + (r() - 0.5) * SPRAY_LIFE_VAR;
+  s.life[i] = ml;
+  s.maxLife[i] = ml;
+  // Fine grains — the mist comes from thousands overlapping, not from size.
+  s.spawnSize[i] = 0.025 + r() * 0.035 + speedF * 0.02;
+  s.sizes[i] = s.spawnSize[i]!;
+  s.alphas[i] = SPRAY_PEAK_ALPHA;
+}
+
+function updateFlurries(
+  dt: number,
+  camera: THREE.Camera,
+  anchor: THREE.Vector3,
+): void {
+  const f = flurry!;
+  flurryTime += dt;
+  // Gust: two slow, out-of-phase sines; the negative half is dead calm, the
+  // positive half squared into an occasional swelling patch.
+  const raw =
+    0.6 * Math.sin(flurryTime * 0.19) +
+    0.4 * Math.sin(flurryTime * 0.41 + 1.7);
+  const gust = Math.pow(Math.max(0, raw), 2);
+  const camPos = camera.position;
+  // Zoom read: the camera orbits the skier, so its distance to the anchor IS
+  // the zoom radius. Close = zoomed in = flurries lean in hard.
+  const dist = camPos.distanceTo(anchor);
+  const closeness = 1 - smoothstep01(8, 30, dist);
+  const globalAlpha = (0.06 + 0.94 * gust) * (0.3 + 0.7 * closeness);
+  f.material.uniforms.globalAlpha!.value = globalAlpha;
+
+  // Camera velocity, so flakes drift *relative* to it and streak past as the
+  // run speeds up. Clamp out the respawn/first-frame teleport.
+  let cvx = 0;
+  let cvy = 0;
+  let cvz = 0;
+  if (haveCam) {
+    cvx = (camPos.x - prevCamPos.x) / dt;
+    cvy = (camPos.y - prevCamPos.y) / dt;
+    cvz = (camPos.z - prevCamPos.z) / dt;
+    if (Math.hypot(cvx, cvy, cvz) > 60) {
+      cvx = 0;
+      cvy = 0;
+      cvz = 0;
+    }
+  }
+  prevCamPos.copy(camPos);
+  haveCam = true;
+
+  // Snow's own drift (gentle fall + wind) minus the camera's motion.
+  const rvx = (FLURRY_WIND_X - cvx) * dt;
+  const rvy = (-FLURRY_FALL - cvy) * dt;
+  const rvz = -cvz * dt;
+  const { offset, positions } = f;
+  for (let i = 0; i < FLURRY_MAX; i++) {
+    const ox = wrapRange(offset[i * 3]! + rvx, -FLURRY_HALF_X, FLURRY_HALF_X);
+    const oy = wrapRange(offset[i * 3 + 1]! + rvy, -FLURRY_DOWN, FLURRY_UP);
+    const oz = wrapRange(offset[i * 3 + 2]! + rvz, -FLURRY_HALF_Z, FLURRY_HALF_Z);
+    offset[i * 3] = ox;
+    offset[i * 3 + 1] = oy;
+    offset[i * 3 + 2] = oz;
+    positions[i * 3] = camPos.x + ox;
+    positions[i * 3 + 1] = camPos.y + oy;
+    positions[i * 3 + 2] = camPos.z + oz;
+  }
+  f.points.geometry.attributes.position!.needsUpdate = true;
 }
 
 // ---------------------------------------------------------------------------

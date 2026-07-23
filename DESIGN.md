@@ -509,6 +509,9 @@ Snow in Toebeans is a surface that *remembers*.
 - **Speed is visible.** Trail spray/kick-up grows with speed; at high
   speed, slight motion blur or speed-lines on the world edges (as in the
   birch-forest reference). Boost should be readable from a screenshot.
+  *(Spray/kick-up built 2026-07-23 — a billowing powder plume off the ski
+  edges plus ambient screen flurries; see that loose-snow ROADMAP entry.
+  Motion blur / speed-lines are still open.)*
 
 (These are rendering features, not just style notes — tracked as the
 "detail touches" items in [ROADMAP.md](ROADMAP.md) M2/M4.)

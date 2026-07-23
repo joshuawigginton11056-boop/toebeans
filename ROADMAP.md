@@ -4513,6 +4513,51 @@ now the 0.3s lockout ends ~0.2s before the 0.5s cue does, so a jump can fire
 (and cancel the bob) while it's still playing. Gate the jump on `tiredHop` too;
 full routes in IDEAS.md. Its own session.
 
+## (slope-vis) 2026-07-23 — Loose snow: ski-trail spray + screen flurries
+
+Two procedural particle systems in `skiScene.ts` — the DESIGN.md "speed is
+visible" callout and the carve-spray idea long parked in IDEAS.md. No image
+files: one soft-dot canvas drives both. **Zero mechanics↔visuals seam change**
+— the skier's world speed is read off the anchor's frame-to-frame motion
+(mechanics already moves it) and `dt` from an internal clock, so nothing new
+crosses from `skiRender.ts`.
+
+- **Spray — the powder plume off the skis.** Emits from both ski contacts
+  while grounded and moving, scaled by speed and by how hard you carve (the
+  sideways share of the velocity). The director's look-pass drove a full
+  rework of the first pass: v1 read as "white orbs/bubbles coming out of the
+  boots"; the reference images (snowboard/ski powder sprays) wanted fine
+  billowing powder off the edge. The rework — soft coreless grains, big count
+  (pool 2800), origin at the ski edge *at snow level* spread down the ski
+  toward the tail (not the boot-height centre), and powder physics: weak
+  gravity + strong air-drag + turbulence so grains decelerate and hang, each
+  expanding ~2.4× and thinning as it ages. Instrumented on a live carve: ~1,100
+  grains alive at once, spanning the snow up to ~0.94 m high. Approved to merge.
+- **Flurries — loose flakes past the lens.** Recycled in a world-axis box that
+  rides the camera, drifting *relative* to it so they streak past as the run
+  speeds up. Gusty (two out-of-phase sines; the negative half is dead calm, a
+  squared positive half is the occasional swelling patch) and stronger when
+  zoomed in — the camera's distance to the skier *is* the zoom radius. A
+  near-lens fade stops a flake from ever splatting full-screen white.
+
+Both are plain `ShaderMaterial` point clouds with per-particle size/alpha
+attributes; fog is applied manually (spray melts into the haze at a far zoom,
+flurries never do — they live at the lens). `npm run check` passes (typecheck
++ 102 tests), no shader errors.
+
+Live-verification note: functionally verified — console clean, instrumentation
+confirmed the spray volume, and the flurries were confirmed on-screen and
+zoom-responsive across several screenshots. A clean hero screenshot of the
+reworked powder mid-carve wasn't captured: the level's chasms (every ~25 m)
+crash blind key-driving within ~1–2 s, and the pane kept toggling hidden
+(which pauses the render loop). Density is the director's own pane call going
+forward.
+
+**Next:** director look-pass on powder density (current mist vs. the denser,
+near-opaque plume in the references — a knob away, parked in IDEAS.md); the
+trick/landing-specific flourishes (air-spin carve-spray, landing "poof" puffs)
+remain their own chunk.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
