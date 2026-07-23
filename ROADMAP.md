@@ -4366,6 +4366,50 @@ silhouettes). Rocks and filler props still fill the gaps in the near band.
 
 Art Style Bible updated with a **"Trees, cleanup"** amendment.
 
+## (slope-mech) 2026-07-23 — Tired-hop retune round 2 (faster, an actual small hop)
+
+Built the round-2 verdict on the failed-jump cue: *"it's not fast enough now.
+by deep i meant an actual small hop."* The previous version sank slow and
+**held** the strain at the bottom, reading as a grounded buckle; this makes it
+a quick spent-legs attempt that pops a real little hop and lands going nowhere.
+Went with approach (a) from the retune notes — presentation-only, no real sim
+hop — so every lockout guarantee still holds by construction (the sim's height
+never leaves the ground).
+
+- **Faster:** `TIRED_HOP_DURATION` (in `skiing.ts`) 0.8 → **0.5s**. Still ≥
+  `LANDING_RECOVERY` (0.3), so the one-attempt-per-lockout ordering test holds
+  untouched (it waits the clock out dynamically). No state-shape change, **no
+  SAVE_VERSION bump**.
+- **A real hop, not a buckle** (all in `skiRender.ts`): dropped the strain-hold
+  phase entirely; the wind-up crouch is now quick (new `TIRED_DIP_FRACTION`
+  0.3 — the first ~0.15s) and the **hop is the event** (the remaining ~0.35s).
+  Raised `TIRED_LIFT` 0.07 → **0.3** world units, so the whole rig genuinely
+  pops off the snow — a real tap jump flies ~1.4, so this is a fifth of that,
+  pathetic on purpose. The rig group lifts, so the cat rides it and the shadow
+  detaches (reads airborne). Kept `TIRED_DIP` 0.65 and `TIRED_EXTEND` 0.2.
+- **Verified the shaping math** (the change is a deterministic rig-local offset
+  shaped off the sim's `tiredHop` clock): quick wind-up to a full 0.65 crouch
+  by attempt 0.30, continuous into the hop at the phase boundary (tuck
+  0.65→0.65, lift 0→0), lift peaks at the full 0.30 mid-hop (attempt 0.65),
+  legs extend to −0.156 below baseline on the way down, and everything settles
+  to *exactly* 0 at the end. `npm run check` passes (101 tests). Live feel
+  under real keys is the playtest's call as always — this pane suspends
+  `requestAnimationFrame`, and port 5302 was held by another chat's server for
+  this same worktree.
+
+**What to playtest:** `npm run dev`, Enter to ski. Jump, land, and press jump
+again during the landing beat — the skier should now give a quick crouch and
+pop a small hop off the snow that goes nowhere, instead of the slow grounded
+buckle. Feel questions: is 0.5s the right speed (still too slow / now too
+snappy?), is the hop the right height (`TIRED_LIFT` 0.3 — more air or less?),
+and does dropping the strain hold read as "spent legs" or has it lost the
+weariness? All three are one-line tunes.
+
+**Next:** the round-10 queue — a finish line (prerequisite for XP, parked
+since 2026-07-20), tree limbs + the crouch control (the missing second
+hazard), or purpose-built big jumps. Recommend the finish line next, since it
+unblocks the most downstream work (XP).
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
