@@ -4413,10 +4413,19 @@ snappy?), is the hop the right height (`TIRED_LIFT` 0.3 — more air or less?),
 and does dropping the strain hold read as "spent legs" or has it lost the
 weariness? All three are one-line tunes.
 
-**Next:** the round-10 queue — a finish line (prerequisite for XP, parked
+**Playtest note (director, 2026-07-23):** found a bug in this same cue —
+holding the space bar to spin in the air and landing while *still holding*
+it plays the tired hop as if you're trying to jump, even though you never
+re-pressed. The trigger is level-triggered (`input.jump` held) rather than
+edge-triggered (a fresh press), so a key carried through the jump counts as
+a failed attempt on touchdown. Parked for its own session — full cause and
+fix routes in IDEAS.md (top entry).
+
+**Next:** *fix the held-jump tired-hop bug above* (its own session, director
+call). Then the round-10 queue — a finish line (prerequisite for XP, parked
 since 2026-07-20), tree limbs + the crouch control (the missing second
-hazard), or purpose-built big jumps. Recommend the finish line next, since it
-unblocks the most downstream work (XP).
+hazard), or purpose-built big jumps. Recommend the finish line after the bug,
+since it unblocks the most downstream work (XP).
 
 ## Milestones
 
