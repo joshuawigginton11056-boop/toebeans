@@ -2812,14 +2812,30 @@ through it; the director's model says it shouldn't)? And jump-spin to a
 near-sideways landing, then steer across: it should feel like catching
 an edge and settling, not snapping.
 
-**Next:** per the running order — the remaining round-2 list items that
-are slope-vis territory (gear style + longer skis, always-on feet,
-angulation round 3 + boot fix, hair-roots + cat-tail) belong to that
-session; for slope-mech the queue is open — candidates: a finish line
-(prerequisite for XP, parked since 2026-07-20), tree limbs + the crouch
-control (the missing second hazard), or purpose-built big jumps (the
-360 question from the charge-jump session). Music still deliberately
-last, then the end-of-M2 tuning pass.
+**Playtest verdict (director, 2026-07-23): the jerk is fixed but the
+feel isn't there — turning round 7 opens.** In the director's words:
+"it feels abrupt," and the bigger ask — **"I want to be able to turn
+around and continue down the slope backwards. Currently, when I go
+backwards I can only go base speed, and if I press W I flip forwards
+again."** Riding switch is supposed to be a real way down the hill, not
+just the aftermath of a pivot. Diagnosis: the abruptness is SKID_SCRUB
+at 45 (tuned so crossings arrive spent — but the backstop dump landed in
+the same session, which changes that math); the base-speed cap backwards
+is W being unavailable riding switch (it's the only speed lean, and
+round 4 made it *seek* — so pressing it flips you forward, working
+exactly as round 4 designed it, which is now the problem); Shift-boost
+does work backwards, worth re-checking at playtest. Round 4's bar
+("return from switch on W alone") and this ask directly conflict — that
+needs an explicit director call. Full diagnosis + options parked in
+[IDEAS.md](IDEAS.md) as **turning round 7**.
+
+**Next:** turning round 7 (riding switch as a first-class stance +
+soften the skid — director picks from the sketched options, including
+the round-4 conflict call). After that the slope-mech queue: a finish
+line (prerequisite for XP, parked since 2026-07-20), tree limbs + the
+crouch control (the missing second hazard), or purpose-built big jumps
+(the 360 question). Music still deliberately last, then the end-of-M2
+tuning pass.
 
 ## (slope-vis) 2026-07-22 — Texture direction called + the sessions restructure
 
