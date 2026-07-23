@@ -24,7 +24,7 @@ const noInput: SkiInput = {
   down: false,
   jump: false,
   boost: false,
-  flip: 0,
+  spin: 0,
 };
 
 // Positioned just short of a chasm so crash tests need only a couple dozen
@@ -465,52 +465,70 @@ describe("stepSkiing", () => {
     expect(Math.abs(downhillHeading(state.heading - state.flightHeading))).toBeLessThan(1e-9);
   });
 
-  it("spins a half turn on the flip input, toward its sign — airborne only", () => {
+  it("spins on the held jump key in the air — faster than any ground turn", () => {
+    // Turning round 9 (director redirect, 2026-07-23): hold Space airborne
+    // to spin, at a trick rate well past what the skis can carve.
     const airborne: SkiState = { ...cruising, height: 1, verticalVelocity: 2 };
 
-    const right = stepSkiing(airborne, { ...noInput, flip: 1 }, 0.02);
-    const left = stepSkiing(airborne, { ...noInput, flip: -1 }, 0.02);
-    expect(right.heading).toBeCloseTo(Math.PI, 10);
-    expect(left.heading).toBeCloseTo(-Math.PI, 10);
-    // The flight path doesn't bend — the 180 turns the body, not the travel.
+    const right = stepSkiing(airborne, { ...noInput, jump: true, spin: 1 }, 0.1);
+    const left = stepSkiing(airborne, { ...noInput, jump: true, spin: -1 }, 0.1);
+    expect(right.heading).toBeGreaterThan(0.4);
+    expect(left.heading).toBeCloseTo(-right.heading, 10);
+    // Unmistakably a trick: at least twice the fastest (boosted) carve.
+    const carved = stepSkiing(
+      cruising,
+      { ...noInput, right: true, boost: true },
+      0.1,
+    );
+    expect(right.heading).toBeGreaterThan(2 * carved.heading);
+    // The flight path doesn't bend — the spin turns the body, not the travel.
     expect(right.lateral).toBeCloseTo(0, 10);
 
-    // Grounded, the flip is reserved as nothing (director call, 2026-07-23:
-    // the charge system keeps its meaning clean).
-    const grounded = stepSkiing(cruising, { ...noInput, flip: 1 }, 0.02);
+    // Grounded, a held Space is the jump charge and only that — no spin.
+    const grounded = stepSkiing(cruising, { ...noInput, jump: true, spin: 1 }, 0.1);
     expect(grounded.heading).toBe(0);
+    expect(grounded.jumpCharge).toBeCloseTo(0.1, 5);
   });
 
-  it("stacks a second flip in the same jump to a 360 — landing clean and fast", () => {
-    // Director call, 2026-07-23: a second double-tap stacks. This answers
-    // the parked 360 question with control design — mid-air heading
-    // accumulates, so the second half turn adds, never cancels.
-    let state: SkiState = { ...cruising, height: 1.2, verticalVelocity: 3 };
-    state = stepSkiing(state, { ...noInput, flip: 1 }, 0.02);
-    expect(state.heading).toBeCloseTo(Math.PI, 10);
-    state = stepSkiing(state, { ...noInput, flip: 1 }, 0.02);
-    expect(state.heading).toBeCloseTo(2 * Math.PI, 10);
+  it("fits a full 360 inside a full-charge jump, with air to spare", () => {
+    // Charge fully, launch, re-press and hold the spin: the whole turn
+    // accumulates before touchdown (the rate is sized for exactly this),
+    // and releasing near clean lands forward at full speed.
+    let state = cruising;
+    for (let i = 0; i < 50; i++) {
+      state = stepSkiing(state, { ...noInput, jump: true }, 0.02);
+    }
+    state = stepSkiing(state, noInput, 0.02); // release launches
+    expect(state.height).toBeGreaterThan(0);
+
+    let frames = 0;
+    while (state.heading < 2 * Math.PI && state.height > 0 && frames++ < 200) {
+      state = stepSkiing(state, { ...noInput, jump: true, spin: 1 }, 0.02);
+    }
+    expect(state.heading).toBeGreaterThanOrEqual(2 * Math.PI); // the 360 fits…
+    expect(state.height).toBeGreaterThan(0); // …before the snow arrives
 
     while (state.height > 0) {
       state = stepSkiing(state, noInput, 0.02);
     }
-    // The full spin collapses to straight downhill, forward, full speed.
-    expect(Math.abs(state.heading)).toBeLessThan(0.001);
+    // The full turn collapses away — landed near clean, forward, full speed.
+    expect(Math.abs(state.heading)).toBeLessThan(0.5);
     expect(state.speed).toBe(BASE_SPEED);
   });
 
-  it("lands a single flip riding switch, still sliding downhill — the compound", () => {
-    // The directives compound: double-Space → 180 → land switch → keep
-    // going. Tips against the travel is round 3's stance rule; the travel
-    // *line* is aligned, so there's no slip to grip — full speed backwards.
+  it("lands a half spin riding switch, still sliding downhill", () => {
+    // Spin to backwards, let go, touch down: tips against the travel is
+    // round 3's stance rule, and the trick itself costs no speed.
     let state: SkiState = { ...cruising, height: 1.2, verticalVelocity: 3 };
-    state = stepSkiing(state, { ...noInput, flip: 1 }, 0.02);
+    while (state.heading < Math.PI && state.height > 0) {
+      state = stepSkiing(state, { ...noInput, jump: true, spin: 1 }, 0.02);
+    }
+    expect(state.heading).toBeGreaterThanOrEqual(Math.PI);
+
     while (state.height > 0) {
       state = stepSkiing(state, noInput, 0.02);
     }
-
     expect(state.speed).toBe(-BASE_SPEED); // tails-first, nothing lost
-    expect(Math.abs(state.heading)).toBeCloseTo(Math.PI, 10);
 
     const next = stepSkiing(state, noInput, 0.1);
     expect(next.distance).toBeGreaterThan(state.distance);

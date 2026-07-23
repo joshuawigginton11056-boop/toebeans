@@ -3,15 +3,15 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (slope-vis) Ski-trick flourishes for the air 180/360 (from turning round 8, 2026-07-23)
+## (slope-vis) Ski-trick flourishes for the air spin (from turning rounds 8–9, 2026-07-23)
 
-Turning round 8 gave the slope a discrete air trick: double-Space spins a
-180 (stacking to a 360), landing switch or clean. The sim and the rig's
-default heading easing carry it, but it's begging for presentation: a
-dedicated spin pose (tuck the body, cat visibly holding on), carve-spray
-when a landing slides through the new grip window, and slip/landing audio
-flourishes to match. All `skierModel.ts` / `skiScene.ts` / `audio.ts`
-territory.
+The slope has an air trick now: hold Space mid-air and the body spins at
+a trick rate (180s, 360s, more if you hold it), landing switch or clean.
+The sim and the rig's default heading easing carry it, but it's begging
+for presentation: a dedicated spin pose (tuck the body, cat visibly
+holding on), carve-spray when a landing slides through the round-8 grip
+window, and spin/slip/landing audio flourishes to match. All
+`skierModel.ts` / `skiScene.ts` / `audio.ts` territory.
 
 ## (slope-vis) Realistic snow — the follow-up test (director verdict, 2026-07-22)
 

@@ -23,7 +23,7 @@ const idleSkiInput = {
   down: false,
   jump: false,
   boost: false,
-  flip: 0,
+  spin: 0,
 } as const;
 
 // A mid-game snapshot with real history: a ski run past the first

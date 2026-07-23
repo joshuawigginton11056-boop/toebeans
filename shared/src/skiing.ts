@@ -5,16 +5,15 @@ export interface SkiInput {
   readonly down: boolean;
   readonly jump: boolean;
   readonly boost: boolean;
-  // The air 180 (turning round 8, director directive 2026-07-23: "I want to
-  // double-Space while in air to do a full 180"): ±1 for exactly one frame
-  // spins the airborne heading a half turn toward that side; 0 otherwise.
-  // The *client* owns the double-tap detection (two Space presses within a
-  // window, both airborne) and the spin side (the last steered direction) —
-  // the sim stays pure and just takes the trick as an input. A second flip
-  // in the same jump stacks to a 360 (director call, 2026-07-23), because
-  // mid-air heading accumulates whole spins. Grounded, flip is deliberately
-  // nothing — the charge system keeps its meaning clean.
-  readonly flip: -1 | 0 | 1;
+  // The air spin (turning round 9, director redirect 2026-07-23: "hold
+  // Space in air to spin — faster spin than the ground turn"; this replaced
+  // round 8's rejected double-tap 180): ±1 while the jump key is held
+  // airborne rotates the body at AIR_SPIN_RATE toward that side; 0 = not
+  // spinning. The *client* owns the side (the held steer key, else the last
+  // steered direction) — the sim stays pure and just takes the trick as an
+  // input. Grounded it's deliberately nothing: on the snow Space means the
+  // jump charge, and only that.
+  readonly spin: -1 | 0 | 1;
 }
 
 export interface Chasm {
@@ -191,6 +190,18 @@ const GRIP_RATE = 3.5;
 // switch, so each key keeps pulling toward its own screen side). Dead
 // backwards is switch's stable point now, not a tie to break.
 const SEEK_DIAGONAL = Math.PI / 4;
+// The air spin's rotation rate (turning round 9 — "faster spin than on
+// ground turn"). A body trick, not an edge carve, so it runs at full rate
+// regardless of speed (no authority scaling) and takes over from the held
+// steer / W-seek while it lasts — one rotation channel at a time. Sized
+// against real airtime: a tap jump (~0.78s) fits a 180 with room to spare
+// (π/6.5 ≈ 0.48s), and a full-charge jump (~1.22s) fits a 360 with ~0.25s
+// of margin after the re-press (you release Space to launch, so the spin
+// needs a fresh press). Ground turn is 1.8 (2.52 boosted) — this is ~2.6×
+// the boosted rate, unmistakably a trick. Tuning knob: higher = snappier
+// spins but touchier release timing on a clean 180/360 (the landing
+// collapse and the round-8 grip window both forgive the overshoot).
+const AIR_SPIN_RATE = 6.5;
 // Half the skiable width. Widened 4 → 12 (director directive, 2026-07-22:
 // open up the skiable area — carving, hockey stops, and switch riding all
 // want room). The edge stays a hard clamp (director call, same day).
@@ -330,7 +341,15 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     (input.boost ? BOOST_TURN_MULTIPLIER : 1) *
     steerAuthority *
     dt;
-  if (input.up) {
+  if (!grounded && input.spin !== 0) {
+    // The air spin (turning round 9): holding the jump key airborne whips
+    // the body around at the trick rate, toward the steered side. It owns
+    // the rotation while it lasts — held steer and the W-seek wait — and
+    // the heading accumulates whole turns up here, so holding it long
+    // enough is a 360 (or more). The landing collapse below sorts out
+    // whatever angle you come down at; flight stays ballistic throughout.
+    heading += AIR_SPIN_RATE * input.spin * dt;
+  } else if (input.up) {
     // W seeks the fall line in the current stance (turning round 7 — see
     // SEEK_DIAGONAL): forward stances ease toward straight-downhill,
     // switch stances toward straight-backwards, each with its own carve
@@ -351,15 +370,6 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   } else {
     if (input.left) heading -= maxTurn;
     if (input.right) heading += maxTurn;
-  }
-  // The air 180 (turning round 8): a half turn, on top of whatever fine
-  // re-aim this frame's held steering added — airborne only, and additive,
-  // so a second flip in the same jump stacks to a full 360 (mid-air heading
-  // accumulates whole spins; the landing collapse and stance rule below
-  // already know what to do with either). The sign is the visual spin side;
-  // the rig's easing rolls the body through it.
-  if (!grounded && input.flip !== 0) {
-    heading += Math.PI * input.flip;
   }
 
   // Speed is signed along the ski axis; the target is the input magnitude
