@@ -150,6 +150,12 @@ window.addEventListener("keydown", (event) => {
     );
     return;
   }
+  // Camera view cycling on the slope (slope-mech) — the rig itself lives
+  // in skiRender.ts; drag-to-look-around is wired there too.
+  if (event.code === "KeyV") {
+    if (mode === "slope") skiScene.cycleView();
+    return;
+  }
   if (event.code === "Enter") {
     if (mode === "lobby") goSkiing();
     else backToLobby();

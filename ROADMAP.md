@@ -3970,6 +3970,62 @@ control (the missing second hazard), or purpose-built big jumps
 (director call whether still wanted now that spins are a control). Music
 still deliberately last, then the end-of-M2 tuning pass.
 
+## (slope-mech) 2026-07-23 — M2: camera views + drag look-around
+
+Director's ask: new camera views and the ability to look around. The
+slope's fixed camera became an eased orbit rig in `skiRender.ts` — all
+presentation-side, no sim or save changes (the camera deliberately isn't
+saved, same reasoning as the scrapped bedroom's follow camera).
+
+- **Four views, V cycles them** (`CAMERA_VIEWS`): **classic** — the
+  DESIGN.md three-quarter front framing, bit-for-bit the old fixed
+  numbers (offset (0, 4, 8), aimed 4 downhill), still the default;
+  **chase** — low and close off the ski tails, aimed over the shoulder;
+  **side** — a true profile from the skier's right, downhill running
+  screen left→right (the purest form of the design doc's 2.5D framing);
+  **far** — high and well back for the whole-slope tactical read. Every
+  parameter (azimuth/elevation/radius/aim offset) eases at `VIEW_EASE`,
+  so a switch swings instead of cutting.
+- **Drag to look around** (mouse or touch, pointer events on the slope
+  canvas): a rigid extra swing of the whole rig around the skier — yaw
+  to a full half-turn either way (you can check uphill), pitch clamped
+  so the camera never dips under the snow or gimbal-locks overhead. It's
+  a *peek*: releasing eases the look back home, so the camera can't be
+  stranded facing uphill mid-run. Sensitivity/snap-back are
+  `LOOK_SENSITIVITY` / `LOOK_EASE`; "drag right = look right" and
+  "drag down = look down" are the chosen (tunable) directions.
+- **Shared-territory edits, small and additive:** `main.ts` wires V to
+  `skiScene.cycleView()` (slope only — lobby ignores it); `hud.ts` adds
+  two hint chips (`V camera`, `Drag look around`).
+- `npm run check` passes (101 tests, no new sim surface to pin —
+  camera is render-side). Live-verified against the served worktree
+  (port 5302 again held by an earlier chat's server for this same
+  folder; screenshots mostly unavailable with the pane hidden, so
+  verification sampled the rendered canvas into color grids per view):
+  all four views produce distinct correct compositions — classic pink
+  sky over snow, chase dominated by the near skier, side showing
+  profile treeline over snow, far all-snow overhead — V wraps back to a
+  pixel-matching classic, drag-left pans into the treeline, drag-down
+  goes all-snow with the skier below, and both ease back to the exact
+  classic baseline on release. Zero console errors.
+- Two things noticed in passing, parked in IDEAS.md: the unclamped
+  frame `dt` after a background-tab stall (the unattended run teleported
+  into a chasm on resume), and decor only reaching 30 units uphill now
+  that players can look back (`DECOR_BEHIND`, slope-vis's).
+
+**What to playtest:** on the slope, tap V through the four views and
+drag (or touch-drag) to peek around. Feel questions: are these the
+*right* four views — keep all, cut any, add one? Should the drag look
+stay a snap-back peek, or persist until re-dragged? Is the drag
+direction right ("drag right = look right" — some players expect the
+inverse "grab the world")? And does the chase view want to follow the
+skier's heading through turns instead of staying downhill-locked (it
+would whip during spins — deliberately not attempted first pass)?
+
+**Next:** tired-hop retune round 2 (faster, an actual small hop — see
+the previous entry's notes), then the round-10 queue: a finish line,
+tree limbs + crouch, or purpose-built big jumps.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

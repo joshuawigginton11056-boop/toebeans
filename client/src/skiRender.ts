@@ -26,6 +26,105 @@ import {
 // lighting, sky, snow, decor, hazard mesh styles — lives in skiScene.ts
 // (slope-visuals territory). See PARALLEL.md for the ownership split.
 
+// ---------------------------------------------------------------------------
+// Camera views (V cycles them — wired in main.ts). Each is an orbit position
+// around the skier — azimuth 0 = due uphill of them, so the camera faces
+// downhill — plus where the camera aims, as an offset from the skier. Every
+// parameter eases (VIEW_EASE), so a switch is a swing, not a cut.
+interface CameraView {
+  readonly name: string;
+  /** Radians around +y; 0 puts the camera uphill of the skier. */
+  readonly azimuth: number;
+  /** Radians above horizontal. */
+  readonly elevation: number;
+  /** Orbit distance from the skier. */
+  readonly radius: number;
+  /** Aim point, offset from the skier (world axes; -z = downhill). */
+  readonly lookX: number;
+  readonly lookY: number;
+  readonly lookZ: number;
+}
+
+const CAMERA_VIEWS: readonly CameraView[] = [
+  // The classic three-quarter front 2.5D framing from DESIGN.md — exactly
+  // the numbers the fixed camera always used (offset (0, 4, 8), aimed 4
+  // units downhill), just expressed as an orbit. Stays the default.
+  {
+    name: "classic",
+    azimuth: 0,
+    elevation: Math.atan2(4, 8),
+    radius: Math.hypot(4, 8),
+    lookX: 0,
+    lookY: 0,
+    lookZ: -4,
+  },
+  // Chase: low and close off the ski tails, aimed over the shoulder at the
+  // slope ahead — speed reads hardest here.
+  {
+    name: "chase",
+    azimuth: 0,
+    elevation: 0.35,
+    radius: 4.6,
+    lookX: 0,
+    lookY: 0.5,
+    lookZ: -6,
+  },
+  // Side-scroller: a true profile from the skier's right, so downhill runs
+  // screen left→right — the purest form of the design doc's 2.5D framing.
+  {
+    name: "side",
+    azimuth: Math.PI / 2,
+    elevation: 0.34,
+    radius: 7.5,
+    lookX: 0,
+    lookY: 0.7,
+    lookZ: -2,
+  },
+  // Far: high and well back — the whole-slope tactical read, chasms and
+  // checkpoints laid out ahead.
+  {
+    name: "far",
+    azimuth: 0,
+    elevation: 0.9,
+    radius: 15,
+    lookX: 0,
+    lookY: 0,
+    lookZ: -6,
+  },
+];
+
+// How fast a view switch swings, and how fast the drag look tracks the
+// pointer / settles back home on release (per-second easing rates).
+const VIEW_EASE = 4;
+const LOOK_EASE = 8;
+// Pointer-to-radians drag feel.
+const LOOK_SENSITIVITY = 0.006;
+// The rig's total pitch clamp: never under the snow, never straight
+// overhead (straight-down gimbal-locks lookAt's up vector).
+const MIN_ELEVATION = 0.06;
+const MAX_ELEVATION = 1.45;
+
+/** The camera rig's eased state — presentation-side memory. */
+interface CameraMemory {
+  view: number;
+  azimuth: number;
+  elevation: number;
+  radius: number;
+  lookX: number;
+  lookY: number;
+  lookZ: number;
+  /** The drag look-around: a rigid extra swing of the whole rig. */
+  lookYaw: number;
+  lookPitch: number;
+  targetLookYaw: number;
+  targetLookPitch: number;
+  dragging: boolean;
+}
+
+function clamp(value: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, value));
+}
+
 export interface SkiSceneHandle {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene: THREE.Scene;
@@ -49,6 +148,14 @@ export interface SkiSceneHandle {
    * touchdown) and decays. Presentation-side memory, like steerMemory.
    */
   readonly jumpMemory: { airborne: boolean; envelope: number };
+  /**
+   * The camera rig (V cycles views, drag looks around) — eased orbit state,
+   * presentation-side memory like steerMemory. Deliberately not saved, same
+   * reasoning as the scrapped bedroom's follow camera.
+   */
+  readonly cameraMemory: CameraMemory;
+  /** Advance to the next camera view (main.ts wires this to V). */
+  readonly cycleView: () => void;
 }
 
 // How long the crash tip-over takes to hit the ground, inside the
@@ -71,9 +178,9 @@ const TIRED_LIFT = 0.07;
 export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   const scene = new THREE.Scene();
 
-  // Three-quarter front perspective: looking downhill and slightly to the
-  // side, matching the 2.5D isometric side-scroller camera described in
-  // DESIGN.md's skiing section.
+  // The camera rig places and aims this every frame (see the sync below):
+  // the default view is the DESIGN.md three-quarter front perspective, V
+  // cycles the alternates in CAMERA_VIEWS, and dragging peeks around.
   const camera = new THREE.PerspectiveCamera(
     50,
     window.innerWidth / window.innerHeight,
@@ -130,6 +237,66 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   // before they arrive.
   void loadSlopeDecor(scene);
 
+  const first = CAMERA_VIEWS[0]!;
+  const cameraMemory: CameraMemory = {
+    view: 0,
+    azimuth: first.azimuth,
+    elevation: first.elevation,
+    radius: first.radius,
+    lookX: first.lookX,
+    lookY: first.lookY,
+    lookZ: first.lookZ,
+    lookYaw: 0,
+    lookPitch: 0,
+    targetLookYaw: 0,
+    targetLookPitch: 0,
+    dragging: false,
+  };
+
+  // Look around: drag anywhere on the slope canvas to swing the camera
+  // around the skier — a *peek*, easing back home on release, so the
+  // camera can't be stranded facing uphill mid-run. Pointer events cover
+  // mouse and touch (touch-action off so a touch drag isn't a page
+  // scroll); capture keeps a drag alive outside the window.
+  const canvas = renderer.domElement;
+  canvas.style.touchAction = "none";
+  let lastPointerX = 0;
+  let lastPointerY = 0;
+  canvas.addEventListener("pointerdown", (event) => {
+    cameraMemory.dragging = true;
+    lastPointerX = event.clientX;
+    lastPointerY = event.clientY;
+    canvas.setPointerCapture(event.pointerId);
+  });
+  canvas.addEventListener("pointermove", (event) => {
+    if (!cameraMemory.dragging) return;
+    const dx = event.clientX - lastPointerX;
+    const dy = event.clientY - lastPointerY;
+    lastPointerX = event.clientX;
+    lastPointerY = event.clientY;
+    // Drag right = look right (the camera orbits the opposite way round
+    // the skier), drag down = look down (the camera rises). Yaw reaches a
+    // full half-turn either way — you can check uphill on the friend the
+    // multiplayer phase will put behind you.
+    cameraMemory.targetLookYaw = clamp(
+      cameraMemory.targetLookYaw - dx * LOOK_SENSITIVITY,
+      -Math.PI,
+      Math.PI,
+    );
+    cameraMemory.targetLookPitch = clamp(
+      cameraMemory.targetLookPitch + dy * LOOK_SENSITIVITY,
+      -1.3,
+      1.3,
+    );
+  });
+  const releaseLook = (): void => {
+    cameraMemory.dragging = false;
+    cameraMemory.targetLookYaw = 0;
+    cameraMemory.targetLookPitch = 0;
+  };
+  canvas.addEventListener("pointerup", releaseLook);
+  canvas.addEventListener("pointercancel", releaseLook);
+
   return {
     renderer,
     scene,
@@ -142,6 +309,10 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     environment,
     steerMemory: { skiing: true, speed: 0 },
     jumpMemory: { airborne: false, envelope: 0 },
+    cameraMemory,
+    cycleView: () => {
+      cameraMemory.view = (cameraMemory.view + 1) % CAMERA_VIEWS.length;
+    },
   };
 }
 
@@ -305,8 +476,43 @@ export function syncSkiSceneToState(
     mesh.position.set(0, 0.01, -(chasm.start + chasm.width / 2));
   }
 
-  handle.camera.position.set(state.lateral, state.height + 4, -state.distance + 8);
-  handle.camera.lookAt(state.lateral, state.height, -state.distance - 4);
+  // The camera rig: ease the orbit toward the active view, layer the drag
+  // look on top (a rigid extra swing of the whole rig around the skier —
+  // position orbits one way, the aim point rotates with it), then place
+  // and aim. state.height rides along in both, so jumps lift the framing
+  // exactly the way the old fixed camera did.
+  const cam = handle.cameraMemory;
+  const view = CAMERA_VIEWS[cam.view]!;
+  const viewEase = Math.min(1, dt * VIEW_EASE);
+  cam.azimuth += (view.azimuth - cam.azimuth) * viewEase;
+  cam.elevation += (view.elevation - cam.elevation) * viewEase;
+  cam.radius += (view.radius - cam.radius) * viewEase;
+  cam.lookX += (view.lookX - cam.lookX) * viewEase;
+  cam.lookY += (view.lookY - cam.lookY) * viewEase;
+  cam.lookZ += (view.lookZ - cam.lookZ) * viewEase;
+  const lookEase = Math.min(1, dt * LOOK_EASE);
+  cam.lookYaw += (cam.targetLookYaw - cam.lookYaw) * lookEase;
+  cam.lookPitch += (cam.targetLookPitch - cam.lookPitch) * lookEase;
+
+  const azimuth = cam.azimuth + cam.lookYaw;
+  const elevation = clamp(
+    cam.elevation + cam.lookPitch,
+    MIN_ELEVATION,
+    MAX_ELEVATION,
+  );
+  const flat = cam.radius * Math.cos(elevation);
+  handle.camera.position.set(
+    state.lateral + flat * Math.sin(azimuth),
+    state.height + cam.radius * Math.sin(elevation),
+    -state.distance + flat * Math.cos(azimuth),
+  );
+  const yawSin = Math.sin(cam.lookYaw);
+  const yawCos = Math.cos(cam.lookYaw);
+  handle.camera.lookAt(
+    state.lateral + cam.lookX * yawCos + cam.lookZ * yawSin,
+    state.height + cam.lookY,
+    -state.distance + cam.lookZ * yawCos - cam.lookX * yawSin,
+  );
 
   // Atmosphere follows the run downhill — the offsets are skiScene's.
   // (slope-visuals seam addition) the snow also gets the two numbers it
