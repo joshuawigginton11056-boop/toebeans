@@ -4022,7 +4022,41 @@ inverse "grab the world")? And does the chase view want to follow the
 skier's heading through turns instead of staying downhill-locked (it
 would whip during spins — deliberately not attempted first pass)?
 
-**Next:** tired-hop retune round 2 (faster, an actual small hop — see
+**Playtest verdict (director, 2026-07-23): pre-built views are out;
+free camera control is in.** Two changes, to build in the next session
+(director call):
+
+- **Zoom, not views.** Instead of V cycling fixed framings, "you should
+  be able to zoom in or out as you please" — mouse wheel (pinch on
+  touch) driving the orbit radius through a clamped range, roughly
+  chase-close to far-out. The eased orbit rig survives; `CAMERA_VIEWS`
+  and the V key go (the hud chip and main.ts wiring too). Open call for
+  the session: should elevation/aim *scale with* the radius (close = low
+  over-the-shoulder, far = high tactical read) or hold fixed at the
+  classic angles? A radius-driven blend of round 1's view parameters
+  would keep each distance framed the way its old view was — probably
+  the right starting point, since each of those framings was tuned at
+  its distance.
+- **Mouse look without the click.** The director explicitly dislikes
+  click-drag on mouse — "the input is automatically recognized as the
+  camera." Touch keeps drag (his call too — "click to drag makes sense
+  for touchscreen"). Two implementations to weigh:
+  - **(a) Mouse-position look (recommended):** the cursor's offset from
+    canvas center maps to look yaw/pitch — centered mouse = camera home,
+    edges = full look. No button, no pointer lock; round 1's snap-back
+    peek becomes "move the mouse back." Wants a center deadzone so the
+    camera holds still during normal play, and the existing `LOOK_EASE`
+    smoothing so it never jitters with the hand.
+  - **(b) FPS-style relative mouselook:** accumulate `mousemove` deltas.
+    Needs pointer lock to escape screen edges, and pointer lock needs a
+    click-to-engage plus Esc-to-release — which reintroduces exactly the
+    ceremony the director just rejected. Only if (a) doesn't feel right.
+  - Either way the elevation clamps and easing from round 1 carry over,
+    and nothing else competes for the mouse on the slope (steering is
+    keys; the lobby's menu clicks are unaffected).
+
+**Next:** camera round 2 — free zoom + no-click mouse look (verdict
+above). Then tired-hop retune round 2 (faster, an actual small hop — see
 the previous entry's notes), then the round-10 queue: a finish line,
 tree limbs + crouch, or purpose-built big jumps.
 
