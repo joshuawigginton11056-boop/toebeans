@@ -221,32 +221,19 @@ them, all `skiScene.ts`:
   (the render loop pauses when the Browser pane is hidden, so no in-session
   capture): whether the new opacity/size/frequency/frost read right — the knobs
   above are all named constants at the top of the lens block.
-- **Lens splat: real snow particles, not crystal flakes — OPEN (director verdict
-  2026-07-24: "the snowflakes are tacky, I wanted actual snow particles").** The
-  smaller/detailed/sticky build landed (see ROADMAP 2026-07-24 build entry) and
-  the director rejected the *detail lever specifically*: the six-arm
-  `makeFlakeSprite()` crystal reads as decorative clip-art, not snow flung onto a
-  lens. **Smaller and sticky were on target and stay** — this is a shape swap, not
-  a redo. The still-standing starting point from that build: base radius
-  `(0.013+.026)·minDim` (small), big mult 2.2, `LENS_BIG_CHANCE` 0.16,
-  `LENS_LIFE` 1.1 / `LENS_LIFE_VAR` 0.7, fade `min(1, age·12)·√t`, `LENS_SLIDE`
-  26 / `LENS_MELT` 22, plus the soft "direct hit" blobs, the edge-frost vignette,
-  and the idle-skip zero-fill. What to change, all in `skiScene.ts`'s lens block:
-  - **Replace the crystal with a naturalistic particle.** Snow on glass is
-    *irregular and asymmetric* — no symmetry, no geometric star. Candidates from
-    the original spec we skipped and should now build: a **clustered speckle of
-    finer grains** (a clump of a few overlapping soft blobs at jittered offsets +
-    a scatter of tiny dots), and/or a **noise-roughened irregular soft blob**
-    (asymmetric feathered edge, not a clean circle). Pre-render a small **set of
-    2–4 variant sprites** (still blit-cheap: `drawImage` scaled + rotated) so it
-    doesn't read repetitive. Palette stays the cool `LENS_TINT` — the read is
-    irregular shape/edge + grain, not a motif.
-  - **Maybe a slight motion streak** in the fling direction (snow hits at an
-    angle) — a soft directional smear reads more like impact than a centred dot.
-    Optional, judge on the eye.
-  - **Keep the size/persistence/mix knobs** (`base`, `LENS_LIFE`,
-    `LENS_SPLAT_RATE`, `LENS_BIG_CHANCE`) as tunables for the director's eye once
-    the particle shape reads right.
+- **Lens splat: real snow particles, not crystal flakes — DONE + APPROVED
+  2026-07-24 ("looks good").** The director's "the snowflakes are tacky, I wanted
+  actual snow particles" was cashed in (see ROADMAP 2026-07-24 build entry): the
+  six-arm crystal is gone, replaced by `makeSnowSprites()` → 4 naturalistic
+  `makeSnowClump()` variants — a packed-powder core (3–5 overlapping soft blobs at
+  jittered offsets → asymmetric feathered mass) + a center-biased scatter of
+  12–21 tiny grains, all cool `LENS_TINT`. Each flake picks a variant + full-2π
+  birth rotation at emit; blits under a mild `scale(1.28,0.82)` for a subtle
+  flung-at-an-angle smear. Smaller/sticky levers all kept. Closes the whole
+  lens-splat thread (make-it-read → smaller/sticky → real particles). The
+  size/persistence/mix knobs (`base`, `LENS_LIFE`, `LENS_SPLAT_RATE`,
+  `LENS_BIG_CHANCE`) and the smear scale remain named constants in `skiScene.ts`
+  if the mix ever wants a nudge, but no ask is open on the splat itself.
 - **Fling MORE on hard turns and jump landings — OPEN (director ask 2026-07-24:
   "want it to fling more when turning or landing a jump").** Both the plume and
   the lens splash should surge on a hard carve and burst on touchdown. Two parts:

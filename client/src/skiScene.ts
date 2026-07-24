@@ -1347,7 +1347,8 @@ interface FlurrySystem {
 
 // One splat stuck to the lens: screen position (CSS px), current radius, how far
 // through its melt it is, its drip velocity, and — for flakes — a fixed birth
-// rotation so the crystal sits at a natural random angle on the glass.
+// rotation and sprite variant so each clump sits at a natural random angle on
+// the glass and no two read alike.
 interface LensSplat {
   x: number;
   y: number;
@@ -1358,14 +1359,15 @@ interface LensSplat {
   maxLife: number;
   alpha0: number;
   rot: number; // birth rotation, radians (flakes only; blobs ignore it)
-  flake: boolean; // true = detailed crystal sprite, false = soft round direct hit
+  sprite: number; // index into flakeSprites (flakes only; blobs ignore it)
+  flake: boolean; // true = detailed snow-clump sprite, false = soft round direct hit
 }
 
 interface LensSplashSystem {
   readonly canvas: HTMLCanvasElement;
   readonly ctx: CanvasRenderingContext2D;
   readonly splats: LensSplat[];
-  readonly flakeSprite: HTMLCanvasElement; // pre-rendered crystal, drawn scaled+rotated
+  readonly flakeSprites: HTMLCanvasElement[]; // pre-rendered snow-clump variants, drawn scaled+rotated
   emitAccum: number;
   frost: number; // 0..1 smoothed edge-cake level (eases with carve intensity)
   wasDrawn: boolean; // last frame left ink on the canvas (so we clear once)
@@ -1760,7 +1762,7 @@ function createLensSplash(renderer: THREE.WebGLRenderer): void {
     canvas,
     ctx,
     splats: [],
-    flakeSprite: makeFlakeSprite(),
+    flakeSprites: makeSnowSprites(),
     emitAccum: 0,
     frost: 0,
     wasDrawn: false,
@@ -1785,14 +1787,26 @@ function createLensSplash(renderer: THREE.WebGLRenderer): void {
   });
 }
 
-// Pre-render one snow-crystal sprite to an offscreen canvas (done once at
-// setup). Each small flake splat then `drawImage`s this scaled + rotated, so the
-// "higher detail" the director asked for (2026-07-24) costs no per-frame pathing
-// — just a blit. Six-arm crystal with short side-branches over a soft melty core,
-// painted in the cool LENS_TINT snow-white so it stays bible-legal (detail is
-// shape, not a new colour). Alpha lives in the sprite; per-splat fade rides
-// globalAlpha at draw time.
-function makeFlakeSprite(): HTMLCanvasElement {
+// Pre-render a small set of naturalistic snow-clump sprites once at setup. Each
+// small flake splat then `drawImage`s one (scaled + rotated), so the detail
+// costs no per-frame pathing — just a blit. The director's 2026-07-24 verdict
+// killed the six-arm crystal ("tacky … I wanted actual snow particles"): snow on
+// glass is *irregular and asymmetric* — packed-powder clumps and scattered fine
+// grains, no symmetry, no geometric star. Each variant is a handful of soft
+// overlapping blobs at jittered offsets (the wet packed clump) plus a scatter of
+// tiny grains around it (the fine powder), painted in the cool LENS_TINT
+// snow-white so it stays bible-legal (the read is shape/edge + grain, not a new
+// colour). 4 variants so a screenful doesn't read repetitive. Alpha lives in the
+// sprite; per-splat fade rides globalAlpha at draw time.
+const LENS_SPRITE_VARIANTS = 4;
+
+function makeSnowSprites(): HTMLCanvasElement[] {
+  const out: HTMLCanvasElement[] = [];
+  for (let v = 0; v < LENS_SPRITE_VARIANTS; v++) out.push(makeSnowClump());
+  return out;
+}
+
+function makeSnowClump(): HTMLCanvasElement {
   const S = 64;
   const c = document.createElement("canvas");
   c.width = S;
@@ -1800,39 +1814,42 @@ function makeFlakeSprite(): HTMLCanvasElement {
   const g = c.getContext("2d")!;
   const cx = S / 2;
   const cy = S / 2;
-  // Soft wet core so the crystal reads as snow-on-glass, not a hard vector star.
-  const core = g.createRadialGradient(cx, cy, 0, cx, cy, S * 0.5);
-  core.addColorStop(0, `rgba(${LENS_TINT}, 0.5)`);
-  core.addColorStop(0.5, `rgba(${LENS_TINT}, 0.12)`);
-  core.addColorStop(1, `rgba(${LENS_TINT}, 0)`);
-  g.fillStyle = core;
-  g.fillRect(0, 0, S, S);
-  // Six radial arms with two pairs of side-branches each.
-  g.translate(cx, cy);
-  g.strokeStyle = `rgb(${LENS_TINT})`;
-  g.lineCap = "round";
-  const arm = S * 0.4;
-  for (let i = 0; i < 6; i++) {
-    g.save();
-    g.rotate((Math.PI / 3) * i);
-    g.globalAlpha = 0.8;
-    g.lineWidth = S * 0.05;
+  // The packed-powder core: 3–5 soft blobs at jittered offsets and sizes. The
+  // overlap builds one asymmetric clump with a feathered, non-circular edge —
+  // never a clean disc, never symmetric.
+  const blobs = 3 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < blobs; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const dist = Math.random() * S * 0.17;
+    const bx = cx + Math.cos(ang) * dist;
+    const by = cy + Math.sin(ang) * dist;
+    const br = S * (0.15 + Math.random() * 0.17);
+    const a = 0.34 + Math.random() * 0.24;
+    const rg = g.createRadialGradient(bx, by, 0, bx, by, br);
+    rg.addColorStop(0, `rgba(${LENS_TINT}, ${a})`);
+    rg.addColorStop(0.6, `rgba(${LENS_TINT}, ${a * 0.4})`);
+    rg.addColorStop(1, `rgba(${LENS_TINT}, 0)`);
+    g.fillStyle = rg;
+    g.fillRect(0, 0, S, S);
+  }
+  // Scattered fine grains around and over the clump — the flung-powder speckle.
+  // Denser toward the center (pow bias), each a tiny soft dot at varied alpha.
+  const grains = 12 + Math.floor(Math.random() * 10);
+  for (let i = 0; i < grains; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const dist = Math.pow(Math.random(), 0.7) * S * 0.44;
+    const gx = cx + Math.cos(ang) * dist;
+    const gy = cy + Math.sin(ang) * dist;
+    const gr = S * (0.014 + Math.random() * 0.04);
+    const a = 0.35 + Math.random() * 0.5;
+    const rg = g.createRadialGradient(gx, gy, 0, gx, gy, gr);
+    rg.addColorStop(0, `rgba(${LENS_TINT}, ${a})`);
+    rg.addColorStop(0.65, `rgba(${LENS_TINT}, ${a * 0.5})`);
+    rg.addColorStop(1, `rgba(${LENS_TINT}, 0)`);
+    g.fillStyle = rg;
     g.beginPath();
-    g.moveTo(0, 0);
-    g.lineTo(0, -arm);
-    g.stroke();
-    g.lineWidth = S * 0.035;
-    for (const f of [0.5, 0.74]) {
-      const by = -arm * f;
-      const bl = arm * 0.24;
-      g.beginPath();
-      g.moveTo(0, by);
-      g.lineTo(bl * 0.7, by - bl * 0.7);
-      g.moveTo(0, by);
-      g.lineTo(-bl * 0.7, by - bl * 0.7);
-      g.stroke();
-    }
-    g.restore();
+    g.arc(gx, gy, gr, 0, Math.PI * 2);
+    g.fill();
   }
   return c;
 }
@@ -1890,7 +1907,8 @@ function updateLensSplash(
         maxLife: 0, // set below
         alpha0: (big ? LENS_PEAK_ALPHA : LENS_PEAK_ALPHA * 0.9) *
           (0.6 + Math.random() * 0.4),
-        rot: Math.random() * Math.PI,
+        rot: Math.random() * Math.PI * 2,
+        sprite: (Math.random() * LENS_SPRITE_VARIANTS) | 0,
         flake: !big,
       });
       const s = splats[splats.length - 1]!;
@@ -1947,14 +1965,19 @@ function updateLensSplash(
     const alpha = s.alpha0 * Math.min(1, age * 12) * Math.sqrt(t);
     if (alpha <= 0.003) continue;
     if (s.flake) {
-      // Detailed crystal: blit the pre-rendered sprite, rotated to its birth
-      // angle and scaled to the current radius. Cheap (no per-frame pathing) and
-      // it clings without drip-squash — a flake sits, it doesn't run.
+      // Naturalistic snow clump: blit its pre-rendered variant, rotated to its
+      // birth angle and scaled to the current radius. Cheap (no per-frame
+      // pathing) and it clings without drip-squash — a clump sits, it doesn't
+      // run. A slight stretch along the local axis (rotated per-flake) gives each
+      // one a faint directional smear, so it reads as snow flung at an angle onto
+      // the glass rather than a centred dot.
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.translate(s.x, s.y);
       ctx.rotate(s.rot);
-      ctx.drawImage(ls.flakeSprite, -s.r, -s.r, s.r * 2, s.r * 2);
+      ctx.scale(1.28, 0.82);
+      const sprite = ls.flakeSprites[s.sprite] ?? ls.flakeSprites[0]!;
+      ctx.drawImage(sprite, -s.r, -s.r, s.r * 2, s.r * 2);
       ctx.restore();
       continue;
     }
