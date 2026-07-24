@@ -9,6 +9,7 @@
     "typecheck": "tsc --build"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.8",
     "@toebeans/shared": "*",
     "three": "^0.185.1"
   },

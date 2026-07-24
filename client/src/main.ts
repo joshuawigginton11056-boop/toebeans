@@ -14,9 +14,17 @@ import {
 } from "@toebeans/shared";
 import { createAudio } from "./audio";
 import { createBranchDebug, type BranchDebug } from "./branchDebug";
+import { createGhosts } from "./ghosts";
 import { createHud } from "./hud";
 import { createLobbyScene, renderLobby, syncLobbyScene } from "./lobbyRender";
 import { createLobbyUi, type LobbyCycle } from "./lobbyUi";
+import {
+  connectRoom,
+  makePlayerId,
+  makeRoomCode,
+  normalizeRoomCode,
+  type NetRoom,
+} from "./net";
 import { readSave, writeSave } from "./save";
 import {
   addBranchGrayblock,
@@ -26,12 +34,20 @@ import {
 } from "./skiRender";
 import { cycleTimeOfDay } from "./skiScene";
 
-// Dev-only entry to the branching map (SLOPE_BRANCHING.md — "the actual map").
-// Append ?branch=1 to the URL and every trip to the slope loads the grayblock
-// branching route (createBranchingSkiState) with a proof readout, instead of
-// the Overlook. Off by default, so normal play is untouched. Grayblock scaffold
-// + debug panel are set up lazily on the first slope entry below.
-const BRANCH_MAP = new URLSearchParams(location.search).has("branch");
+// The branching map (SLOPE_BRANCHING.md — "the actual map") is the DEFAULT slope
+// now (director, 2026-07-24: the graded "real mountain" run must be what the live
+// build shows — no more hiding it behind a dev flag; the old flat Overlook felt
+// unchanged because the grade only ever lived on the branching map). Every trip to
+// the slope loads the graded grayblock branching route (createBranchingSkiState).
+// `?overlook=1` still loads the old flat Overlook for comparison. It's grayblock
+// today (boxes + descending corridors, no dressing) — the real snow/forest is the
+// slope-visuals session's parallel job; the mechanics (the 3D drop) are here now.
+const params = new URLSearchParams(location.search);
+const BRANCH_MAP = !params.has("overlook");
+// The live proof readout stays a dev-only overlay (?branch or ?debug) so the
+// default run isn't covered in dev text; the grayblock scenery always shows
+// because it's the only ground until the visuals seam dresses it.
+const BRANCH_DEBUG = params.has("branch") || params.has("debug");
 let branchGrayblockAdded = false;
 let branchDebug: BranchDebug | null = null;
 
@@ -54,11 +70,11 @@ const restored = (() => {
   return save === null ? null : restoreSave(save);
 })();
 
-// Under the branching-map dev flag, never resume a saved slope run: a restore
-// always rebuilds the Overlook (branching state isn't saved), so `?branch=1`
-// would silently drop you onto the wrong slope with no grayblock — which is
-// exactly why the tree "wasn't there." Force a clean lobby start and auto-enter
-// the branching map below; appearance/mute still come from the save.
+// On the branching map (now the default), never resume a saved slope run: a
+// restore always rebuilds the Overlook (branching state isn't saved), so resuming
+// would silently drop you onto the wrong slope with no grayblock. Force a clean
+// lobby start; appearance/mute still come from the save. (`?overlook=1` turns
+// BRANCH_MAP off and restores the saved Overlook run as before.)
 let mode: SceneMode = BRANCH_MAP ? "lobby" : (restored?.mode ?? "lobby");
 let skiState = restored?.ski ?? createInitialSkiState();
 let muted = restored?.muted ?? false;
@@ -66,6 +82,68 @@ let appearance: Appearance = restored?.appearance ?? createDefaultAppearance();
 
 const lobbyScene = createLobbyScene(container);
 const skiScene = createSkiScene(container);
+
+// Ghost racing (multiplayer session, 2026-07-24). The other players' skiers,
+// drawn into the slope scene from the pose packets net.ts relays. Client-only:
+// no game state, no collisions — see ghosts.ts / net.ts.
+const ghosts = createGhosts(skiScene.scene);
+const myId = makePlayerId();
+let room: NetRoom | null = null;
+// Who we've heard from lately (id → last-seen ms), so the lobby status line
+// can say "friend connected" / "waiting" and notice a friend leaving. Mirrors
+// (deliberately, kept simple) the timeout ghosts.ts uses to drop stale rigs.
+const peers = new Map<string, number>();
+const PEER_TIMEOUT_MS = 3000;
+// How often we broadcast our own pose while in a room (~12×/sec).
+const NET_SEND_INTERVAL = 0.08;
+let netSendTimer = 0;
+
+function updateRoomStatus(): void {
+  if (!room) return;
+  if (peers.size > 0) {
+    lobbyUi.setRoomStatus("Friend connected! Both hit the slopes to race.");
+    return;
+  }
+  const caveat = room.canReachRemote
+    ? ""
+    : " (Heads up: same-device only until Supabase is set up.)";
+  lobbyUi.setRoomStatus(`Waiting for your friend — share the code above.${caveat}`);
+}
+
+function openRoom(code: string): void {
+  room?.close();
+  peers.clear();
+  ghosts.clear();
+  lobbyScene.friends.clear();
+  room = connectRoom(code, {
+    onPacket: (packet) => {
+      // BroadcastChannel has no self-filter, so drop echoes of our own pose.
+      if (packet.id === myId) return;
+      const isNew = !peers.has(packet.id);
+      peers.set(packet.id, performance.now());
+      ghosts.ingest(packet);
+      // Also stand the friend up in the lobby vignette (lobbyRender.ts owns
+      // the presentation; it hides them while they're onSlope). onPacket has
+      // already dropped our own echo above, so this is only real friends.
+      lobbyScene.friends.set(packet.id, packet.appearance, packet.onSlope);
+      if (isNew) updateRoomStatus();
+    },
+    onStatus: (status) => {
+      if (status === "connecting") lobbyUi.setRoomStatus("Connecting…");
+      else if (status === "connected") updateRoomStatus();
+      else if (status === "error")
+        lobbyUi.setRoomStatus("Connection problem — check the code and try again.");
+    },
+  });
+}
+
+function leaveRoom(): void {
+  room?.close();
+  room = null;
+  peers.clear();
+  ghosts.clear();
+  lobbyScene.friends.clear();
+}
 
 // Both scenes show the same character, so they always get the same
 // appearance. Pushing it in (rather than the rigs reading state) keeps the
@@ -103,8 +181,11 @@ function goSkiing(): void {
       addBranchGrayblock(skiScene);
       branchGrayblockAdded = true;
     }
-    if (!branchDebug) branchDebug = createBranchDebug();
-    branchDebug.reset();
+    // The proof readout only under the dev flag (?branch/?debug) — see BRANCH_DEBUG.
+    if (BRANCH_DEBUG) {
+      if (!branchDebug) branchDebug = createBranchDebug();
+      branchDebug.reset();
+    }
   } else {
     skiState = createInitialSkiState();
   }
@@ -143,6 +224,16 @@ const lobbyUi = createLobbyUi({
     lobbyUi.setMuted(muted);
     persist();
   },
+  // Ghost racing (multiplayer session). Create hands back a fresh code to
+  // show; join/leave open and tear down the relay room. Deliberately not
+  // saved — a room is a per-sitting thing, not game progress.
+  onCreateRoom: () => {
+    const code = makeRoomCode();
+    openRoom(code);
+    return code;
+  },
+  onJoinRoom: (code) => openRoom(normalizeRoomCode(code)),
+  onLeaveRoom: leaveRoom,
 });
 
 applyAppearance();
@@ -158,10 +249,10 @@ hud.sync(mode, skiState);
 const audio = createAudio(muted);
 lobbyUi.setMuted(muted);
 
-// ?branch=1: drop straight into the grayblock branching map — goSkiing sets up
-// the segment run, the grayblock corridors/tree/markers, and the proof readout,
-// so the map is on screen immediately instead of hiding behind a save-resume.
-if (BRANCH_MAP) goSkiing();
+// ?branch/?debug: drop straight into the map so it's on screen immediately (a dev
+// convenience). The default flow keeps the lobby first — load, see the menu, press
+// "Hit the slopes" to ride the graded mountain.
+if (BRANCH_DEBUG) goSkiing();
 
 const AUTOSAVE_SECONDS = 5;
 let autosaveTimer = 0;
@@ -243,6 +334,8 @@ function loop(now: number): void {
   } else {
     skiState = stepSkiing(skiState, readSkiInput(), dt);
     syncSkiSceneToState(skiScene, skiState, dt);
+    // Ghost racing: place/animate the friend's skier(s) before drawing.
+    ghosts.update(performance.now(), dt);
     render(skiScene);
     // The branching map's live proof readout (dev-only, ?branch=1).
     branchDebug?.update(skiState, dt);
@@ -258,6 +351,41 @@ function loop(now: number): void {
   // "bedroom" for the quiet scene — map at the call site rather than edit
   // their file (IDEAS.md has a (slope) note to rename it at leisure).
   audio.sync(mode === "slope" ? "slope" : "bedroom", skiState);
+
+  // Ghost racing: while in a room, broadcast our own pose a few times a second
+  // (lobby or slope — onSlope tells the friend whether to show our ghost), and
+  // let the status line notice a friend who's gone quiet.
+  if (room) {
+    netSendTimer += dt;
+    if (netSendTimer >= NET_SEND_INTERVAL) {
+      netSendTimer = 0;
+      room.send({
+        id: myId,
+        name: "Friend",
+        appearance,
+        onSlope: mode === "slope",
+        seg: skiState.segmentId,
+        dist: skiState.distance,
+        lat: skiState.lateral,
+        h: skiState.height,
+        spd: skiState.speed,
+        hd: skiState.heading,
+        st: skiState.status,
+      });
+    }
+    const nowMs = performance.now();
+    let pruned = false;
+    for (const [id, seen] of peers) {
+      if (nowMs - seen > PEER_TIMEOUT_MS) {
+        peers.delete(id);
+        // Their lobby stand-in leaves with them (ghosts.ts expires its own
+        // rig on the same timeout).
+        lobbyScene.friends.remove(id);
+        pruned = true;
+      }
+    }
+    if (pruned && mode === "lobby") updateRoomStatus();
+  }
 
   autosaveTimer += dt;
   if (autosaveTimer >= AUTOSAVE_SECONDS) {

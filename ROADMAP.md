@@ -41,8 +41,9 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 ### Ski slope (the M2 area)
 - **Slope 1 "The Overlook"** — a finite track skeleton (finish at distance 800,
   a "finished" status that coasts to a stop and auto-returns to the lobby,
-  chasms/checkpoints placed to a beat sheet, a lane pinch at the rock gate).
-  Now framed as **the onboarding run**; the "actual map" is the next mechanics job.
+  chasms/checkpoints placed to a beat sheet, a lane pinch at the rock gate). Flat
+  (faked grade). **No longer the default run** — the branching map replaced it as
+  what "Hit the slopes" loads; reachable at **`?overlook=1`** for comparison.
 - **Momentum skiing:** inertial speed with a pole push-off from a standstill,
   boost that builds and coasts, braking that bites. Real turning (skis point
   where you steer; turning scrubs speed; fully sideways = hockey stop; **switch
@@ -62,16 +63,28 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   way it's reached. The renderer places each segment in its own grayblock world
   corridor (`SEGMENT_PLACEMENTS`/`addBranchGrayblock`, now fully data-driven off
   the registry — boxes only, no `skiScene.ts`); `roadSegmentIds()` is the single
-  source of truth for spine-vs-detour. 134 tests (incl. a behavioral proof all
-  three routes + the tree no-op reach the flag on the same step) + a clean
-  `?branch=1` bundle. Dev-only behind **`?branch=1`** (auto-loads the map — a save
-  doesn't bypass it); the Overlook's single `"main"` segment stays inert, so
-  normal play is unchanged. **Next (director, 2026-07-24): make it actually
-  playable, starting with the summit → forest ride** — promote it from the
-  dev-flag grayblock to a real, *dressed* run you enter and ski (see the Open
-  item and the IDEAS handoffs). Detour *content* (animal world, bird, penguin/ice
-  castles) and per-route hazard balancing (§5) come after; §7's open
-  reconciliations remain the director's.
+  source of truth for spine-vs-detour. **The corridors CURVE now (2026-07-24):**
+  each segment is a constant-curvature arc (`SEGMENT_SHAPES` in `slopePath.ts`),
+  the spine weaving a gentle S down the middle and the detours peeling off to
+  their sides — chained smoothly on continuous runs (no kink), cut at fork
+  handoffs; the grayblock floor/walls facet along the arc to follow it. 144 tests
+  (incl. a behavioral proof all three routes + the tree no-op reach the flag on
+  the same step, the grade, and the arcs' length/continuity).
+  **It is now the DEFAULT slope (2026-07-24)** — "Hit the slopes" loads it at the
+  live URL; **`?overlook=1`** keeps the old flat Overlook; the proof readout is
+  gated dev-only (`?branch`/`?debug`).
+- **Real 3D grade on the branching map (2026-07-24) — director-approved.** The run
+  drops for real in world-Y: an elevated summit falling ~224 units to y=0 at the
+  flag, a constant **~19° pitch** (`SEGMENT_GRADE` 0.35) keyed to route distance so
+  every route drops the same total height ("same clock, same flag" in elevation
+  too). Director rode it and called the angle **"invigorating" — locked in, not a
+  pending tune.** `slopePath.ts` `segmentCenterline` carries the `y`; the skier,
+  camera, hazards, and grayblock (descending floor ramps + tilted walls) all ride
+  it; the Overlook stays flat (no placement). **Still grayblock, and the dressed
+  snow is still FLAT under it** — tilting the snow surface to the grade is the
+  slope-vis half (the urgent next visual piece; see IDEAS.md). Detour *content*
+  (animal world, bird, penguin/ice castles) and per-route hazard balancing (§5)
+  come after; §7's open reconciliations remain the director's.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
   across all 24 slope models; decor scatter follows the run. (Old birches removed.)
 - **Realism snow:** procedural displaced surface + GPU-carved ski trails.
@@ -116,6 +129,35 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 - Temp keys (stand-ins for the M3 picker): **C** character, **K** skin, **H** hair
   — gated to the lobby.
 
+### Multiplayer — "Play with a friend" (ghost racing), experimental
+- **Landed early vs. the plan** (real-time co-op is M7 in DESIGN.md) as a
+  lightweight friend-testing layer, at Josh's request. **Client-only** — the sim
+  never changes, `/server` stays a stub. Each browser stays authoritative over
+  its own skier and just **broadcasts its pose ~12×/sec**; the friend is drawn as
+  a **ghost** (reusing the real rig + cat), interpolated. Purely visual: no shared
+  simulation, no collisions, no life loss — you can ski through a ghost.
+- **Rooms by short code** in the lobby ("Play with a friend" → Create / Join).
+  Two transports run at once: **Supabase Realtime broadcast** (a hosted relay, so
+  players on *different networks* connect — needs `VITE_SUPABASE_URL` +
+  `VITE_SUPABASE_ANON_KEY`, see `client/.env.example`) and a **BroadcastChannel**
+  mirror (same-machine tabs, zero setup — the local-test path). Without the
+  Supabase vars the room still works same-device and says so.
+- **(lobby) Friends show in the lobby, not just on the slope** — a connected
+  friend's character now stands in the lobby vignette beside you (lined up to
+  your camera-left, the cat's side left clear), driven from the same pose
+  packets. It hides while they're out on the slope (they're a ghost over there)
+  and reappears when they're back in the lobby — mirroring ghost on-slope
+  semantics, so one racer is only ever in one place. Managed in
+  `lobbyRender.ts` (`createLobbyFriends`), fed by the loop in `main.ts`.
+- Files: `client/src/net.ts` (transport/room), `client/src/ghosts.ts` (remote
+  skiers on the slope), `client/src/lobbyRender.ts` (friends standing in the
+  lobby), friend panel in `lobbyUi.ts`, loop wiring in `main.ts`.
+  Verified: typecheck + 139 tests + prod build green; UI flow, the net send +
+  receive paths, and ghost spawn all exercised live (the on-slope *visual* of two
+  racers is Josh's playtest — and needs the Supabase vars for the cross-network
+  case). Fast-follows (name tags, a real synced race, lazy-loading Supabase) in
+  IDEAS.md.
+
 ### Lobby, UI, systems
 - **Menu lobby / title screen** (`lobbyRender.ts` + `lobbyUi.ts`) — a live 3D
   vignette of the character + cat on dawn snow; doubles as character select.
@@ -159,6 +201,28 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       dressed for real (this is the run that becomes the game). A coordinated
       cross-session slice — the ride already works mechanically (proven by tests),
       what's missing is a real entry + real visuals:
+      - **(slope-mech) — real 3D grade ✅ landed (2026-07-24):** the branching map
+        drops for real now ("ride down a REAL mountain", director). `slopePath.ts`'s
+        `segmentCenterline` returns a `y` — the corridors descend from an elevated
+        summit (~224) to y=0 at the flag, a constant **~19° pitch** (`SEGMENT_GRADE`
+        0.35, steepened from 0.18 on the director's ride) keyed to route distance so
+        every route falls the same total height (same-clock → same floor); the
+        Overlook stays flat (no placement → y=0). The skier, camera, hazards, and
+        grayblock (now descending floor ramps + tilted walls) ride the grade, and the
+        environment `anchor` carries `anchor.y`. **Snow-follow is the slope-vis half**
+        (tilt the surface to the grade — folds into the main lift; see IDEAS.md).
+        139 tests. **Angle director-approved at ~19° ("invigorating", 2026-07-24)
+        — locked, not a pending tune.**
+      - **(slope-mech) — branching map is now the DEFAULT slope ✅ (2026-07-24):**
+        director couldn't see the grade because it was hidden behind `?branch=1` and
+        the live build's plain URL served the flat Overlook. Promoted: the graded
+        branching map is what "Hit the slopes" loads at the plain URL now
+        (`main.ts` — `BRANCH_MAP` defaults on; **`?overlook=1`** opts back to the
+        flat Overlook); the proof readout is gated dev-only (`?branch`/`?debug`).
+        Verified live in the production bundle. **This answers the (lobby) open
+        decision below as replace-as-default.** Still grayblock — the flat dressed
+        snow now shows under a *default* descending run, so the slope-vis snow-tilt
+        (below / IDEAS.md) is the urgent next visual piece.
       - **(slope-vis) — the main lift:** dress the summit + forest corridors. The
         grayblock map renders boxes only (`addBranchGrayblock`, mechanics-owned) and
         `skiScene.ts` draws along the *single* Overlook road, not per-segment — it
@@ -168,16 +232,18 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
         the night → enchanted-forest work lands, and the parked "sun sets *as you
         race*" auto-transition now has its trigger: **the summit→forest descent**
         (sunset up top → dark/enchanted in the forest). See IDEAS.md.
-      - **(slope-mech) — real entry + cleanup:** promote entry off the `?branch=1`
-        dev flag (gate the debug readout + grayblock so they don't show in real
-        play); confirm the summit→forest ride feels right (it's gentle, no hazards
-        until the lake — a clean intro). Expose whatever segment-placement the
-        visuals seam needs (additive, per PARALLEL.md).
-      - **(lobby) — how you get there:** the entry UX — a slope-select menu choice,
-        or make the branching map what "Hit the slopes" loads. **Open decision for
-        the kickoff:** branching map replaces the Overlook as the default, or
-        coexists (Overlook = onboarding, branching = the real map, selectable)? The
-        docs assume *coexist*, per the existing framing — confirm with the director.
+      - **(slope-mech) — real entry ✅ mostly done (2026-07-24):** the branching map
+        is now what "Hit the slopes" loads (off the `?branch=1` flag — see the
+        default-slope entry above); the debug readout is gated dev-only. The
+        grayblock scenery still shows because it's the only ground until the snow
+        follows the grade. Remaining: gate the grayblock off once the dressed
+        surface is under the run (with slope-vis), and the summit→forest ride is
+        gentle (no hazards until the lake) as intended.
+      - **(lobby) — how you get there ✅ decided (2026-07-24):** the open
+        replace-vs-coexist question is answered **replace-as-default** — the
+        branching map is the default slope now (`main.ts`), `?overlook=1` keeps the
+        old flat Overlook reachable. A proper slope-select menu (if the Overlook
+        earns a permanent spot as onboarding) is a later lobby polish, not required.
 - [ ] **Night → the enchanted forest (director redirect 2026-07-24).** First
       moonlit night was too bright; new target is an *extremely dark* forest with
       a few moonlight rays, lit by **glowing emissive assets** (mushrooms/crystals/

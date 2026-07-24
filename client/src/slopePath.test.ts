@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  BRANCH_SEGMENTS,
+  routeDistanceOf,
+  TOTAL_ROUTE_LENGTH,
+} from "@toebeans/shared";
+import {
   buildCenterline,
   centerlineAt,
   centerlineToWorld,
+  segmentCenterline,
+  segmentToWorld,
   slopeCenterline,
   slopeToWorld,
   type Bend,
@@ -75,5 +82,137 @@ describe("slopePath — the curve mechanism (proven before it ships)", () => {
     const center = centerlineAt(line, 800);
     const off = centerlineToWorld(line, 800, 3);
     expect(Math.hypot(off.x - center.x, off.z - center.z)).toBeCloseTo(3, 6);
+  });
+});
+
+describe("slopePath — the branching map's real grade (world-Y descent)", () => {
+  // Height is derived from the constant grade × the route's remaining distance
+  // (see SEGMENT_GRADE / segmentGroundY). We don't hardcode the grade constant:
+  // the summit-entrance height IS grade × TOTAL, so every other height is that
+  // scaled by (TOTAL − routeDistance)/TOTAL — which pins the whole formula from
+  // one measured value and stays honest if the grade is retuned.
+  const summitY = segmentCenterline("summit", 0).y;
+  const expectedY = (segmentId: string, distance: number): number =>
+    (summitY * (TOTAL_ROUTE_LENGTH - routeDistanceOf(segmentId, distance))) /
+    TOTAL_ROUTE_LENGTH;
+
+  it("leaves the Overlook (and the flat road) dead flat at y = 0", () => {
+    // "main" has no placement → falls through to the flat road, so the shipped
+    // Overlook never moves in y.
+    for (const distance of [0, 120, 380, 800]) {
+      expect(segmentCenterline("main", distance).y).toBe(0);
+      expect(slopeCenterline(distance).y).toBe(0);
+    }
+  });
+
+  it("descends from an elevated summit to y ≈ 0 at the flag", () => {
+    expect(summitY).toBeGreaterThan(0);
+    // Both terminal segments (cliff, ice-castle) end at the flag — route
+    // distance TOTAL — so both land at y = 0: same clock, same flag, same floor.
+    expect(segmentCenterline("cliff", 100).y).toBeCloseTo(0, 6);
+    expect(segmentCenterline("ice-castle", 80).y).toBeCloseTo(0, 6);
+    // The total drop is the summit's height — every route falls the same amount.
+    expect(summitY - segmentCenterline("cliff", 100).y).toBeCloseTo(summitY, 6);
+  });
+
+  it("matches the height formula on every segment (same clock → same height)", () => {
+    for (const [id, distance] of [
+      ["summit", 60],
+      ["forest-road", 0],
+      ["forest-tree", 60], // the Type A detour: same height as the road it parallels
+      ["lake", 50],
+      ["water", 100],
+      ["yeti", 40],
+      ["cave", 0],
+      ["ledge", 30],
+      ["valley", 40],
+    ] as const) {
+      expect(segmentCenterline(id, distance).y).toBeCloseTo(expectedY(id, distance), 6);
+    }
+  });
+
+  it("keeps every fork reconvergence at one height whichever way it's reached", () => {
+    // Cave and Water both deliver you to the shared cliff at route offset 540:
+    // the ends of cave and water, and the cliff's entrance, are all one height.
+    const cliffEntranceY = segmentCenterline("cliff", 0).y;
+    expect(segmentCenterline("cave", 120).y).toBeCloseTo(cliffEntranceY, 6);
+    expect(segmentCenterline("water", 200).y).toBeCloseTo(cliffEntranceY, 6);
+    // The Type A forest fork: road and tree both feed the lake at the same height.
+    expect(segmentCenterline("forest-road", 120).y).toBeCloseTo(
+      segmentCenterline("forest-tree", 120).y,
+      6,
+    );
+    expect(segmentCenterline("lake", 0).y).toBeCloseTo(
+      segmentCenterline("forest-road", 120).y,
+      6,
+    );
+  });
+
+  it("descends monotonically down every segment", () => {
+    for (const id of ["summit", "lake", "water", "valley", "cliff"]) {
+      const top = segmentCenterline(id, 0).y;
+      const bottom = segmentCenterline(id, 40).y;
+      expect(bottom).toBeLessThan(top);
+    }
+  });
+});
+
+describe("slopePath — the branching map's shaped (curved) corridors", () => {
+  const lengthOf = (id: string): number => BRANCH_SEGMENTS[id]!.length;
+
+  it("stays arc-length parameterized down each segment (travel ≈ distance)", () => {
+    // The corridors curve now, but each is a circular arc parameterized by arc
+    // length — so a hazard at segment-distance D still sits D units of travel
+    // down it, keeping the sim's spacing honest (same guarantee as the road).
+    for (const id of ["summit", "lake", "water", "valley", "forest-tree"]) {
+      const len = lengthOf(id);
+      let travel = 0;
+      let prev = segmentCenterline(id, 0);
+      for (let d = 1; d <= len; d++) {
+        const p = segmentCenterline(id, d);
+        travel += Math.hypot(p.x - prev.x, p.z - prev.z);
+        prev = p;
+      }
+      expect(travel).toBeCloseTo(len, 0);
+    }
+  });
+
+  it("actually turns — the heading changes across a curved segment", () => {
+    const h0 = segmentCenterline("lake", 0).heading;
+    const h1 = segmentCenterline("lake", lengthOf("lake")).heading;
+    expect(Math.abs(h1 - h0)).toBeGreaterThan(0.1);
+  });
+
+  it("flows smoothly along the spine — no kink or gap at the seams", () => {
+    // Each road segment inherits its start from the previous segment's exit, so
+    // both the heading AND the world point are continuous across every spine
+    // seam (the S reads as one carved line, not doglegged boxes).
+    const spine = ["summit", "forest-road", "lake", "yeti", "cave", "cliff"];
+    for (let i = 1; i < spine.length; i++) {
+      const exitPrev = segmentCenterline(spine[i - 1]!, lengthOf(spine[i - 1]!));
+      const entryCur = segmentCenterline(spine[i]!, 0);
+      expect(entryCur.heading).toBeCloseTo(exitPrev.heading, 6);
+      expect(entryCur.x).toBeCloseTo(exitPrev.x, 6);
+      expect(entryCur.z).toBeCloseTo(exitPrev.z, 6);
+    }
+  });
+
+  it("maps lateral onto the corridor normal, perpendicular to the tangent", () => {
+    const mid = 40;
+    const c = segmentCenterline("lake", mid);
+    const off = segmentToWorld("lake", mid, 5);
+    // The offset point sits exactly |lateral| from the centerline...
+    expect(Math.hypot(off.x - c.x, off.z - c.z)).toBeCloseTo(5, 6);
+    // ...and perpendicular to the tangent (dot of the offset with the tangent ≈ 0).
+    const tangent = { x: Math.sin(c.heading), z: -Math.cos(c.heading) };
+    const dot = (off.x - c.x) * tangent.x + (off.z - c.z) * tangent.z;
+    expect(dot).toBeCloseTo(0, 6);
+  });
+
+  it("leaves 'main' straight (identity road) — the unbranched run is unchanged", () => {
+    for (const d of [0, 50, 300]) {
+      expect(segmentCenterline("main", d).heading).toBeCloseTo(0, 9);
+      expect(segmentToWorld("main", d, 4)).toMatchObject({ x: 4 });
+    }
   });
 });

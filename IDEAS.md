@@ -3,7 +3,65 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (slope-mech / slope-vis / lobby) Branching map — the §4 layout landed; now make it PLAYABLE (2026-07-24)
+## (multiplayer) Ghost racing — fast-follows past the first slice (2026-07-24)
+
+The first slice landed (see ROADMAP): two players in a room by code, each
+broadcasting pose ~12×/sec over a Supabase relay (+ a same-device
+BroadcastChannel mirror), drawn as ghost skiers. Purely visual — no shared sim,
+no collisions. Client-only (`client/src/net.ts`, `ghosts.ts`; UI in
+`lobbyUi.ts`; wiring in `main.ts`). This is EARLY vs. the plan — DESIGN.md/
+ROADMAP put real-time co-op at M7, post-v1.0 — built now as a lightweight
+testing/fun layer at Josh's request. Parked next steps, roughly ordered:
+
+- **Name tags over ghosts.** The packet already carries `name` (hard-coded
+  "Friend" today); add a name-entry field in the friend panel and a floating
+  label sprite over each ghost so you can tell who's who with >2 players.
+- **A real race:** synced countdown + start gate, a finish-line "who won"
+  readout. Needs a tiny shared agreement on "go" time over the channel (still no
+  server sim — just a broadcast timestamp both count down to).
+- **Lobby presence.** Ghosts only show on the slope right now; showing the
+  friend's character in the lobby vignette would make "we're both here" legible
+  before the run.
+- **Lazy-load Supabase.** `@supabase/supabase-js` added ~0.9MB to the bundle
+  (241KB gzip). Dynamic-import it only when a room is actually opened, so the
+  solo-play initial load stays lean (M4's <15MB / fast-load bar).
+- **Crash tip-over + tired-hop on ghosts.** Ghosts skip the frame-diff pose
+  niceties (pole push, jump envelope, tired hop) and the crash tip, since those
+  need local input history. If ghosts start reading "stiff," broadcast a couple
+  extra derived flags rather than re-deriving.
+- **Reconnect/robustness.** Supabase channel drop currently just shows an error
+  status; a retry/backoff would help flaky Wi-Fi. Peer timeout is a flat 3s.
+- **Segment-seam interpolation.** On the branching map a ghost snaps (doesn't
+  interpolate) across a segment boundary — fine for the Overlook (single
+  segment), revisit when detour worlds are playable.
+
+## (slope-mech) Steepness → speed — the steeper the terrain, the faster the run (director, 2026-07-24)
+
+Director directive (kicking off the map-layout continuation): **"steepness
+increases speed. the steeper the area, the faster the skiing."** Today the grade
+is a single constant (`SEGMENT_GRADE` 0.35, ~19° everywhere on the branching map)
+and the sim (`shared/src/skiing.ts`) is grade-blind — speed targets come from
+`BASE_SPEED`/lean/boost with no terrain term. So this directive has **two halves,
+and they're a pair**: (1) **per-segment (or per-distance) grade variation** — a
+steep plunge off the summit, mellow into the forest, a steep drop in the ice
+valley — because a constant grade gives "steeper = faster" nothing to vary
+against; and (2) **couple the sim's downhill pull to the local grade** so steeper
+pitch pulls the run to a higher natural cruise. The seam: the grade lives in
+`slopePath.ts` (presentation) today; to let the pure sim read it, pass the local
+pitch into `stepSkiing` as segment/route data (a small additive field on the sim
+side), keeping `skiing.ts` pure. This is **the next slope-mech chunk** after the
+curves below.
+
+## (slope-mech ✅ curves landed 2026-07-24 / rest still open) Branching map — the §4 layout landed; now make it PLAYABLE (2026-07-24)
+
+**Shaped corridors landed (slope-mech, 2026-07-24):** the branching map's segments
+CURVE now — each a constant-curvature arc (`SEGMENT_SHAPES` in `slopePath.ts`), the
+spine a gentle centered S and the detours peeling to their sides, chained smoothly
+on continuous runs and cut at fork handoffs; the grayblock floor/walls facet along
+the arc. The straight parallel-box layout is gone. (Amplitudes are a grayblock
+tuning knob — adjust `SEGMENT_SHAPES` turns; verified at runtime, look-pass on the
+live build still welcome.) The rest of this section (real entry, visuals dressing,
+hazard balancing) is unchanged below.
 
 The **real §4 map is laid out** (slope-mech, 2026-07-24 — see ROADMAP +
 SLOPE_BRANCHING.md): `route.ts` now chains summit → enchanted forest (Type A) →
@@ -35,6 +93,28 @@ The cross-session split:
   auto-transition's trigger is now answered: **it rides the summit→forest
   descent.** Wire `setTimeOfDay` off route progress (`routeDistanceOf`, or the
   segment id: summit → dusk, forest → dark).
+- **(slope-mech ✅ landed / slope-vis TODO) The branching map has a REAL 3D grade
+  now — the snow surface must follow it.** Director call 2026-07-24 ("ride down a
+  REAL mountain into the forest"): `slopePath.ts`'s `segmentCenterline(id, d)` now
+  returns a `y` — the branching corridors descend for real (summit y≈115 → flag
+  y=0, a constant ~10° pitch keyed to route distance so every route drops the same
+  total height; `slopeGradePitch`/`segmentPitch(id)` export the pitch; the Overlook
+  stays y=0, untouched). `skiRender.ts` rides it end-to-end: the skier, camera,
+  hazards, and grayblock corridors (now descending floor ramps + tilted walls) all
+  sit at the real y, and the **environment `anchor` now carries `anchor.y = the
+  ground y`.** BUT the dressed snow surface in `skiScene.ts` still ignores
+  `anchor.y` — it recenters the flat plane on `anchor.z` only (line ~479,
+  `slope.position.z = centerZ`), so on the branching map the skier rides the
+  grayblock ramp while the real snow stays flat at y=0. **The slope-vis half: sit +
+  TILT the snow surface (and treeline/trails/decor) to the grade** — follow
+  `anchor.y` for height and pitch the surface by `slopeGradePitch` (import from
+  `slopePath.ts`), so the dressed descent lands under the skier. Do it with the
+  segment-aware surface rework above (same chunk). **URGENCY BUMP (2026-07-24): the
+  branching map is now the DEFAULT slope** (main.ts — "Hit the slopes" loads it at
+  the plain URL, `?overlook=1` opts out), so the flat snow under a descending run is
+  what everyone sees on the live build now, not a hidden dev view. The grayblock ramp
+  is the stand-in ground until this lands. The Overlook (now `?overlook=1`) is still
+  unaffected (its anchor.y stays 0).
 - **(slope-mech) Real entry + grayblock cleanup.** Promote entry off the
   `?branch=1` dev flag into real play (the exact UX is lobby's — below); gate the
   debug readout (`branchDebug.ts`) and the grayblock markers (`addBranchGrayblock`)
