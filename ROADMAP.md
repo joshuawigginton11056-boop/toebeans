@@ -41,8 +41,9 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 ### Ski slope (the M2 area)
 - **Slope 1 "The Overlook"** — a finite track skeleton (finish at distance 800,
   a "finished" status that coasts to a stop and auto-returns to the lobby,
-  chasms/checkpoints placed to a beat sheet, a lane pinch at the rock gate).
-  Now framed as **the onboarding run**; the "actual map" is the next mechanics job.
+  chasms/checkpoints placed to a beat sheet, a lane pinch at the rock gate). Flat
+  (faked grade). **No longer the default run** — the branching map replaced it as
+  what "Hit the slopes" loads; reachable at **`?overlook=1`** for comparison.
 - **Momentum skiing:** inertial speed with a pole push-off from a standstill,
   boost that builds and coasts, braking that bites. Real turning (skis point
   where you steer; turning scrubs speed; fully sideways = hockey stop; **switch
@@ -62,16 +63,23 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   way it's reached. The renderer places each segment in its own grayblock world
   corridor (`SEGMENT_PLACEMENTS`/`addBranchGrayblock`, now fully data-driven off
   the registry — boxes only, no `skiScene.ts`); `roadSegmentIds()` is the single
-  source of truth for spine-vs-detour. 134 tests (incl. a behavioral proof all
-  three routes + the tree no-op reach the flag on the same step) + a clean
-  `?branch=1` bundle. Dev-only behind **`?branch=1`** (auto-loads the map — a save
-  doesn't bypass it); the Overlook's single `"main"` segment stays inert, so
-  normal play is unchanged. **Next (director, 2026-07-24): make it actually
-  playable, starting with the summit → forest ride** — promote it from the
-  dev-flag grayblock to a real, *dressed* run you enter and ski (see the Open
-  item and the IDEAS handoffs). Detour *content* (animal world, bird, penguin/ice
-  castles) and per-route hazard balancing (§5) come after; §7's open
-  reconciliations remain the director's.
+  source of truth for spine-vs-detour. 139 tests (incl. a behavioral proof all
+  three routes + the tree no-op reach the flag on the same step, and the grade).
+  **It is now the DEFAULT slope (2026-07-24)** — "Hit the slopes" loads it at the
+  live URL; **`?overlook=1`** keeps the old flat Overlook; the proof readout is
+  gated dev-only (`?branch`/`?debug`).
+- **Real 3D grade on the branching map (2026-07-24) — director-approved.** The run
+  drops for real in world-Y: an elevated summit falling ~224 units to y=0 at the
+  flag, a constant **~19° pitch** (`SEGMENT_GRADE` 0.35) keyed to route distance so
+  every route drops the same total height ("same clock, same flag" in elevation
+  too). Director rode it and called the angle **"invigorating" — locked in, not a
+  pending tune.** `slopePath.ts` `segmentCenterline` carries the `y`; the skier,
+  camera, hazards, and grayblock (descending floor ramps + tilted walls) all ride
+  it; the Overlook stays flat (no placement). **Still grayblock, and the dressed
+  snow is still FLAT under it** — tilting the snow surface to the grade is the
+  slope-vis half (the urgent next visual piece; see IDEAS.md). Detour *content*
+  (animal world, bird, penguin/ice castles) and per-route hazard balancing (§5)
+  come after; §7's open reconciliations remain the director's.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
   across all 24 slope models; decor scatter follows the run. (Old birches removed.)
 - **Realism snow:** procedural displaced surface + GPU-carved ski trails.
@@ -190,7 +198,8 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
         grayblock (now descending floor ramps + tilted walls) ride the grade, and the
         environment `anchor` carries `anchor.y`. **Snow-follow is the slope-vis half**
         (tilt the surface to the grade — folds into the main lift; see IDEAS.md).
-        139 tests. Grade steepness is a live tuning knob.
+        139 tests. **Angle director-approved at ~19° ("invigorating", 2026-07-24)
+        — locked, not a pending tune.**
       - **(slope-mech) — branching map is now the DEFAULT slope ✅ (2026-07-24):**
         director couldn't see the grade because it was hidden behind `?branch=1` and
         the live build's plain URL served the flat Overlook. Promoted: the graded
