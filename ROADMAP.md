@@ -4756,6 +4756,33 @@ look-pass on a composited frame: whether the two-tone *mix ratio* and the splat
 *frequency/opacity* read right — all named constants at the top of the spray /
 lens tuning blocks. IDEAS follow-ups updated (both threads closed).
 
+## (slope-vis) 2026-07-24 — Director verdict on the splat + a "fling more" ask (hand-off)
+
+Look-pass on the built fixes: **"splash not noticeable enough. I also want it to
+fling more when turning or landing a jump."** No code changed this session — this
+is the hand-off; the build starts fresh next session. Both threads reopened in
+IDEAS with the specific levers. Two pieces of work, all `skiScene.ts` except the
+possible seam field:
+
+- **Make the lens splash READ.** The CTM gradient bug is fixed so splats now
+  paint, but the current tuning is too subtle. Make-it-read pass: push
+  `LENS_PEAK_ALPHA` (0.34) up, bigger/more-frequent hits (`base` radius,
+  `LENS_BIG_CHANCE`, `LENS_SPLAT_RATE`, `LENS_SPLAT_MAX`), and consider a soft
+  white edge-frosting under heavy carve rather than only discrete blobs. Keep the
+  idle-skip zero-fill and watch per-frame fill cost.
+- **Fling MORE on hard turns and on jump landings.** (a) *Turning:* crank the
+  carve boost — raise the `sideF` multipliers on spray emit rate `(1 + 1.4·sideF)`
+  and lens intensity `(0.4 + 0.6·sideF)`, and/or scale launch velocity with it, so
+  a hard carve visibly throws a bigger, wider plume + more lens hits than a glide.
+  (b) *Landing a jump — the "poof":* a one-shot powder burst (+ a heavier one-shot
+  lens splat) on the airborne→grounded transition and the trick-landing slide.
+  Needs a **landing impulse signal** — `skiRender.ts` knows it via `jumpMemory`
+  (mechanics-owned, read-only); cleanest is a small additive seam field
+  (`justLanded` / a 0..1 impact strength from fall speed) passed via
+  `setSkiMotion`/`syncEnvironment`, marked `// slope-vis` per PARALLEL.md.
+  Fallback: infer the landing from `anchor.y` motion the way the plume infers
+  speed. Decide at build time.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

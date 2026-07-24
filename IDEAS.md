@@ -163,20 +163,44 @@ them, all `skiScene.ts`:
   through the shared shader (`color * vColor`). Palette-legal, no bible change.
   *Open only as a look-pass:* the mix ratio (`SPRAY_SHADOW_FRAC`) is a director's
   eye call on a composited frame. See ROADMAP 2026-07-23 build entry.
-- **Lens splash renders nothing — FIXED (built 2026-07-23), awaiting director
-  look-pass.** The canvas-gradient CTM bug: the radial gradient was built at
-  absolute `(s.x,s.y)` but filled under `translate(s.x,s.y)+scale(1,1.25)`, so it
-  offset off the arc and every splat filled transparent. Fixed by building the
-  gradient at `(0,0)` inside the `save()/translate` block. Verified with a
-  center-pixel sample (old alpha 0 → new ≈0.34). Now that it paints, the *tuning*
-  is open for the director: tint (`LENS_TINT`), frequency (`LENS_SPLAT_RATE`,
-  `LENS_PEAK_ALPHA`), and tying a heavier one-shot splat to the **landing "poof"**
-  below (share the impulse hook).
-- **Landing "poof" puff.** A one-shot outward burst of the same powder on
-  touchdown from a jump (and on the trick-landing slide). The emitter's already
-  there; it needs an impulse hook off the airborne→grounded transition (the
-  renderer knows it via `jumpMemory`; a small additive seam signal, or infer it
-  the same anchor-motion way the spray does).
+- **Lens splash now paints, but NOT NOTICEABLE ENOUGH — OPEN (director verdict
+  2026-07-24: "splash not noticeable enough").** The CTM gradient bug is fixed
+  (built 2026-07-23; center-pixel alpha 0 → ~0.34), so splats now render — but
+  at the current tuning they're too subtle to feel. This is now a *make-it-read*
+  pass, the levers all named constants at the top of the lens block:
+  - **Opacity** `LENS_PEAK_ALPHA` (0.34) — push it up; a lens hit should be a
+    clear white smear, not a faint haze. Kept translucent enough not to block
+    the play read, but that ceiling is higher than 0.34.
+  - **Size** `base` radius (`0.02–0.065·minDim`) and `LENS_BIG_CHANCE` (0.12) —
+    bigger and more frequent "direct hits" so a splat covers real screen area.
+  - **Frequency** `LENS_SPLAT_RATE` (16/s) and `LENS_SPLAT_MAX` (70) — more
+    splats landing per second at full carve.
+  - Consider a subtle white **frosting/blur** at the lens edge under heavy carve
+    (a vignette-ish accumulation), not just discrete blobs — reads as "buried in
+    it" more than dots do. Optional; try blob tuning first.
+  - Watch fill cost: the idle-skip (zero fill when nothing's on the lens) must
+    stay; more/bigger splats raise the per-frame `fill` area under heavy carve.
+- **Fling MORE on hard turns and jump landings — OPEN (director ask 2026-07-24:
+  "want it to fling more when turning or landing a jump").** Both the plume and
+  the lens splash should surge on a hard carve and burst on touchdown. Two parts:
+  - **Turning:** crank the carve boost. Spray emit today is `SPRAY_BASE_RATE ·
+    speedF · (1 + 1.4·sideF)` and the velocity `fan` scales with `sideF`; lens
+    intensity is `speedF · (0.4 + 0.6·sideF) · closeness`. Raise the `sideF`
+    multipliers (and/or make the launch velocity `back`/`up` scale with it) so a
+    hard turn visibly throws a bigger, wider plume + more lens hits than a
+    straight glide. Keep the pool headroom (`SPRAY_MAX` 4000) in mind.
+  - **Landing a jump — the "poof" (elevated to a real ask, was parked below):**
+    a one-shot outward burst of powder on the airborne→grounded transition (and
+    the trick-landing slide), plus a heavier one-shot lens splat sharing the same
+    impulse. The spray emitter's already there; it needs a **landing impulse
+    signal**. `skiRender.ts` knows the transition via `jumpMemory` (mechanics-
+    owned — read-only to us). Cleanest is a small **additive seam field**: have
+    `setSkiMotion`/`syncEnvironment` pass a one-frame `justLanded` (or a
+    0..1 landing-impact strength from fall speed) — mark it `// slope-vis` per
+    PARALLEL.md and note it in the ROADMAP entry. Fallback if we don't want a
+    seam change: infer the landing from the anchor's vertical motion the same way
+    the plume infers speed (a sudden downward-then-flat in `anchor.y`), but the
+    seam signal is more reliable (impact strength for free). Decide at build time.
 - **Particle point-size vs. live fov.** `particleSizeScale()` bakes the fov
   (50°) and viewport height at load; a `resize` handler updates it, but a live
   fov change (none today) wouldn't. Cheap to drive off the camera each frame if
