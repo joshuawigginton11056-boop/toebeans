@@ -11,6 +11,10 @@ docs, park tangents in IDEAS.md.
 room, and the slope session split in two so texture/art work and
 gameplay-feel work can run side by side without colliding.)*
 
+*(2026-07-24: UI building folded into the lobby session rather than given
+its own worktree — `hud.ts` and all cross-scene UI chrome now belong to
+lobby. Still three sessions.)*
+
 ## Who works where
 
 | Session | Branch | Folder | Dev server |
@@ -28,9 +32,20 @@ about missing packages, run `npm install` in **your own** folder.
 
 ## File ownership
 
-**Lobby session owns** (edit freely):
+**Lobby session owns** — the lobby scene *and* all cross-scene UI (edit
+freely):
 - `client/src/lobbyRender.ts`, `client/src/lobbyUi.ts`
+- `client/src/hud.ts` (the in-game HUD — lives on the slope but is UI, so
+  it belongs to this session, not the slope sessions)
+- any new global UI: menus, overlays, banners, shared UI styling
 - `assets/bedroom/` (the furniture models — kept as the future unlock pool)
+
+Note the split of concern: **UI chrome is the lobby session's; slope
+sessions own what the UI *reads*.** If the HUD needs a new value to
+display (a speed readout, a new life-state), the slope-mechanics session
+exposes it on `SkiState`/via `skiRender.ts` and the lobby session renders
+it — same additive-seam etiquette as below. The lobby session never edits
+the sim; the slope sessions never restyle the HUD.
 
 **Slope-mechanics session owns** — how the slope *plays*, and what exists
 where each frame:
@@ -62,7 +77,6 @@ while you're in there.
 additive, and localized; expect merge conflicts here and resolve them by
 keeping both sides' intent:
 - `client/src/main.ts` (scene switching, key handling)
-- `client/src/hud.ts`
 - `client/src/catModel.ts` (the cat appears in both scenes)
 - `client/src/save.ts`, `shared/src/save.ts`, `shared/src/index.ts`,
   `shared/src/appearance.ts`
