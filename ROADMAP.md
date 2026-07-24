@@ -5031,6 +5031,44 @@ substrate map work builds on, and the Slope 1 gentle-curve joint-flip with
 slope-vis remains parked and independent of whatever "the actual map" turns out
 to be.
 
+## (lobby) 2026-07-24 — Lobby seats up to four players, each on a glowing orb
+
+The lobby can now stand **up to four characters**, laid out for a party rather
+than a single hero, with a **glowing orb under every one of them**. "You" (the
+local player) always stand **a step in front of the rest**, and where you stand
+in the line follows the party size:
+
+- **2 or 4 players:** you're on the **left**.
+- **3 players:** you're in the **middle**, flanked by the other two.
+- **alone:** exactly the old single spot (a touch camera-left) — the solo lobby
+  doesn't move, it just gains its orb.
+
+The others fill the remaining spots, evenly spaced, centered, and angled gently
+inward so it reads as a group. The cat now seats beside — and orbits — wherever
+*you* end up, at any party size.
+
+- **New `client/src/lobbyLayout.ts`** holds the positioning as pure geometry
+  (no three.js), so the left/middle/front rules are unit-tested without a
+  renderer — `lobbyLayout.test.ts`, 128 tests green.
+- **`client/src/lobbyRender.ts`**: the single character became a local player
+  plus a lazily-grown pool of up to three guests, each a `LobbyPlayer` (rig +
+  orb). Orbs are a flat additive pool of light on the snow plus a hovering
+  wisp, breathing on a slow pulse (staggered per orb). Palette-legal: **your
+  orb is birch amber** (the cozy Play-button accent), **guests' are a cooler
+  ice glow**, so the front-and-warmest character always reads as you. Guests
+  wear a spread of default looks for now.
+- **`client/src/main.ts`**: a `?players=2..4` **preview hook** drives the count
+  so the layouts can be seen today; real multiplayer will call the new
+  `setLobbyPlayerCount(...)` with the live party. Single-player is unchanged
+  without the param.
+- Verified live in the dev server at 1/2/3/4 players — all four layouts match
+  the spec. No new shipped dependency (screenshotting used a scratchpad-only
+  tool). `npm run check` passes.
+
+**Next (lobby):** when multiplayer lands, feed real friends' appearances and the
+live party size into `setLobbyPlayerCount`; a nameplate/host marker over each
+orb is a natural follow-up (parked in IDEAS.md if it comes up).
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

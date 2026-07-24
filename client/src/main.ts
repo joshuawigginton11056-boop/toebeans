@@ -13,7 +13,12 @@ import {
 } from "@toebeans/shared";
 import { createAudio } from "./audio";
 import { createHud } from "./hud";
-import { createLobbyScene, renderLobby, syncLobbyScene } from "./lobbyRender";
+import {
+  createLobbyScene,
+  renderLobby,
+  setLobbyPlayerCount,
+  syncLobbyScene,
+} from "./lobbyRender";
 import { createLobbyUi, type LobbyCycle } from "./lobbyUi";
 import { readSave, writeSave } from "./save";
 import { createSkiScene, render, syncSkiSceneToState } from "./skiRender";
@@ -44,6 +49,15 @@ let appearance: Appearance = restored?.appearance ?? createDefaultAppearance();
 
 const lobbyScene = createLobbyScene(container);
 const skiScene = createSkiScene(container);
+
+// Lobby party size. Single-player today, but the lobby can stand up to four
+// characters (you plus guests, each with a glowing orb). Until real
+// multiplayer wires in the live party, `?players=2..4` previews the layouts —
+// you shift left (2/4) or to the middle (3), always a step in front.
+const lobbyPlayers = Number(new URLSearchParams(location.search).get("players"));
+if (Number.isFinite(lobbyPlayers) && lobbyPlayers > 1) {
+  setLobbyPlayerCount(lobbyScene, lobbyPlayers);
+}
 
 // Both scenes show the same character, so they always get the same
 // appearance. Pushing it in (rather than the rigs reading state) keeps the
