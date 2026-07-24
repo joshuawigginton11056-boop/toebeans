@@ -432,6 +432,28 @@ Signal red (#12) is **not** in any character ramp — it stays reserved for
 "look at this", which is why the cat's scarf still reads as the one red
 thing on a skier.
 
+### Glow palette (night — separate from the 13)
+
+**Director sign-off, 2026-07-24 (enchanted-forest night).** The night slope
+is lit by *glowing objects* (see the Lighting amendment below), and emissive
+hues have no home in the daylight 13 — so, exactly like the character ramps,
+glow gets its own small ramp carved out separately. **Only night emissive
+props/motes use these; nothing in the daylight landscape may.** Signal red
+(#12) stays reserved — none of these compete with the cat's scarf.
+
+| # | Hex | Name | Used for |
+|---|-----|------|----------|
+| G1 | `#5FE9D0` | Mushroom cyan | Glowing mushroom caps; the base cool glow. |
+| G2 | `#8CF08A` | Luminous moss | Luminous plants/moss, the second cool glow. |
+| G3 | `#B98CF0` | Crystal violet | Crystals/rarer glow accents. |
+| G4 | `#F0C06A` | Warm lantern | The one warm pool — lanterns, warm mushrooms. Sparse, for contrast against the cold. |
+
+Mostly cool (G1/G2); G4 is a deliberate minority so the forest reads cold-
+enchanted, not fairy-lights. These are *emissive* (read "lit" regardless of
+the near-black scene light) and pair with a faked additive pool on the snow
+(and, once it lands, **bloom** — emissive without bloom won't feel glowing).
+Implemented as `GLOW` in `client/src/skiScene.ts`.
+
 ### Characters & customization — how it's built
 
 Raised 2026-07-21 (cat-model session), decided the same day (skier

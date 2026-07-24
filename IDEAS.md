@@ -51,24 +51,34 @@ from the de-risk:
 
 ## (slope-vis) NIGHT → the enchanted forest — director redirect (2026-07-24)
 
-> **⏭ START HERE NEXT SESSION (slope-vis, handoff 2026-07-24):** the
-> **darker-night first pass landed and is merged to master** — the `NIGHT`
-> constants in `skiScene.ts` are crushed toward near-black (open-snow floor
-> `#12182B`, sky zenith `#0B0F1C`, moon-lit lane `#4E608A`), moon kept on as a
-> faint down-lane key. **Two things before building on it:**
-> 1. **Look-pass still pending** — the darkness value was verified numerically
->    but never eyeballed (port 5303 was held, pane wouldn't composite). Confirm
->    with Josh that it's dark enough / not too dark on **N** before treating the
->    values as final; they may still get tuned.
-> 2. **The big piece is next: glowing emissive props + bloom + a glow palette**
->    (the "enchanted" lighting model). This is blocked on **two director calls**
->    — (a) sourcing preference: CC0 pack (Quaternius/Kenney mushrooms/crystals/
->    plants) vs. re-lighting existing props; (b) sign-off on a small glow palette
->    (cool bioluminescent teals/greens/violets ± a warm lantern amber), carved
->    out separately from the 13 like the character ramps. **Ask these first.**
->    Then: moonlight *rays*, phase-aware decor/spray/audio, the auto-transition.
-> **Do NOT crush the ambient further until glow-pool lighting exists** — past
-> the current values the lane stops being readable (see the ✅ bullet below).
+> **⏭ START HERE NEXT SESSION (slope-vis, handoff 2026-07-24):** the darker
+> night **and** the glowing-forest *first layer* are now merged. The gate calls
+> are all made: darkness values are the base (Josh: "feels right / I'll check
+> N"); the **glow ramp is signed off** — G1 `#5FE9D0` cyan, G2 `#8CF08A` moss,
+> G3 `#B98CF0` violet, G4 `#F0C06A` warm lantern (recorded in DESIGN.md, `GLOW`
+> in `skiScene.ts`); **sourcing = MegaKit mushrooms/plants** (CC0, Josh will
+> pick the exact models). **What landed (slope-vis 2026-07-24):** code-built
+> emissive mushroom clusters + faked additive snow pools scattered along both
+> treelines, and a drifting firefly/spore mote cloud — all night-gated
+> (`glowFactor`, ramps in past dusk `GLOW_ONSET`). Verified: typecheck + 129
+> tests green, live-built on the slope with no console errors; **the look itself
+> was NOT eyeballed** (pane still won't composite) — Josh's look-pass on **N** is
+> the real judge, and the tuning knobs are named constants at the top of the
+> ENCHANTED NIGHT section (`GLOW_EMISSIVE`, `POOL_ALPHA`, `FIREFLY_ALPHA`,
+> `GLOW_ONSET`, `GLOW_CELL`/`GLOW_DENSITY`, `FIREFLY_COUNT`).
+>
+> **Next chunks, in order:**
+> 1. **Bloom** — the halo that makes emissive read as *glowing*. A render-seam
+>    add: `render()` in `skiRender.ts` (mechanics) currently calls
+>    `renderer.render(scene, camera)`; route it through an `EffectComposer`
+>    (`three/addons/postprocessing/…`, present in r185) with an `UnrealBloomPass`
+>    owned by `skiScene.ts`. Smallest additive seam change, mark `// slope-vis`.
+> 2. **Real MegaKit glow props** — download + convert the mushrooms/plants Josh
+>    picks, swap them for the code-built `makeGlowCluster` primitives.
+> 3. **Moonlight rays**, **phase-aware decor/spray darkening**, then the
+>    auto-transition + night audio.
+> **Do NOT crush the ambient further until bloom + real glow-pool light exist** —
+> past the current values the lane stops being readable (see the ✅ bullet below).
 
 **Redirect after the first night look-pass (director, 2026-07-24):** the
 moonlit night I built is **too bright and too evenly lit**. The new target:
