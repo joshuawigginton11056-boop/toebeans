@@ -26,6 +26,17 @@ export interface AudioHandle {
   sync(mode: AudioMode, state: SkiState): void;
   /** Flip mute; returns true if now muted. */
   toggleMuted(): boolean;
+  // --- Added by the lobby session (2026-07-24, settings menu) -------------
+  // Smallest additive seam change (see PARALLEL.md): the settings menu needs a
+  // master-volume slider and a music on/off toggle, so the audio handle grows
+  // two setters. Everything above is untouched slope-session work. Slope-vis:
+  // the ambient music bed below is intentionally minimal (a pad + a gentle
+  // pentatonic bell loop) — real music direction is still yours to pick; see
+  // the (slope-vis) note in IDEAS.md.
+  /** Set master loudness, 0..1 (multiplied out by mute). */
+  setVolume(volume: number): void;
+  /** Turn the ambient music bed on or off. */
+  setMusicEnabled(enabled: boolean): void;
 }
 
 // How quickly continuous layers chase their target loudness (seconds).
@@ -248,13 +259,119 @@ function playForfeit(nodes: Nodes): void {
   note(nodes, 330, now + 0.44, 0.12, 0.9);
 }
 
+// --- Ambient music bed (lobby session, 2026-07-24) -------------------------
+// A cozy, low ambient loop that the settings menu can switch on. Two layers:
+// a soft detuned pad held under everything, and a slow pentatonic bell that
+// wanders through a few notes so it breathes instead of drones. Routed through
+// its own gain into master, so the volume slider and mute cover it too. Kept
+// deliberately small — real music direction is the slope-vis session's call.
+
+interface Music {
+  readonly setEnabled: (enabled: boolean) => void;
+}
+
+// A warm, cozy pentatonic (A minor pentatonic, low octave) for the bell.
+const BELL_NOTES = [220.0, 261.63, 293.66, 329.63, 392.0, 440.0];
+
+function buildMusic(ctx: AudioContext, master: GainNode): Music {
+  // The music bus. Starts silent; enabling ramps it up.
+  const bus = ctx.createGain();
+  bus.gain.value = 0;
+  bus.connect(master);
+
+  // Pad: two slightly detuned triangle oscillators through a gentle lowpass,
+  // with a slow tremolo so the held chord shimmers rather than sits flat.
+  const padFilter = ctx.createBiquadFilter();
+  padFilter.type = "lowpass";
+  padFilter.frequency.value = 900;
+  padFilter.connect(bus);
+  const padGain = ctx.createGain();
+  padGain.gain.value = 0.05;
+  padGain.connect(padFilter);
+  for (const [freq, detune] of [
+    [146.83, -4],
+    [220.0, 4],
+    [293.66, 0],
+  ] as const) {
+    const osc = ctx.createOscillator();
+    osc.type = "triangle";
+    osc.frequency.value = freq;
+    osc.detune.value = detune;
+    osc.connect(padGain);
+    osc.start();
+  }
+  const tremolo = ctx.createOscillator();
+  tremolo.frequency.value = 0.12;
+  const tremoloDepth = ctx.createGain();
+  tremoloDepth.gain.value = 0.02;
+  tremolo.connect(tremoloDepth);
+  tremoloDepth.connect(padGain.gain);
+  tremolo.start();
+
+  // Bell: soft sine plucks scheduled a little ahead of the clock. A lookahead
+  // timer (the standard Web Audio pattern) keeps the next couple of notes
+  // queued so timing stays steady even if a frame hitches.
+  const BEAT = 1.6; // seconds between bell notes — unhurried
+  let nextNoteTime = 0;
+  let timer: number | null = null;
+
+  function scheduleBell(when: number): void {
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    const freq = BELL_NOTES[Math.floor(Math.random() * BELL_NOTES.length)] ?? 220;
+    osc.frequency.value = freq;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, when);
+    gain.gain.linearRampToValueAtTime(0.09, when + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, when + 1.4);
+    osc.connect(gain);
+    gain.connect(bus);
+    osc.start(when);
+    osc.stop(when + 1.5);
+  }
+
+  function tick(): void {
+    // Queue every note that falls inside the next ~0.25s lookahead window.
+    while (nextNoteTime < ctx.currentTime + 0.25) {
+      scheduleBell(nextNoteTime);
+      // Occasionally rest a beat so the melody isn't metronomic.
+      nextNoteTime += Math.random() < 0.25 ? BEAT * 2 : BEAT;
+    }
+  }
+
+  function setEnabled(enabled: boolean): void {
+    const now = ctx.currentTime;
+    bus.gain.setTargetAtTime(enabled ? 1 : 0, now, 0.4);
+    if (enabled && timer === null) {
+      nextNoteTime = now + 0.1;
+      timer = window.setInterval(tick, 100);
+    } else if (!enabled && timer !== null) {
+      window.clearInterval(timer);
+      timer = null;
+    }
+  }
+
+  return { setEnabled };
+}
+
 // --- Public handle ---------------------------------------------------------
 
 export function createAudio(initiallyMuted = false): AudioHandle {
   let nodes: Nodes | null = null;
+  let music: Music | null = null;
   let muted = initiallyMuted;
+  // Base loudness the master runs at when unmuted — was the hardcoded 0.9;
+  // the settings slider (lobby session) now drives it. Mute multiplies it to 0.
+  let baseVolume = 0.9;
+  // Desired music state, remembered until the context exists (music can be
+  // toggled from the settings menu before the first keypress builds the graph).
+  let musicEnabled = false;
   let prev: SkiState | null = null;
   let prevOnSlope = false;
+
+  function masterTarget(): number {
+    return muted ? 0 : baseVolume;
+  }
 
   // Browsers only allow sound after a user gesture. Everything in the game
   // is keyboard-driven, so the first keydown is the earliest sound could
@@ -262,7 +379,10 @@ export function createAudio(initiallyMuted = false): AudioHandle {
   function ensureContext(): void {
     if (!nodes) {
       nodes = buildNodes(new AudioContext());
-      nodes.master.gain.value = muted ? 0 : 0.9;
+      nodes.master.gain.value = masterTarget();
+      // Music shares the graph; reflect whatever the settings said so far.
+      music = buildMusic(nodes.ctx, nodes.master);
+      music.setEnabled(musicEnabled);
     }
     if (nodes.ctx.state === "suspended") {
       void nodes.ctx.resume();
@@ -341,10 +461,22 @@ export function createAudio(initiallyMuted = false): AudioHandle {
   function toggleMuted(): boolean {
     muted = !muted;
     if (nodes) {
-      nodes.master.gain.setTargetAtTime(muted ? 0 : 0.9, nodes.ctx.currentTime, 0.05);
+      nodes.master.gain.setTargetAtTime(masterTarget(), nodes.ctx.currentTime, 0.05);
     }
     return muted;
   }
 
-  return { sync, toggleMuted };
+  function setVolume(volume: number): void {
+    baseVolume = Math.max(0, Math.min(1, volume));
+    if (nodes) {
+      nodes.master.gain.setTargetAtTime(masterTarget(), nodes.ctx.currentTime, 0.05);
+    }
+  }
+
+  function setMusicEnabled(enabled: boolean): void {
+    musicEnabled = enabled;
+    music?.setEnabled(enabled);
+  }
+
+  return { sync, toggleMuted, setVolume, setMusicEnabled };
 }

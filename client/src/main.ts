@@ -27,6 +27,12 @@ import {
 } from "./net";
 import { readSave, writeSave } from "./save";
 import {
+  codeMatchesAction,
+  loadSettings,
+  type Settings,
+} from "./settings";
+import { createSettingsMenu } from "./settingsMenu";
+import {
   addBranchGrayblock,
   createSkiScene,
   render,
@@ -79,6 +85,12 @@ let mode: SceneMode = BRANCH_MAP ? "lobby" : (restored?.mode ?? "lobby");
 let skiState = restored?.ski ?? createInitialSkiState();
 let muted = restored?.muted ?? false;
 let appearance: Appearance = restored?.appearance ?? createDefaultAppearance();
+
+// Player preferences — volume, music, key bindings (see settings.ts). Kept
+// separate from the game save (they're settings, not progress). The live
+// object is mutated in place by the settings menu; input reads bindings from
+// it, so a rebind takes effect immediately.
+const settings: Settings = loadSettings();
 
 const lobbyScene = createLobbyScene(container);
 const skiScene = createSkiScene(container);
@@ -224,6 +236,7 @@ const lobbyUi = createLobbyUi({
     lobbyUi.setMuted(muted);
     persist();
   },
+  onOpenSettings: () => settingsMenu.open(),
   // Ghost racing (multiplayer session). Create hands back a fresh code to
   // show; join/leave open and tear down the relay room. Deliberately not
   // saved — a room is a per-sitting thing, not game progress.
@@ -242,12 +255,31 @@ showActiveCanvas();
 // HUD: DOM overlay on top of the canvas (see hud.ts). Reads state only,
 // never writes it. Synced once up front so the right panels show even
 // before the first animation frame (browsers pause frames in hidden tabs).
-const hud = createHud();
+const hud = createHud(settings);
 hud.sync(mode, skiState);
 
 // Sound effects (see audio.ts). Reads state only, like the HUD.
 const audio = createAudio(muted);
 lobbyUi.setMuted(muted);
+// Apply saved preferences to the audio graph up front (they take hold once
+// the graph builds on the first keypress).
+audio.setVolume(settings.masterVolume);
+audio.setMusicEnabled(settings.musicEnabled);
+
+// The settings menu (volume, music, controls). It edits the live `settings`
+// object; we apply sound changes to audio immediately, and input reads the
+// updated bindings on its own each frame — nothing else to re-wire.
+const settingsMenu = createSettingsMenu({
+  settings,
+  onVolume: (volume) => audio.setVolume(volume),
+  onMusic: (enabled) => audio.setMusicEnabled(enabled),
+  onBindingsChanged: () => {
+    /* Input reads settings.bindings live; nothing to refresh here. */
+  },
+  onClose: () => {
+    /* Focus returns to the page automatically; nothing to restore. */
+  },
+});
 
 // ?branch/?debug: drop straight into the map so it's on screen immediately (a dev
 // convenience). The default flow keeps the lobby first — load, see the menu, press
@@ -266,7 +298,9 @@ const heldKeys = new Set<string>();
 let lastSteerSide: -1 | 1 = 1;
 
 window.addEventListener("keydown", (event) => {
-  if (event.code === "KeyM") {
+  // Global/gameplay keys read their codes from the player's bindings
+  // (settings.ts) so rebinds take effect here without any extra wiring.
+  if (codeMatchesAction(settings, "mute", event.code)) {
     muted = audio.toggleMuted();
     lobbyUi.setMuted(muted);
     persist();
@@ -290,32 +324,41 @@ window.addEventListener("keydown", (event) => {
   // Camera round 3 (slope-mech): the slope camera is all mouse/touch now —
   // wheel/pinch zoom and Pointer-Lock mouse look (click to engage, Esc to
   // release), wired in skiRender.ts. No keyboard camera control (V is gone).
-  if (event.code === "Enter") {
+  if (codeMatchesAction(settings, "lobby", event.code)) {
     if (mode === "lobby") goSkiing();
     else backToLobby();
     return;
   }
-  if (event.code === "ArrowLeft" || event.code === "KeyA") lastSteerSide = -1;
-  if (event.code === "ArrowRight" || event.code === "KeyD") lastSteerSide = 1;
+  if (codeMatchesAction(settings, "left", event.code)) lastSteerSide = -1;
+  if (codeMatchesAction(settings, "right", event.code)) lastSteerSide = 1;
   heldKeys.add(event.code);
 });
 window.addEventListener("keyup", (event) => heldKeys.delete(event.code));
 
 function readSkiInput(): SkiInput {
-  const left = heldKeys.has("ArrowLeft") || heldKeys.has("KeyA");
-  const right = heldKeys.has("ArrowRight") || heldKeys.has("KeyD");
-  const jump = heldKeys.has("Space");
+  // Each action is "down" if its bound key or its fixed alternate (WASD etc.)
+  // is held — see codeMatchesAction. Checking the whole held set keeps this
+  // agnostic to which physical key a player chose.
+  const down = (action: Parameters<typeof codeMatchesAction>[1]): boolean => {
+    for (const code of heldKeys) {
+      if (codeMatchesAction(settings, action, code)) return true;
+    }
+    return false;
+  };
+  const left = down("left");
+  const right = down("right");
+  const jump = down("jump");
   // The spin side: a held steer key wins (both held = the last pressed),
   // else the last steered direction. The sim only spins airborne — on the
-  // snow a held Space stays the jump charge.
+  // snow a held jump key stays the jump charge.
   const spin = jump ? (left && !right ? -1 : right && !left ? 1 : lastSteerSide) : 0;
   return {
     left,
     right,
-    up: heldKeys.has("ArrowUp") || heldKeys.has("KeyW"),
-    down: heldKeys.has("ArrowDown") || heldKeys.has("KeyS"),
+    up: down("faster"),
+    down: down("brake"),
     jump,
-    boost: heldKeys.has("ShiftLeft") || heldKeys.has("ShiftRight"),
+    boost: down("boost"),
     spin,
   };
 }
