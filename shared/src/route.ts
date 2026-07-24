@@ -263,10 +263,27 @@ export const REFERENCE_GRADE = 0.35;
 // (no pitch crease) that integrates to a smooth height. Averages ~0.35 over the 640
 // route (≈ the old ~224-unit total drop). Tunable knobs — widen the spread for more
 // punch, flatten for less.
+//
+// THE SUMMIT→FOREST EASE-OUT (slope-mech, 2026-07-24, director look-pass: "speed
+// instantly drops at the forest — it reads as slamming the brakes"). The old profile
+// dropped the grade at ONE constant slope [0,0.5]→[120,0.26] that bottomed exactly at
+// the forest mouth (120): the whole speed shed landed there, and a boosted run pins
+// the momentum easing at its COAST_DRAG floor (~4 u/s²) for a sustained beat right as
+// the forest arrives — the "brakes." Fix: shed the plunge's extreme EARLY and EASE OUT
+// into the forest. The grade now falls STEEPLY over the upper summit [0,60] (where
+// bleeding the ~27° plunge's speed is natural and expected) then LEVELS onto a gentle
+// leg [60,180] that carries THROUGH the forest entrance (120) — so at the forest you're
+// already gliding, decel a fraction of the cap (~0.3 u/s² cruise), not slamming. The
+// mellow finishes at 180 (just inside the early forest) instead of at its mouth, and
+// the floor sits a touch higher (0.28) to narrow the summit→forest speed ratio without
+// touching the locked 0.5 plunge or the SLOPE_SPEED_GAIN steeps. The steepest grade
+// CHANGE now lives high on the mountain, not at the forest. (Secondary knob if it wants
+// even gentler: lower SLOPE_SPEED_GAIN in skiing.ts — it scales the absolute decel.)
 const GRADE_PROFILE: readonly (readonly [number, number])[] = [
   [0, 0.5], // steep summit plunge (~26.6°, just under the camera's ~27°)
-  [120, 0.26], // mellow into the enchanted forest (~14.6°)
-  [340, 0.26], // …stays gentle across the forest + frozen lake
+  [60, 0.36], // shed most of the plunge up high — steep grade drop, expected here
+  [180, 0.28], // ease out onto the mellow forest, gently, PAST the 120 forest mouth
+  [340, 0.28], // …stays gentle across the forest + frozen lake
   [460, 0.34], // building back up through the mid detours
   [560, 0.5], // the steep lower pitch (ice valley / cliff run-in)
   [640, 0.38], // ease a touch for the flag
@@ -306,8 +323,15 @@ const HEIGHT_TABLE: Float64Array = (() => {
 })();
 
 /** The local grade (tan of the downhill pitch) at a route distance — steep near
- * the summit and the lower pitch, mellow through the forest/lake. */
+ * the summit and the lower pitch, mellow through the forest/lake.
+ *
+ * Past the flag the mountain RUNS OUT FLAT (slope-mech, 2026-07-24 — "no finish
+ * line yet", director): a terminal segment opens into an open runout you coast
+ * off rather than a win, so grade drops to 0 there. That keeps the runout terrain
+ * flat and consistent with the clamped height (routeHeightAt is already 0 past the
+ * flag) and eases the speed coupling into a gentle coast on the valley floor. */
 export function routeGradeAt(routeDistance: number): number {
+  if (routeDistance > TOTAL_ROUTE_LENGTH) return 0;
   return gradeProfileAt(routeDistance);
 }
 

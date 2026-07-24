@@ -163,11 +163,18 @@ const LEAN_SHIFT = 6;
 export const BOOST_SPEED = 16;
 // The absolute speed ceiling once the grade multiplier is applied (M2 steepness →
 // speed, director 2026-07-24). A steep pitch multiplies the target — cruise OR
-// boost — by up to ~1.4× (grade 0.5 / REFERENCE_GRADE 0.35), so a steep boost aims
-// for ~22; this caps the very fastest target so the steepest boosted run is
-// thrilling rather than uncontrollable. On the reference grade the factor is 1 and
-// nothing here binds (BOOST_SPEED 16 < this), so the locked feel is untouched.
-const GRADE_TOP_SPEED = 22;
+// boost — by grade/REFERENCE_GRADE (up to ~1.4×) AND by SLOPE_SPEED_GAIN below, so
+// a steep boost aims well past BOOST_SPEED; this caps the very fastest target so the
+// steepest boosted run is thrilling rather than uncontrollable. On the flat Overlook
+// nothing here binds (its factor is 1, BOOST_SPEED 16 < this), so the locked feel is
+// untouched. LOOK-PASS KNOB (Josh tunes on the live build).
+const GRADE_TOP_SPEED = 28;
+// How hard the grade drives speed on the branching map (director 2026-07-24:
+// "increase speed on slopes"). Multiplies the grade factor so the whole graded
+// mountain skis genuinely faster — steeps really move, and even the mellow forest
+// out-paces the flat baseline. Applied ONLY on the branching map (the flat Overlook
+// keeps its factor 1, so its locked feel is untouched). LOOK-PASS KNOB.
+const SLOPE_SPEED_GAIN = 1.5;
 // Momentum (M2): speed is inertial. The lean/boost inputs set a *target*
 // and the actual speed eases toward it — runs start from a standstill with
 // a pole push-off instead of teleporting to cruise speed. Growing the speed
@@ -564,7 +571,14 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   // feel is untouched and only the graded branching map gains the terrain-driven
   // pace. Boost scales too, so a steep boost really screams; GRADE_TOP_SPEED caps
   // the fastest steep+boost. See route.ts's grade profile (gradeSpeedFactor).
-  const gradeFactor = gradeSpeedFactor(state.segmentId, state.distance);
+  // On the branching map SLOPE_SPEED_GAIN amplifies the coupling (director:
+  // "increase speed on slopes"); off it (the Overlook), the factor is a hard 1
+  // so the locked feel is exactly as it was. Past the flag grade→0 → the factor
+  // eases toward 0 and the run coasts out down the flat runout (no finish yet).
+  const onGradedMap = BRANCH_SEGMENTS[state.segmentId] !== undefined;
+  const gradeFactor = onGradedMap
+    ? gradeSpeedFactor(state.segmentId, state.distance) * SLOPE_SPEED_GAIN
+    : 1;
   const baseTarget = input.boost
     ? BOOST_SPEED
     : Math.max(
@@ -860,10 +874,19 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
       // the fresh segment restarts here, never back up the previous one.
       lastCheckpoint = 0;
       divertTo = null;
+    } else if (seg) {
+      // The branching map has NO finish line yet (director 2026-07-24): a
+      // terminal segment's end opens into an OPEN RUNOUT — you keep skiing off
+      // the mountain (onto the flat valley floor, grade 0 past the flag) instead
+      // of winning + auto-returning to the lobby. Push finishDistance out of
+      // reach so this fires once; distance keeps growing down the runout and the
+      // centerline (slopePath.ts) carries the skier flat past the flag. The
+      // player leaves by forfeiting. (The Overlook still finishes below.)
+      finishDistance = Number.POSITIVE_INFINITY;
     } else {
-      // No successor — this is the flag. Crossing it wins the run (a crash on
-      // the final frame takes precedence). Next frame the "finished" branch at
-      // the top coasts you out.
+      // The Overlook ("main" — no registry entry) still finishes at its line:
+      // crossing it wins the run (a crash on the final frame takes precedence).
+      // Next frame the "finished" branch at the top coasts you out.
       finished = true;
     }
   }

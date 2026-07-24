@@ -22,9 +22,28 @@ describe("route — the descent's grade profile (steepness → speed)", () => {
     }
   });
 
-  it("clamps out-of-range route distances to the ends", () => {
+  it("eases out into the forest — no grade 'wall' at the forest mouth (slope-mech, 2026-07-24)", () => {
+    // The bug fix (director look-pass): the summit→forest speed shed must not slam
+    // in at the forest entrance (route 120). The grade sheds its extreme high on the
+    // summit and levels onto a gentle leg through the mouth, so around the forest the
+    // grade barely moves — no sharp corner, no sustained hard decel there.
+    // 1) Across the forest mouth (route 100–200), any 20-unit window is nearly flat.
+    for (let d = 100; d <= 180; d += 10) {
+      expect(Math.abs(routeGradeAt(d) - routeGradeAt(d + 20))).toBeLessThan(0.03);
+    }
+    // 2) The mouth-region grade change is far gentler than the upper-summit shed —
+    //    the steepest grade CHANGE lives high on the mountain, not at the forest.
+    const upperShed = routeGradeAt(0) - routeGradeAt(40); // the steep early leg
+    const mouthShed = routeGradeAt(110) - routeGradeAt(150); // across the mouth
+    expect(mouthShed).toBeLessThan(upperShed / 2);
+  });
+
+  it("clamps below the route to the summit; flattens past the flag to a runout", () => {
     expect(routeGradeAt(-50)).toBe(routeGradeAt(0));
-    expect(routeGradeAt(9999)).toBe(routeGradeAt(TOTAL_ROUTE_LENGTH));
+    // Past the flag the mountain runs out FLAT — no finish line yet (director
+    // 2026-07-24): a terminal segment opens into an open runout you coast off.
+    expect(routeGradeAt(TOTAL_ROUTE_LENGTH + 100)).toBe(0);
+    expect(routeGradeAt(9999)).toBe(0);
   });
 
   it("drops the height monotonically to exactly 0 at the flag", () => {

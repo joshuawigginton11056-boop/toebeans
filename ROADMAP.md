@@ -51,7 +51,7 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   a landing grip window, landing lockout + a "tired hop" cue.
 - **Road system** (`client/src/slopePath.ts`): a presentation-only centerline,
   curve-ready but **straight/identity today** (bit-for-bit the old world).
-- **Branching map (the "actual map") — the real §4 layout is in, as grayblock.**
+- **Branching map (the "actual map") — the real §4 layout is in, on real terrain.**
   Per SLOPE_BRANCHING.md (director's direction: one continuous descent that grabs
   you into detour worlds, all obeying **"same clock, same flag"**), a sim-side
   **segment graph** (`shared/src/route.ts`) chains the real map: **summit →
@@ -60,19 +60,45 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   **Cave** (…yeti·cave·cliff), **Ice** (…yeti·ledge·valley·ice-castle), **Water**
   (…lake·water·cliff) — each **640** units by construction, with the Cave/Water
   reconvergence (`cliff`) landing at the identical route-offset (540) whichever
-  way it's reached. The renderer places each segment in its own grayblock world
-  corridor (`SEGMENT_PLACEMENTS`/`addBranchGrayblock`, now fully data-driven off
-  the registry — boxes only, no `skiScene.ts`); `roadSegmentIds()` is the single
-  source of truth for spine-vs-detour. **The corridors CURVE now (2026-07-24):**
-  each segment is a constant-curvature arc (`SEGMENT_SHAPES` in `slopePath.ts`),
-  the spine weaving a gentle S down the middle and the detours peeling off to
-  their sides — chained smoothly on continuous runs (no kink), cut at fork
-  handoffs; the grayblock floor/walls facet along the arc to follow it. 144 tests
-  (incl. a behavioral proof all three routes + the tree no-op reach the flag on
-  the same step, the grade, and the arcs' length/continuity).
-  **It is now the DEFAULT slope (2026-07-24)** — "Hit the slopes" loads it at the
-  live URL; **`?overlook=1`** keeps the old flat Overlook; the proof readout is
-  gated dev-only (`?branch`/`?debug`).
+  way it's reached. The renderer places each segment in its own world corridor
+  (`SEGMENT_PLACEMENTS`, data-driven off the registry); `roadSegmentIds()` is the
+  single source of truth for spine-vs-detour. **The corridors CURVE:** each segment
+  is a constant-curvature arc (`SEGMENT_SHAPES` in `slopePath.ts`), the spine
+  weaving a gentle S down the middle and the detours peeling off to their sides —
+  chained smoothly on continuous runs (no kink), cut at fork handoffs.
+  **REAL TERRAIN now, no longer grayblock boxes (slope-mech, 2026-07-24 — "create
+  the real mountain," director):** `addBranchTerrain` (skiRender.ts) builds a
+  continuous mountain SURFACE per segment — a smooth playable lane flush with the
+  sim's ground, flanked by snowbanks that rise into rolling mountainside — following
+  the curved centerlines + varying grade. Plain-shaded placeholder (slope-vis owns
+  the dressed look and re-skins/replaces it). Fork spots marked by boulders, not
+  gray boxes. 153 tests (incl. a behavioral proof all three routes + the tree no-op
+  reach the flag on the same clock, plus the arcs' length/continuity).
+  **It is the DEFAULT slope** — "Hit the slopes" loads it at the live URL;
+  **`?overlook=1`** keeps the old flat Overlook; the proof readout is gated dev-only
+  (`?branch`/`?debug`). **NO FINISH LINE yet (director, 2026-07-24):** a terminal
+  segment's end opens into a flat runout — you coast off the mountain rather than
+  winning + auto-returning to the lobby (leave by forfeiting). The Overlook still
+  finishes at 800.
+  **⚠ REDIRECT (director look-pass, 2026-07-24 — NEXT, slope-mech):** the branching
+  is being PARKED for the played path. The per-segment constant-curvature arcs kink at
+  their seams (curvature sign flips) — "jerky" — and the forks aren't wanted yet.
+  Target: **one solid mountain, a SINGLE smooth trail summit → forest, no switching to
+  other areas.** Two forest bugs to fix with it (speed instantly drops; character drifts
+  right). Full spec in the START HERE banner atop IDEAS.md. The branching graph stays in
+  `route.ts` (tested), just isn't the active run.
+  **(slope-mech) speed-drop bug FIXED (2026-07-24):** the summit→forest grade shed no
+  longer slams in at the forest mouth. `GRADE_PROFILE` (route.ts) was reshaped into an
+  **ease-out** — the grade drops steeply high on the summit (`[60, 0.36]`, where bleeding
+  the plunge's speed is natural) then LEVELS onto a gentle leg (`[180, 0.28]`) that carries
+  THROUGH the forest entrance (route 120), so at the forest the decel is a fraction of the
+  COAST_DRAG cap instead of pinned to it. Verified by a numeric trace through the real
+  sim: worst decel in the forest window (route 90–150) dropped to **0.27 u/s² cruise /
+  1.07 u/s² boosted** (cap is 4.0); the hard shed now lives up high, not at the forest.
+  New route.test.ts test pins the ease-out (no grade "wall" at the mouth). Trail-scope
+  call from Josh: the single trail will **end at the back of the forest** (forest = the
+  bottom, for gauging its size). Still TODO for this redirect: the smooth single trail
+  itself (item 1) + the drift-right (item 3, subsumed by item 1).
 - **Real 3D grade on the branching map (2026-07-24) — director-approved, now VARYING.**
   The run drops for real in world-Y: an elevated summit falling ~216 units to y=0 at
   the flag. The pitch is **no longer one constant — it varies down the route** (a
@@ -81,19 +107,25 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   `routeHeightAt`) keyed to route distance so every route still drops the same total
   ("same clock, same flag" in elevation). The reference ~19° is the director's
   locked-"invigorating" baseline. `slopePath.ts` embeds the profile (world-Y +
-  per-point `segmentPitch(id, distance)`); the skier, camera, hazards, and grayblock
-  all ride it; the Overlook stays flat (no placement). **The corridors also curve now
-  (see the branching-map bullet).** **Still grayblock, and the dressed snow is still
-  FLAT under it** — tilting the snow surface to the grade is the slope-vis half (now
-  it must follow the VARYING per-point pitch; see IDEAS.md).
+  per-point `segmentPitch(id, distance)`); the skier, camera, hazards, and the real
+  terrain surface all ride it; the Overlook stays flat (no placement). **The corridors
+  also curve (see the branching-map bullet).** The playable lane of the real terrain
+  now sits + tilts to the grade; the slope-vis half is to DRESS that surface (snow
+  material/displacement/decor/trails), following the VARYING per-point pitch — see
+  IDEAS.md.
 - **Steepness → speed (2026-07-24, director "the steeper the area, the faster the
   skiing").** The sim (`shared/src/skiing.ts`) reads the local grade and scales the
   target cruise (and boost) by it — `gradeSpeedFactor` in route.ts, 1.0 (a no-op) at
-  the reference ~19° and on the flat Overlook, so the locked feel is untouched and
-  only the graded map gains terrain-driven pace: steep pitches genuinely fast, mellow
-  flats slower, capped at `GRADE_TOP_SPEED`. Detour *content* (animal world, bird,
-  penguin/ice castles) and per-route hazard balancing (§5) come after; §7's open
-  reconciliations remain the director's.
+  the reference ~19° and on the flat Overlook, so the Overlook's locked feel is
+  untouched and only the graded map gains terrain-driven pace: steep pitches
+  genuinely fast, mellow flats slower, capped at `GRADE_TOP_SPEED`. **Turned UP
+  (slope-mech, 2026-07-24 — director "increase speed on slopes"):** a
+  `SLOPE_SPEED_GAIN` (1.5) amplifies the coupling so the whole graded mountain skis
+  faster — steeps really move, even the mellow forest out-paces the flat baseline;
+  `GRADE_TOP_SPEED` raised 22→28. Both are live-build LOOK-PASS knobs; the Overlook
+  stays a hard no-op. Detour *content* (animal world, bird, penguin/ice castles) and
+  per-route hazard balancing (§5) come after; §7's open reconciliations remain the
+  director's.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
   across all 24 slope models; decor scatter follows the run. (Old birches removed.)
 - **Realism snow:** procedural displaced surface + GPU-carved ski trails.
@@ -121,10 +153,17 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   gradient, both cut. New direction from the reference photos: **trees are dark
   silhouettes; the glow lives in the environment** (ground props, mist/haze, a
   light shaft/rays, motes) — a fresh session rebuilds night from the photos.
-  Still to do (verdict-ordered): the **environmental night look (dark tree
-  silhouettes + glow around them)**, bloom (strong), general decor/spray
-  darkening, real MegaKit glow props, realistic fireflies, moonlight *rays*, the
-  auto-transition, night audio. ⚠ amends the bible's "bright only" rule (DESIGN.md).
+  **Environmental night look, started (slope-vis 2026-07-24):** **enchanted
+  ground mist** — soft additive cool-blue haze banks (`MistField` in
+  `skiScene.ts`) drift along both treelines (faint wisps across the lane so
+  hazards stay readable), night-gated (`mistFactor`, rolls in at dusk just
+  ahead of the glow). Additive, so it lifts the near-black floor into glow-haze
+  without darkening the crushed ambient. **Director-approved (2026-07-24, "looks
+  great").** Still to do (verdict-ordered): the **light shaft / moonlight rays**
+  (the other half of
+  the env look), bloom (strong), general decor/spray darkening, real MegaKit
+  glow props, realistic fireflies, the auto-transition, night audio. ⚠ amends
+  the bible's "bright only" rule (DESIGN.md).
 - **Loose snow:** ski-trail spray, screen flurries, and a lens splat of
   naturalistic snow-clump particles (director-approved).
 - **Camera:** free zoom, fixed angle, pointer-lock mouse look.
@@ -225,11 +264,15 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       for all slopes vs. one branching map; collectibles/achievements vs. XP;
       friend-race = later-phase MP, not v1.0). Art comes after the layout stands.
 - [ ] **Play the branching map — first slice: the summit → forest ride (director,
-      2026-07-24).** Turn the grayblock map into something you actually *play*,
-      starting with the top: drop in at the summit and ride down into the forest,
-      dressed for real (this is the run that becomes the game). A coordinated
-      cross-session slice — the ride already works mechanically (proven by tests),
-      what's missing is a real entry + real visuals:
+      2026-07-24).** Turn the map into something you actually *play*, starting with the
+      top: drop in at the summit and ride down into the forest, dressed for real (this
+      is the run that becomes the game). A coordinated cross-session slice — the ride
+      works mechanically (proven by tests), what's missing is a smooth single trail +
+      real visuals.
+      **⚠ REDIRECT (director look-pass, 2026-07-24): NO branching for this slice — one
+      solid mountain, a single SMOOTH trail summit → forest (the per-segment arcs kink;
+      forks not wanted yet), + fix two forest bugs (instant speed drop, drift right).
+      Full spec: START HERE banner atop IDEAS.md (slope-mech, next chat).**
       - **(slope-mech) — real 3D grade + curves + steepness→speed ✅ landed
         (2026-07-24):** the branching map drops for real ("ride down a REAL mountain",
         director). `slopePath.ts`'s `segmentCenterline` returns a `y`; the corridors
@@ -243,13 +286,16 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
         on the flat Overlook). The skier, camera, hazards, and grayblock (descending,
         curving, per-point-pitched ramps) ride it; the `anchor` carries `anchor.y`.
         153 tests. Reference ~19° stays the director-locked "invigorating" baseline.
-      - **(slope-vis) — REPLACE THE RAMP WITH A REAL MOUNTAIN — the next slice
-        (director, 2026-07-24, next session).** The run rides a grayblock ramp; make
-        `skiScene.ts`'s snow surface segment-aware and lay real dressed ground under
-        it, following the **curved centerlines** (`segmentCenterline`/`segmentToWorld`)
-        AND the **varying per-point pitch** (`segmentPitch(id, distance)`, not one
-        constant). Then (slope-mech) gates off `addBranchGrayblock`. See the START
-        HERE banner in IDEAS.md.
+      - **(slope-vis) — DRESS THE REAL MOUNTAIN (the geometry now exists).** The
+        grayblock ramp is GONE: (slope-mech) built a real terrain surface
+        (`addBranchTerrain`, skiRender.ts — smooth playable lane + rising snowbank
+        flanks, following the curved centerlines + varying grade). It's a
+        PLAIN-SHADED placeholder. slope-vis's job is now to DRESS it — snow
+        material/displacement, decor, ski-trail carving — re-skinning or replacing
+        that mesh, using the same `segmentCenterline`/`segmentToWorld`/`segmentPitch`
+        exports. (No more "make the flat snow plane segment-aware and tilt it"; the
+        ground already sits + tilts to the grade.) See the START HERE banner in
+        IDEAS.md.
       - **(slope-mech) — branching map is now the DEFAULT slope ✅ (2026-07-24):**
         director couldn't see the grade because it was hidden behind `?branch=1` and
         the live build's plain URL served the flat Overlook. Promoted: the graded
@@ -305,11 +351,16 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       light shaft/rays, floating motes) — not the wood. **All self-glowing-trunk
       code was removed from `skiScene.ts`** (`npm run check` green, 153 tests).
       The night look restarts in a **fresh session with the reference photos**;
-      the trunk-glow direction is dead. Still open, verdict-ordered: the
-      **environmental night look** (dark tree silhouettes + glow around them,
-      driven by the photos), **bloom (strong)**, general decor/spray darkening,
-      **real MegaKit glow props**, **realistic fireflies (CC0)**, **moonlight rays**, a
-      designed dusk midpoint, night audio/lobby. **The auto-transition trigger is answered** (director,
+      the trunk-glow direction is dead. **Environmental night look — started
+      (slope-vis 2026-07-24, from the photos):** enchanted **ground mist** —
+      soft additive cool-blue haze banks (`MistField`) drifting along the
+      treelines, faint wisps across the lane, night-gated (`mistFactor`, rolls
+      in at dusk ahead of the glow); additive so it never darkens the crushed
+      floor. **Director-approved (2026-07-24, "looks great").** Still open,
+      verdict-ordered: the **light shaft / moonlight rays** (env look, other
+      half), **bloom (strong)**, general decor/spray darkening, **real MegaKit
+      glow props**, **realistic fireflies (CC0)**, a designed dusk midpoint,
+      night audio/lobby. **The auto-transition trigger is answered** (director,
       2026-07-24): the enchanted forest *is* the branching map's forest segment, so
       the sunset→dark transition rides the **summit→forest descent** — folds into
       the "play the summit → forest ride" slice above.

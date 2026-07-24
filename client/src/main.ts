@@ -33,7 +33,7 @@ import {
 } from "./settings";
 import { createSettingsMenu } from "./settingsMenu";
 import {
-  addBranchGrayblock,
+  addBranchTerrain,
   createSkiScene,
   render,
   syncSkiSceneToState,
@@ -54,7 +54,7 @@ const BRANCH_MAP = !params.has("overlook");
 // default run isn't covered in dev text; the grayblock scenery always shows
 // because it's the only ground until the visuals seam dresses it.
 const BRANCH_DEBUG = params.has("branch") || params.has("debug");
-let branchGrayblockAdded = false;
+let branchTerrainAdded = false;
 let branchDebug: BranchDebug | null = null;
 
 const container = document.getElementById("app");
@@ -187,11 +187,11 @@ function goSkiing(): void {
   // This is also how you retry after a forfeit.
   if (BRANCH_MAP) {
     skiState = createBranchingSkiState();
-    // The grayblock corridors/tree/markers live in the scene for good once
-    // dropped in — only the run state resets per trip.
-    if (!branchGrayblockAdded) {
-      addBranchGrayblock(skiScene);
-      branchGrayblockAdded = true;
+    // The mountain terrain lives in the scene for good once dropped in — only
+    // the run state resets per trip.
+    if (!branchTerrainAdded) {
+      addBranchTerrain(skiScene);
+      branchTerrainAdded = true;
     }
     // The proof readout only under the dev flag (?branch/?debug) — see BRANCH_DEBUG.
     if (BRANCH_DEBUG) {

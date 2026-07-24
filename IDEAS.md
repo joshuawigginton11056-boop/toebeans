@@ -3,6 +3,58 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## ⏭ START HERE (slope-mech) — ONE solid mountain, one SMOOTH trail summit → back of the forest (director look-pass, 2026-07-24)
+
+Director look-pass on the real-terrain build. **Redirect: stop branching. Build one
+solid mountain with a SINGLE trail going down toward the forest — no forks, no
+switching over to other areas — and make the path smooth, not jerky.**
+
+**Status (2026-07-24):** the speed-drop bug (item 2) is **DONE and shipped to master**.
+**Remaining — the next chunk = the smooth single trail (items 1 + 3).** Item 3 (drift-right)
+is subsumed by item 1: build the single continuous trail and the +x drift goes away. Trail
+scope is settled — it **ends at the back of the forest** (Josh, so he can gauge forest size).
+Coordinate with slope-vis on the terrain seam (`addBranchTerrain` → one continuous surface).
+
+**1. One trail, no switching, NOT jerky.** The run still rides the branching segment
+graph — each segment is a constant-curvature arc whose curvature SIGN FLIPS at every
+seam (summit turns −0.24 toward −x, then forest-road turns +0.24 toward +x, …), so the
+path *kinks* at the boundaries. That's "the jerky path from the gray blocks." Kill it:
+- Route the played run down a SINGLE continuous, smooth centerline summit → forest —
+  one gentle line (or straight), **no per-segment curvature discontinuities**, no
+  detour peel-offs. (Reshape `SEGMENT_SHAPES` in `client/src/slopePath.ts` and/or route
+  a single path; a continuous-curvature centerline like the Overlook's `BENDS`
+  integrator is the smooth model, not per-segment constant arcs meeting at kinks.)
+- Disable the forks for now — the `trigger`s in `shared/src/route.ts`
+  (summit→forest-tree, lake→water, yeti→ledge) — and don't route/render the detour
+  corridors. The branching graph can STAY in route.ts (still tested), just not be the
+  active played path.
+- The terrain must read as ONE solid mountain down that trail, not overlapping
+  per-segment ribbons (`addBranchTerrain` in `skiRender.ts` currently builds one mesh
+  per segment; for a single trail it's one continuous surface).
+- **ANSWERED (Josh, 2026-07-24):** the trail **ends at the back of the forest** — forest
+  is the bottom, so he can get a feel for how big the forest should be. Build the single
+  trail as summit → (through) → back of the forest.
+
+**2. Speed instantly drops at the forest. ✅ FIXED (slope-mech, 2026-07-24).** Reshaped
+`GRADE_PROFILE` (route.ts) into an ease-out: steep grade shed high on the summit
+(`[60, 0.36]`) then a gentle leg (`[180, 0.28]`) carrying through the forest mouth (route
+120) — so the decel at the forest is a fraction of the `COAST_DRAG` cap, not pinned to it.
+Numeric trace through the real sim: forest-window worst decel dropped to 0.27 u/s² cruise
+/ 1.07 u/s² boosted (cap 4.0). `SLOPE_SPEED_GAIN` left at 1.5 (it scales absolute speed,
+not the felt ratio — it's the secondary knob if Josh wants it gentler still). route.test.ts
+pins the ease-out. **Josh: feel-test on the live build — the grade shape is a look-pass knob.**
+
+**3. Character drifts right at the forest.** The forest-road corridor curves toward +x
+(`SEGMENT_SHAPES.forest-road.turn = +0.24`) = screen-right drift. The single-trail
+straight/gentle-line redirect (item 1) removes it; if any curve stays, keep it gentle
+and symmetric so the run tracks straight down the fall line toward the forest.
+
+Touch points: `shared/src/route.ts` (grade profile + graph/triggers),
+`client/src/slopePath.ts` (`SEGMENT_SHAPES`, centerline), `client/src/skiRender.ts`
+(`addBranchTerrain`), `shared/src/skiing.ts` (`SLOPE_SPEED_GAIN`, fork trigger logic).
+The branching architecture below is now PARKED for the played path — keep it, don't
+delete it, but the active run is one non-branching trail until Josh says otherwise.
+
 ## (slope-vis) The music bed is a placeholder — pick the real direction (2026-07-24)
 
 The lobby session's settings menu needed a **music on/off toggle** to be worth
@@ -74,31 +126,33 @@ use `segmentPitch(id, distance)` per-point (it varies down the route now).
 
 ## (slope-mech ✅ curves landed 2026-07-24 / rest still open) Branching map — the §4 layout landed; now make it PLAYABLE (2026-07-24)
 
-> **⏭ START HERE NEXT SESSION (handoff 2026-07-24, director): REPLACE THE GRAYBLOCK
-> RAMP WITH A REAL MOUNTAIN.** The branching map (the default slope) rides on a
-> grayblock ramp today — descending, curving floor/wall boxes built by
-> `addBranchGrayblock` in `skiRender.ts`. Make it a real, dressed mountain surface.
-> This is chiefly the **(slope-vis)** lift — `skiScene.ts`'s snow surface must go
-> **segment-aware** and lay real ground under every corridor — plus a small
-> **(slope-mech)** cleanup to retire the grayblock once real ground exists. Two hard
-> requirements from THIS session's work, both already exposed on `slopePath.ts`:
+> **⏭ START HERE (slope-vis): DRESS THE REAL MOUNTAIN. The geometry now exists.**
+> The grayblock ramp is GONE. (slope-mech, 2026-07-24, director "create the real
+> mountain") replaced it with a real terrain SURFACE — `addBranchTerrain` in
+> `skiRender.ts` builds a continuous mountain mesh per segment: a smooth playable
+> lane flush with the sim's ground, flanked by snowbanks rising into rolling
+> mountainside, following the curved centerlines AND the varying grade. It's a
+> **plain-shaded placeholder** (a soft off-white MeshStandard, fork spots marked by
+> boulders). **slope-vis's job is to DRESS it** — snow material/displacement, decor,
+> ski-trail carving — re-skinning that mesh or replacing it with your own segment-aware
+> surface. The old framing ("make skiScene's flat snow plane segment-aware and tilt it
+> to the grade") is obsolete: the ground already sits + tilts to the grade and follows
+> the curves. What you build against, all on `slopePath.ts` (already in `client/src`):
 >
-> 1. **Follow the CURVES.** Corridors are constant-curvature arcs now, not straight —
->    build the surface along `segmentCenterline(id, distance)` (world x/z + `heading`)
->    and `segmentToWorld(id, distance, lateral)`, per segment, not one straight strip
->    down −z. The spine weaves an S; detours peel to the sides (`SEGMENT_SHAPES`).
-> 2. **Follow the VARYING grade.** The pitch is no longer one constant — use
->    `segmentPitch(id, distance)` **per-point** (it changes down the route: steep ~27°
->    summit, mellow ~15° forest/lake, steep lower pitch) and `segmentCenterline(...).y`
->    for height. Do NOT tilt by a single `slopeGradePitch` — that's only the
->    reference/average now. The height/grade truth is `routeHeightAt`/`routeGradeAt`
->    in `shared/src/route.ts` if you want it raw.
+> 1. **Follow the CURVES.** Corridors are constant-curvature arcs — sample
+>    `segmentCenterline(id, distance)` (world x/z + `heading`) and
+>    `segmentToWorld(id, distance, lateral)`, per segment. The spine weaves an S;
+>    detours peel to the sides (`SEGMENT_SHAPES`).
+> 2. **Follow the VARYING grade.** Height is `segmentCenterline(...).y`; local pitch is
+>    `segmentPitch(id, distance)` **per-point** (steep ~27° summit, mellow ~15°
+>    forest/lake, steep lower pitch). Raw truth: `routeHeightAt`/`routeGradeAt` in
+>    `shared/src/route.ts`. Past the flag both go flat — that's the no-finish runout.
 >
-> **(slope-mech) cleanup half:** once the real surface is under the run, gate
-> `addBranchGrayblock` (and the `branchDebug` readout) so the placeholder boxes +
-> proof text don't show in real play — see "Real entry + grayblock cleanup" below.
-> Detour worlds (lake/yeti/penguin/ice-castle) still dress in later; summit→forest is
-> the first slice, as before.
+> Reference `addBranchTerrain` for the lane/flank cross-section it uses (lane
+> `|lateral| ≤ LATERAL_LIMIT` flat at the centerline y; flanks rise to ±46). If you
+> replace the mesh, (slope-mech) can retire `addBranchTerrain` — coordinate. Detour
+> worlds (lake/yeti/penguin/ice-castle) still dress in later; summit→forest is the
+> first slice.
 
 **Shaped corridors landed (slope-mech, 2026-07-24):** the branching map's segments
 CURVE now — each a constant-curvature arc (`SEGMENT_SHAPES` in `slopePath.ts`), the
@@ -195,15 +249,17 @@ The cross-session split:
 
 ## (slope-vis) NIGHT → the enchanted forest — director redirect (2026-07-24)
 
-> **⏭ START HERE NEXT SESSION (slope-vis, handoff 2026-07-24):** the darker
-> night **and** the glowing-forest *first layer* are merged, and the director has
-> now **look-passed** the first layer (verdict below). Settled: darkness values
-> are the base (Josh: "feels right"); the **glow ramp is signed off** — G1
-> `#5FE9D0` cyan, G2 `#8CF08A` moss, G3 `#B98CF0` violet, G4 `#F0C06A` warm
-> lantern (DESIGN.md, `GLOW` in `skiScene.ts`); **sourcing = MegaKit mushrooms/
-> plants** (CC0). Live tuning knobs are named constants at the top of the
-> ENCHANTED NIGHT section (`GLOW_EMISSIVE`, `POOL_ALPHA`, `GLOW_ONSET`,
-> `GLOW_CELL`/`GLOW_DENSITY`).
+> **⏭ START HERE NEXT SESSION (slope-vis, handoff 2026-07-24):** the environmental
+> night look is underway from Josh's reference photos. **Ground mist is BUILT and
+> DIRECTOR-APPROVED** ("looks great") — `MistField` in `skiScene.ts`, see chunk #0
+> below. **Next up: the light shaft / moonlight rays** (the other half of #0 — the
+> bright misty central shaft from ref photo 2), then **bloom** (#1). Also already
+> settled: darkness values are the base (Josh: "feels right"); the **glow ramp is
+> signed off** — G1 `#5FE9D0` cyan, G2 `#8CF08A` moss, G3 `#B98CF0` violet, G4
+> `#F0C06A` warm lantern (DESIGN.md, `GLOW` in `skiScene.ts`); **sourcing = MegaKit
+> mushrooms/plants** (CC0). Live tuning knobs are named constants at the top of the
+> ENCHANTED NIGHT section — glow: `GLOW_EMISSIVE`, `POOL_ALPHA`, `GLOW_ONSET`,
+> `GLOW_CELL`/`GLOW_DENSITY`; mist: `MIST_CELL`/`MIST_DENSITY`/`MIST_COLOR`/`MIST_ONSET`.
 >
 > **★ Director look-pass verdict on the first layer (2026-07-24) — the punch
 > list for next session:**
@@ -258,6 +314,22 @@ The cross-session split:
 >    **light shaft / moonlight rays**, and (later, CC0) floating **motes**. The
 >    trunk materials are back to plain painted bark — do not re-add emissive to
 >    them. Judge every pass by the photos: dark trees, lit surroundings.
+>    - **✅ Ground mist BUILT + DIRECTOR-APPROVED (slope-vis 2026-07-24, "looks
+>      great").** The *"atmospheric mist/haze catching the glow"* half: `MistField` in
+>      `skiScene.ts` — soft **additive** cool-blue haze banks (a value shift of
+>      snow-shadow #2, so it's atmosphere not the glow ramp; the colored glow at
+>      the light sources comes from the existing additive glow pools shining up
+>      into overlapping mist) drifting along both treelines, with only faint
+>      wisps across the lane so hazards stay readable. Night-gated by a new
+>      `mistFactor` that rolls in at dusk (`MIST_ONSET 0.4`, just ahead of the
+>      glow). Additive → only lifts the near-black floor into glow-haze, never
+>      darkens the crushed ambient (per "don't crush further"). Tuning knobs:
+>      `MIST_CELL`/`MIST_DENSITY`/`MIST_COLOR`/`MIST_ONSET` + per-bank opacities.
+>    - **⏭ NEXT (still #0): the light shaft / moonlight rays** — the other half
+>      of the env look, most prominent in ref photo 2 (the bright misty central
+>      shaft). Faked additive god-ray cone(s) angled from a canopy gap onto the
+>      lane, night-gated the same way. Then bloom (#1) makes both the mist and
+>      the glow props actually bleed halo.
 > 1. **Bloom** — the halo that makes emissive read as *glowing*, tuned STRONG
 >    (verdict #4). A render-seam add: `render()` in `skiRender.ts` (mechanics)
 >    calls `renderer.render(scene, camera)`; route it through an `EffectComposer`
