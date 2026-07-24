@@ -23,6 +23,73 @@ export const PALETTE = {
   chasmDark: 0x2e3548, // slate rock, deep value shift — never pure black
 } as const;
 
+// NIGHT (branching-map idea, director 2026-07-24: "the sun sets as we race,
+// and it turns to night"). ⚠ This intentionally reaches past the Art Style
+// Bible's "the whole game is bright — dark moods are out of scope" line — a
+// director amendment, flagged for a look-pass and a bible note (see the
+// ROADMAP entry). It stays inside the palette in spirit: every night color
+// below is a cool, dark *value shift* of an existing palette entry (snow
+// shadow #2, glacial ice #10, the chasm navy). The night is moonlit and
+// serene — readable, never black — so the cat's signal-red scarf stays the
+// one warm thing in frame, exactly the bible's "warmth comes from the
+// characters, not the landscape."
+const NIGHT = {
+  // The two snow targets that drive the lighting solve at full night — same
+  // trick as day (createEnvironment), just cooler and darker: moonlit facing
+  // snow reads as a soft silver-blue, ambient-only snow sinks to a deep cool
+  // slate. Both are value shifts of snow-shadow #D3DFF0 / the chasm navy.
+  snowLit: 0x8fa0be,
+  snowShadow: 0x3f4d70,
+  // Sky: a dim blue at the horizon melting up to a deep navy overhead. The
+  // fog rides the horizon color so distance still fades into the sky.
+  skyHorizon: 0x3a4a6e,
+  skyZenith: 0x1a2138,
+  // The moon: a pale cool disc, smaller and crisper than the hazy dawn sun,
+  // hung a touch higher in the sky.
+  moon: 0xdfe8f5,
+} as const;
+
+// Solve the two snow lights (ambient skylight + one directional) so flat snow
+// renders exactly on target: ambient alone lands on `shadowTarget`, ambient +
+// direct light lands on `litTarget`. This is the dawn trick from
+// createEnvironment, generalized so night can reuse it (day passes
+// litTarget = albedo). See the constraint derivation there.
+function solveSnowLights(
+  albedo: THREE.Color,
+  litTarget: THREE.Color,
+  shadowTarget: THREE.Color,
+  ndotL: number,
+): { ambient: THREE.Color; direct: THREE.Color } {
+  const ambient = new THREE.Color(
+    Math.min(1, shadowTarget.r / albedo.r),
+    Math.min(1, shadowTarget.g / albedo.g),
+    Math.min(1, shadowTarget.b / albedo.b),
+  );
+  const direct = new THREE.Color(
+    Math.max(0, (litTarget.r - shadowTarget.r) / (albedo.r * ndotL)),
+    Math.max(0, (litTarget.g - shadowTarget.g) / (albedo.g * ndotL)),
+    Math.max(0, (litTarget.b - shadowTarget.b) / (albedo.b * ndotL)),
+  );
+  return { ambient, direct };
+}
+
+// Everything about the sky/light that changes between dawn and night. Two of
+// these (the day and night endpoints) are built once; setTimeOfDay lerps
+// between them and applies the result to the live scene objects.
+interface Atmosphere {
+  readonly ambient: THREE.Color;
+  readonly direct: THREE.Color; // the sun/moon directional light color
+  readonly fog: THREE.Color;
+  readonly skyHorizon: THREE.Color;
+  readonly skyZenith: THREE.Color;
+  readonly disc: THREE.Color; // sun/moon billboard tint
+  readonly discScale: number;
+  readonly discOpacity: number;
+  /** Billboard elevation cheat, azimuth-matched to the light. */
+  readonly discDir: THREE.Vector3;
+  readonly stars: number; // 0 (day, invisible) … 1 (full night)
+}
+
 // Direction from the scene toward the sun: nearly straight down-lane (you
 // ski into the light, which is what makes the haze glow) and low enough
 // (~26°) that shadows stretch long across the snow. The azimuth is cheated
@@ -56,6 +123,11 @@ const SUN_BILLBOARD_DIRECTION = new THREE.Vector3(
   -1,
 ).normalize();
 
+// The moon hangs at the same azimuth but a little higher than the horizon sun
+// — a night sky can afford to show it off, and lifting it clears the treeline
+// silhouettes at the far end of the lane.
+const MOON_BILLBOARD_DIRECTION = new THREE.Vector3(-0.15, 0.2, -1).normalize();
+
 export const SLOPE_LENGTH = 100;
 // The snowfield plane: one moving window of snow that follows the skier
 // (see syncEnvironment). The trail ring buffer below shares these numbers —
@@ -74,9 +146,11 @@ export const SLOPE_WIDTH = LATERAL_LIMIT * 2 + 2;
 export const LANE_EDGE = SLOPE_WIDTH / 2;
 
 export interface SlopeEnvironment {
-  readonly sun: THREE.DirectionalLight;
+  readonly sun: THREE.DirectionalLight; // the sun by day, the moon at night
+  readonly ambient: THREE.AmbientLight;
   readonly skyDome: THREE.Mesh;
-  readonly sunBillboard: THREE.Sprite;
+  readonly sunBillboard: THREE.Sprite; // the sun disc by day, the moon at night
+  readonly stars: THREE.Points; // fade in with night
   readonly slope: THREE.Mesh;
   readonly trail: SnowTrail;
 }
@@ -91,6 +165,93 @@ export interface SnowTrailInput {
   readonly grounded: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Time of day — dawn ⇄ night (branching-map idea, director 2026-07-24).
+//
+// The whole scene was one fixed dawn. Now the sky/light live on a single
+// phase `timeOfDay` in [0,1]: 0 = the exact dawn from before this change,
+// 1 = full moonlit night. setTimeOfDay lerps between two prebuilt endpoints
+// and applies the result. It's called from a debug key today (N, wired in
+// main.ts) so the director can eyeball the look; the "sun sets *as you race*"
+// auto-transition (drive the phase from run progress) is the next chunk —
+// deliberately left out until the night look is approved and the trigger
+// (linear distance? which map branch?) is a director call. Presentation-only:
+// nothing here touches the sim or the save.
+
+// The active slope environment — there is only ever one, built once by
+// createSkiScene and reused across runs, so a module singleton lets the debug
+// key retint the scene without threading the handle through main.ts. Matches
+// how the decor/texture singletons already live in this file.
+let activeEnvironment: SlopeEnvironment | null = null;
+let activeScene: THREE.Scene | null = null;
+let dayAtmosphere: Atmosphere | null = null;
+let nightAtmosphere: Atmosphere | null = null;
+let timeOfDay = 0; // persists across runs; re-asserted when the env rebuilds
+// The billboard placement direction for the current phase — syncEnvironment
+// reads it each frame to hang the sun/moon. Lerped in applyTimeOfDay.
+const currentDiscDir = SUN_BILLBOARD_DIRECTION.clone();
+
+const lerpColor = (() => {
+  const out = new THREE.Color();
+  return (a: THREE.Color, b: THREE.Color, t: number) =>
+    out.copy(a).lerp(b, t);
+})();
+
+// Lerp the whole atmosphere from day → night at `t` and push it onto the live
+// scene objects. Cheap enough to call on demand (the debug key); the only
+// non-trivial bit is repainting the sky dome's vertex colors, done here rather
+// than per frame.
+function applyTimeOfDay(t: number): void {
+  timeOfDay = Math.min(1, Math.max(0, t));
+  const env = activeEnvironment;
+  if (!env || !dayAtmosphere || !nightAtmosphere) return;
+  const d = dayAtmosphere;
+  const n = nightAtmosphere;
+  const k = timeOfDay;
+
+  env.ambient.color.copy(lerpColor(d.ambient, n.ambient, k));
+  env.sun.color.copy(lerpColor(d.direct, n.direct, k));
+  if (activeScene?.fog) {
+    activeScene.fog.color.copy(lerpColor(d.fog, n.fog, k));
+  }
+  if (activeScene?.background instanceof THREE.Color) {
+    activeScene.background.copy(lerpColor(d.skyZenith, n.skyZenith, k));
+  }
+
+  repaintSkyDome(
+    env.skyDome,
+    lerpColor(d.skyHorizon, n.skyHorizon, k).clone(),
+    lerpColor(d.skyZenith, n.skyZenith, k).clone(),
+  );
+
+  const disc = env.sunBillboard.material as THREE.SpriteMaterial;
+  disc.color.copy(lerpColor(d.disc, n.disc, k));
+  disc.opacity = d.discOpacity + (n.discOpacity - d.discOpacity) * k;
+  env.sunBillboard.scale.setScalar(d.discScale + (n.discScale - d.discScale) * k);
+  currentDiscDir.copy(d.discDir).lerp(n.discDir, k).normalize();
+
+  const starMat = env.stars.material as THREE.PointsMaterial;
+  starMat.opacity = d.stars + (n.stars - d.stars) * k;
+  env.stars.visible = starMat.opacity > 0.001;
+}
+
+/** Jump straight to a time of day (0 = dawn, 1 = full night). */
+export function setTimeOfDay(t: number): void {
+  applyTimeOfDay(t);
+}
+
+/**
+ * Debug cycle for the director's look-pass: dawn → dusk → night → dawn.
+ * Returns the new phase so the caller can surface it. Wired to the N key in
+ * main.ts; retires when the auto-transition lands.
+ */
+export function cycleTimeOfDay(): number {
+  const stops = [0, 0.5, 1];
+  const i = stops.findIndex((s) => s > timeOfDay + 1e-3);
+  applyTimeOfDay(i === -1 ? 0 : stops[i]!);
+  return timeOfDay;
+}
+
 // Builds the slope's weather and ground: fog, lights, sky, sun disc, and
 // the snowfield. Adds everything to the scene and returns the pieces that
 // follow the run downhill (see syncEnvironment). The renderer comes along
@@ -103,7 +264,9 @@ export function createEnvironment(
   scene.background = new THREE.Color(PALETTE.skyBlue);
 
   // The mandatory haze: distance fog tinted dawn pink. Doubles as gameplay —
-  // how pink something is tells you how far away it is.
+  // how pink something is tells you how far away it is. (Color is re-tinted
+  // by setTimeOfDay; near/far stay put so gameplay read is identical day or
+  // night.)
   scene.fog = new THREE.Fog(PALETTE.dawnPink, 35, 150);
 
   // The bible's two snow colors define the lighting exactly: ambient
@@ -112,25 +275,22 @@ export function createEnvironment(
   // gives the light colors below — shadows land on palette #2 by
   // construction, not by tuning. (The blue channel wants slightly more than
   // the sun can subtract, hence the clamp; the sun comes out warm because
-  // it carries all the red/yellow the blue ambient lacks.)
+  // it carries all the red/yellow the blue ambient lacks.) The night
+  // endpoint reuses the same solve with the cooler NIGHT targets.
   const albedo = new THREE.Color(PALETTE.sunlitSnow);
-  const shadowTarget = new THREE.Color(PALETTE.snowShadow);
-  const ambientColor = new THREE.Color(
-    Math.min(1, shadowTarget.r / albedo.r),
-    Math.min(1, shadowTarget.g / albedo.g),
-    Math.min(1, shadowTarget.b / albedo.b),
-  );
   const groundNdotL = SUN_DIRECTION.y; // how squarely the sun hits flat snow
-  const sunColor = new THREE.Color(
-    Math.max(0, (1 - ambientColor.r) / groundNdotL),
-    Math.max(0, (1 - ambientColor.g) / groundNdotL),
-    Math.max(0, (1 - ambientColor.b) / groundNdotL),
+  const day = solveSnowLights(
+    albedo,
+    albedo, // day: lit snow *is* the albedo (sunlit-snow #1)
+    new THREE.Color(PALETTE.snowShadow),
+    groundNdotL,
   );
 
   // Math.PI because three.js physical lights fold 1/π into the material.
-  scene.add(new THREE.AmbientLight(ambientColor, Math.PI));
+  const ambient = new THREE.AmbientLight(day.ambient.clone(), Math.PI);
+  scene.add(ambient);
 
-  const sun = new THREE.DirectionalLight(sunColor, Math.PI);
+  const sun = new THREE.DirectionalLight(day.direct.clone(), Math.PI);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   // ±55 covers the widened lane (±12 of skier travel) plus both treelines;
@@ -157,6 +317,9 @@ export function createEnvironment(
 
   const sunBillboard = createSunBillboard();
   scene.add(sunBillboard);
+
+  const stars = createStarfield();
+  scene.add(stars);
 
   // One wide snowfield; the skiable lane (SLOPE_WIDTH) sits in the middle
   // and the decor lives on the flanks beyond it. The mesh quietly follows
@@ -190,7 +353,54 @@ export function createEnvironment(
   // to find its DOM parent and to mirror its visibility).
   createLensSplash(renderer);
 
-  return { sun, skyDome, sunBillboard, slope, trail };
+  const environment: SlopeEnvironment = {
+    sun,
+    ambient,
+    skyDome,
+    sunBillboard,
+    stars,
+    slope,
+    trail,
+  };
+
+  // Day and night endpoints for the time-of-day lerp. Day mirrors exactly
+  // what was hardcoded before this change (so t=0 is a no-op); night uses the
+  // NIGHT targets and the same snow-light solve.
+  const night = solveSnowLights(
+    albedo,
+    new THREE.Color(NIGHT.snowLit),
+    new THREE.Color(NIGHT.snowShadow),
+    groundNdotL,
+  );
+  dayAtmosphere = {
+    ambient: day.ambient,
+    direct: day.direct,
+    fog: new THREE.Color(PALETTE.dawnPink),
+    skyHorizon: new THREE.Color(PALETTE.dawnPink),
+    skyZenith: new THREE.Color(PALETTE.skyBlue),
+    disc: new THREE.Color(PALETTE.sunGlow),
+    discScale: 34,
+    discOpacity: 1,
+    discDir: SUN_BILLBOARD_DIRECTION.clone(),
+    stars: 0,
+  };
+  nightAtmosphere = {
+    ambient: night.ambient,
+    direct: night.direct,
+    fog: new THREE.Color(NIGHT.skyHorizon),
+    skyHorizon: new THREE.Color(NIGHT.skyHorizon),
+    skyZenith: new THREE.Color(NIGHT.skyZenith),
+    disc: new THREE.Color(NIGHT.moon),
+    discScale: 22, // the moon reads smaller and crisper than the hazy sun
+    discOpacity: 1,
+    discDir: MOON_BILLBOARD_DIRECTION.clone(),
+    stars: 1,
+  };
+  activeEnvironment = environment;
+  activeScene = scene;
+  applyTimeOfDay(timeOfDay); // re-assert whatever phase persisted across runs
+
+  return environment;
 }
 
 // Atmosphere follows the run downhill. The sun light (and its shadow
@@ -241,9 +451,12 @@ export function syncEnvironment(
   // updateSlopeDecor below.
   updateSlopeDecor(anchor.z);
   environment.skyDome.position.copy(camera.position);
+  environment.stars.position.copy(camera.position);
+  // The disc direction is the current time-of-day's (lerped in applyTimeOfDay)
+  // — the sun sits near the horizon, the moon a little higher.
   environment.sunBillboard.position
     .copy(camera.position)
-    .addScaledVector(SUN_BILLBOARD_DIRECTION, 150);
+    .addScaledVector(currentDiscDir, 150);
   // Loose snow — spray kicked off the skis, flurries drifting past the
   // lens. Reads the skier's speed straight off the anchor's motion (no new
   // seam field) and its own frame clock; see updateSnowEffects.
@@ -291,25 +504,26 @@ export function createChasmMesh(width: number): THREE.Mesh {
 // blue overhead, so the ground fog (also dawn pink) melts into the horizon
 // instead of hitting a flat-colored wall.
 
+// Per-vertex horizon→zenith blend factor, cached once so the dome can be
+// repainted for any time of day without re-running the smoothstep.
+let skyHeightT: Float32Array | null = null;
+
 function createSkyDome(): THREE.Mesh {
   const radius = 170;
   const geometry = new THREE.SphereGeometry(radius, 32, 16);
   const positions = geometry.attributes.position!;
-  const colors = new Float32Array(positions.count * 3);
-  const horizon = new THREE.Color(PALETTE.dawnPink);
-  const zenith = new THREE.Color(PALETTE.skyBlue);
-  const color = new THREE.Color();
+  skyHeightT = new Float32Array(positions.count);
   for (let i = 0; i < positions.count; i++) {
     const height = positions.getY(i) / radius; // -1 (below) … 1 (overhead)
-    // Blend fully to sky blue within ~15° of elevation — the downhill camera
-    // only ever sees a low band of sky, and the blue should reach into it.
-    const t = Math.min(1, Math.max(0, (height - 0.02) / 0.25));
-    color.lerpColors(horizon, zenith, t);
-    colors[i * 3] = color.r;
-    colors[i * 3 + 1] = color.g;
-    colors[i * 3 + 2] = color.b;
+    // Blend fully to the zenith color within ~15° of elevation — the downhill
+    // camera only ever sees a low band of sky, so the top color reaches into
+    // it.
+    skyHeightT[i] = Math.min(1, Math.max(0, (height - 0.02) / 0.25));
   }
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute(
+    "color",
+    new THREE.BufferAttribute(new Float32Array(positions.count * 3), 3),
+  );
   const dome = new THREE.Mesh(
     geometry,
     new THREE.MeshBasicMaterial({
@@ -320,7 +534,69 @@ function createSkyDome(): THREE.Mesh {
     }),
   );
   dome.renderOrder = -1; // paint the sky first; everything else draws over it
+  repaintSkyDome(dome, new THREE.Color(PALETTE.dawnPink), new THREE.Color(PALETTE.skyBlue));
   return dome;
+}
+
+// Rewrite the dome's vertex colors for a horizon/zenith pair. Called on
+// create and on every time-of-day change.
+function repaintSkyDome(
+  dome: THREE.Mesh,
+  horizon: THREE.Color,
+  zenith: THREE.Color,
+): void {
+  const attr = dome.geometry.attributes.color as THREE.BufferAttribute;
+  const colors = attr.array as Float32Array;
+  const heights = skyHeightT!;
+  const color = new THREE.Color();
+  for (let i = 0; i < heights.length; i++) {
+    color.lerpColors(horizon, zenith, heights[i]!);
+    colors[i * 3] = color.r;
+    colors[i * 3 + 1] = color.g;
+    colors[i * 3 + 2] = color.b;
+  }
+  attr.needsUpdate = true;
+}
+
+// A field of faint stars on a shell just inside the sky dome, upper hemisphere
+// only. Invisible by day (material opacity lerps in with night). It rides with
+// the camera like the dome, so the stars sit at infinity and never parallax.
+function createStarfield(): THREE.Points {
+  const count = 550;
+  const radius = 165; // just inside the 170 dome
+  const positions = new Float32Array(count * 3);
+  // Deterministic scatter (a tiny LCG) so the sky is the same every run — no
+  // Math.random, matching the seeded-decor convention elsewhere in this file.
+  let seed = 0x5eed;
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 0xffffffff;
+  };
+  for (let i = 0; i < count; i++) {
+    // Cosine-free uniform-ish over the upper hemisphere; bias slightly up so
+    // few stars sit right on the horizon haze.
+    const theta = rand() * Math.PI * 2;
+    const y = 0.06 + rand() * 0.94; // 0 = horizon, 1 = zenith
+    const r = Math.sqrt(1 - y * y);
+    positions[i * 3] = Math.cos(theta) * r * radius;
+    positions[i * 3 + 1] = y * radius;
+    positions[i * 3 + 2] = Math.sin(theta) * r * radius;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.PointsMaterial({
+    color: 0xeaf1ff, // cool white, a hair off pure white per the bible
+    size: 1.1,
+    sizeAttenuation: false,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    fog: false,
+  });
+  const stars = new THREE.Points(geometry, material);
+  stars.renderOrder = -1; // with the dome, behind everything
+  stars.visible = false;
+  return stars;
 }
 
 // The visible sun: a solid sun-glow disc with a soft radial halo, drawn on
@@ -339,10 +615,13 @@ function createSunBillboard(): THREE.Sprite {
     size / 2,
     size / 2,
   );
-  gradient.addColorStop(0, "rgba(255,244,218,1)"); // sun glow, solid core
-  gradient.addColorStop(0.28, "rgba(255,244,218,1)");
-  gradient.addColorStop(0.34, "rgba(255,244,218,0.55)");
-  gradient.addColorStop(1, "rgba(255,244,218,0)");
+  // Neutral white disc + halo; the warm/cool tint comes from the sprite's
+  // material.color (sun-glow by day, cool moon by night — set in
+  // applyTimeOfDay), so one texture serves both.
+  gradient.addColorStop(0, "rgba(255,255,255,1)"); // solid core
+  gradient.addColorStop(0.28, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.34, "rgba(255,255,255,0.55)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
   const texture = new THREE.CanvasTexture(canvas);
@@ -350,6 +629,7 @@ function createSunBillboard(): THREE.Sprite {
   const sprite = new THREE.Sprite(
     new THREE.SpriteMaterial({
       map: texture,
+      color: PALETTE.sunGlow, // day default; retinted by applyTimeOfDay
       transparent: true,
       depthWrite: false,
       fog: false,

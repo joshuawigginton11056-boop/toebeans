@@ -500,6 +500,17 @@ parked in [IDEAS.md](IDEAS.md).
 
 ### Lighting & atmosphere
 
+> **⚠ Amended for the slope (director call, 2026-07-24 — the branching-map
+> "sun sets as we race" idea):** "the whole game is bright — dark moods are
+> out of scope" no longer holds unconditionally. The slope now has a
+> **moonlit night** end-state (built this session; see the ROADMAP entry) —
+> readable, never black, every night color a cool value-shift of an existing
+> palette entry, the cat's signal red left as the one warm thing in frame.
+> How far this amendment reaches (slope-only? game-wide? only certain map
+> branches?) is a **director-framing call not yet made** — so the "bright
+> only" rule below is left standing as written until the look-pass settles
+> it; this note is the flag that night now exists.
+
 - **One sun, bright and high-key.** A single directional light, sun low
   enough to throw long readable shadows. The whole game is bright — dark
   moods are out of scope.
