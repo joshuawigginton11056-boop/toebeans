@@ -5069,6 +5069,44 @@ inward so it reads as a group. The cat now seats beside — and orbits — where
 live party size into `setLobbyPlayerCount`; a nameplate/host marker over each
 orb is a natural follow-up (parked in IDEAS.md if it comes up).
 
+## (lobby) 2026-07-24 — Backed the party up; pets, contrast orbs, and nameplates
+
+Building on the four-player orb lobby, this chunk makes the party read as
+*people with pets* and frees the front of the screen for the menu UI that's
+coming:
+
+- **Everyone backed up.** The whole line now stands well back from the camera
+  (`BACK_Z` in `lobbyLayout.ts` went from `0` to `-1.6`; the solo spot backs up
+  to match). That opens foreground room for future menu chrome and makes space
+  for a pet beside each player. Neighbour spacing widened a touch (`1.05 → 1.35`)
+  so a cat fits between characters without crowding.
+- **A pet beside every player.** Guests now bring their own cat (DESIGN.md:
+  "visiting cats socialize"), seated on their outer side and angled toward the
+  camera. Your cat still gets up and strolls; the guests' sit and breathe, so
+  four cats never turn the small vignette into a traffic jam.
+- **Darker-contrast orbs that follow the backdrop.** The orb pool used to only
+  *add* light, which washed out against bright snow. It's now a normal-blended,
+  **darkened** wash of the orb's hue — a saturated shadow-pool that stands out —
+  topped by the same additive wisp for glow. How dark it goes is derived from
+  the live backdrop color (`backdropContrast()` in `lobbyLayout.ts`, unit-tested):
+  bright sky → dark orbs, dark sky → luminous ones. `setLobbyBackdropColor()` is
+  the hook for a future slope theme to re-tint the sky and have the orbs re-adapt.
+- **Nameplates.** A floating **character name sits on the orb at each player's
+  feet**, and a **pet name floats above each cat**. Both are camera-facing pill
+  labels (dark pill, light text, accent border) that draw over the scene so a
+  name is never hidden — every player can always read who everyone is. The pet
+  label is parented to the cat, so it trails it seamlessly as it strolls. Your
+  character label tracks your live appearance (via `setLobbyLocalName` from
+  `main.ts`); pet names are placeholder scaffolding (like `GUEST_APPEARANCES`)
+  until multiplayer feeds real ones.
+- `npm run check` passes (131 tests) and `npm run build` succeeds. Verified by
+  typecheck/tests and a production build; live browser verification wasn't
+  possible in this headless session.
+
+**Next (lobby):** feed real friend appearances, party size, and real pet/player
+names when multiplayer lands; a host marker (crown/ring) per orb is still open
+(IDEAS.md).
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

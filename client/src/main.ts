@@ -16,6 +16,7 @@ import { createHud } from "./hud";
 import {
   createLobbyScene,
   renderLobby,
+  setLobbyLocalName,
   setLobbyPlayerCount,
   syncLobbyScene,
 } from "./lobbyRender";
@@ -65,7 +66,10 @@ if (Number.isFinite(lobbyPlayers) && lobbyPlayers > 1) {
 function applyAppearance(): void {
   lobbyScene.player.setAppearance(appearance);
   skiScene.skier.setAppearance(appearance);
-  lobbyUi.setCharacterLabel(resolveCharacter(appearance).label);
+  const label = resolveCharacter(appearance).label;
+  lobbyUi.setCharacterLabel(label);
+  // Keep the name on your lobby orb in step with the character you're wearing.
+  setLobbyLocalName(lobbyScene, label);
 }
 
 function showActiveCanvas(): void {

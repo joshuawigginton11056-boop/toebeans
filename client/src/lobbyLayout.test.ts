@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { clampPlayerCount, lobbyLayout, localSlotIndex } from "./lobbyLayout";
+import {
+  backdropContrast,
+  clampPlayerCount,
+  lobbyLayout,
+  localSlotIndex,
+} from "./lobbyLayout";
 
 describe("lobbyLayout — up-to-four player positioning", () => {
   it("clamps requested counts into the supported 1..4", () => {
@@ -63,13 +68,21 @@ describe("lobbyLayout — up-to-four player positioning", () => {
     expect(others.some((s) => s.x > local.x)).toBe(true);
   });
 
-  it("solo layout is the untouched historical spot", () => {
+  it("solo player keeps the camera-left spot, backed up off the camera", () => {
     const slots = lobbyLayout(1);
     expect(slots).toHaveLength(1);
     const only = slots[0]!;
     expect(only.isLocal).toBe(true);
     expect(only.x).toBeCloseTo(-0.35, 6);
-    expect(only.z).toBe(0);
+    // Backed well away from the camera (−z), to the same depth "you" stand at
+    // in a full lobby — leaving foreground room for UI and a pet.
+    expect(only.z).toBeLessThan(-0.5);
+  });
+
+  it("solo depth matches the local player's depth in a full lobby", () => {
+    const solo = lobbyLayout(1)[0]!;
+    const localInFour = lobbyLayout(4).find((s) => s.isLocal)!;
+    expect(solo.z).toBeCloseTo(localInFour.z, 6);
   });
 
   it("the others face inward, toward the center of the line", () => {
@@ -81,5 +94,21 @@ describe("lobbyLayout — up-to-four player positioning", () => {
         if (slot.x > 0) expect(slot.facing).toBeLessThan(0);
       }
     }
+  });
+});
+
+describe("backdropContrast — orbs contrast whatever the sky is", () => {
+  it("is 0..1 and tracks perceived brightness", () => {
+    expect(backdropContrast(0, 0, 0)).toBe(0); // black backdrop → no darkening
+    expect(backdropContrast(1, 1, 1)).toBeCloseTo(1, 6); // white → fullest
+    // A brighter backdrop always wants more contrast than a darker one.
+    expect(backdropContrast(0.9, 0.9, 0.95)).toBeGreaterThan(
+      backdropContrast(0.2, 0.2, 0.25),
+    );
+  });
+
+  it("clamps out-of-range channels instead of overshooting", () => {
+    expect(backdropContrast(2, 2, 2)).toBe(1);
+    expect(backdropContrast(-1, -1, -1)).toBe(0);
   });
 });

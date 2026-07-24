@@ -173,8 +173,12 @@ and **660**, rock-gate pinch ~**560** (checkpoint 620 past it), finish **800**.
   rest, on a warm birch-amber orb (guests get a cooler ice glow), on the
   **left** in a two- or four-player lobby and in the **middle** of a
   three-player one. Driven by a `?players=` preview hook until real party data
-  feeds `setLobbyPlayerCount()`. Open follow-ups (nameplates, guest cats, real
-  appearances) are parked in IDEAS.md.
+  feeds `setLobbyPlayerCount()`. Extended 2026-07-24: the party stands **backed
+  up** from the camera (foreground room for menu UI), **each player has a cat
+  beside them** ("visiting cats socialize"), the orbs **darken to contrast the
+  backdrop**, and **nameplates** float a character name on each orb and a pet
+  name above each cat. Open follow-ups (host marker, real names + appearances)
+  are parked in IDEAS.md.
 
 ## Look & Feel
 

@@ -9,19 +9,29 @@ From the up-to-four-players + glowing-orbs chunk. The layout and orbs shipped;
 these are the parked next steps for when multiplayer (see DESIGN.md →
 Multiplayer) starts feeding the lobby real data:
 
-- **Nameplate / host marker per orb.** A small floating name — and a crown or
-  ring on the host — over each character would make a populated lobby read as
-  *people*, not just models. Cross-scene UI, so it belongs to the lobby
-  session. It's the natural next layer on top of the orbs.
+- ~~**Nameplate per orb.**~~ **SHIPPED 2026-07-24** (backed-up-party chunk): a
+  character name sits on each orb at the feet and a pet name floats above each
+  cat, both camera-facing. Still open: a **host marker** (crown or ring on the
+  host's orb) once there's a host to mark.
+- ~~**Guest cat(s).**~~ **SHIPPED 2026-07-24**: each guest brings a seated cat
+  beside them (yours still strolls). Clutter was handled by backing the whole
+  party up, widening the spacing, and seating guest cats on each player's outer
+  side. If a future lobby feels busy at four players, that's the place to tune.
 - **Feed real appearances + party size in.** `setLobbyPlayerCount()` currently
   takes a preview count from `?players=`, and guests wear placeholder default
   looks (`GUEST_APPEARANCES` in `lobbyRender.ts`). When multiplayer lands, call
   it with the live party size and push each guest rig's real saved appearance
   (each rig already has a `setAppearance`).
-- **Guest cat(s)?** DESIGN.md says visiting cats socialize, but only the local
-  player's cat is in the lobby today. Whether guests bring their cats — and how
-  four cats share the small vignette without clutter — is an open call, parked
-  for whenever friend-visits get built.
+- **Real names, not placeholders.** Nameplates read the *character* label for
+  players (so yours tracks the character you cycle to) and a placeholder pet
+  name per slot (`LOCAL_PET_NAME` / `GUEST_PET_NAMES` in `lobbyRender.ts`).
+  When multiplayer lands, swap these for each friend's real display name and
+  their cat's real name — and decide whether the local player's plate should
+  show their username rather than the character label.
+- **Backdrop-driven orb contrast is wired but idle.** The orbs already darken
+  from the live backdrop color (`backdropContrast` + `setLobbyBackdropColor`).
+  Nothing changes the backdrop yet; when a slope theme or day/night tint lands,
+  call `setLobbyBackdropColor()` and the orbs re-adapt for free.
 
 ## (slope-vis) Adopt the road centerline so the curve can turn on (2026-07-24)
 
