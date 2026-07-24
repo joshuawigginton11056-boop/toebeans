@@ -453,20 +453,22 @@ enchanted, not fairy-lights. These are *emissive* (read "lit" regardless of
 the near-black scene light) and pair with a faked additive pool on the snow
 (and, once it lands, **bloom** — emissive without bloom won't feel glowing; the
 director wants the bloom pushed *strong* on the plants). Used by night emissive
-props: glowing mushrooms, **glowing tree trunks** (director look-pass 2026-07-24
-— the pines' trunks glow at night), and other luminous plants. Implemented as
-`GLOW` in `client/src/skiScene.ts`.
+props: glowing mushrooms and other luminous plants (see the trunk note below —
+tree trunks do **not** self-glow). Implemented as `GLOW` in
+`client/src/skiScene.ts`.
 
-**Glowing trunks — how they glow (director feedback 2026-07-24):** the trunk
-glow **fades out as it rises up the tree** — bright at the base where the magic
-pools, gone by the canopy — a vertical gradient, never a uniform wash. And it
-must **sit under the painted bark detail**: you still see the tree's bark
-strokes *through* the glow, so the emissive can't blow the trunk out to a flat
-color. (First pass was a flat emissive up the whole trunk — sent back on both
-counts. **Revised 2026-07-24 (slope-vis, ref photos):** an object-space vertical
-gradient textured by the triplanar bark — `primeTrunkGlowGradient` in
-`skiScene.ts` — meeting both requirements; awaiting the director's look-pass.
-See ROADMAP / IDEAS slope-vis night entry.)
+**Trees do NOT glow — the enchantment is in the environment (director verdict,
+2026-07-24).** Self-glowing trunks were tried twice and **rejected both times**:
+first a flat emissive up the whole trunk (verdict #3), then a base-bright
+vertical gradient textured by the bark (the ref-photo revision). The verdict on
+the second: *"the tree glow looks tacky; I don't want the trees to glow
+themselves."* Reading the reference photos, the trees are **dark silhouettes**
+standing in an enchanted world — the glow lives **around** them: glowing ground
+props (mushrooms, luminous plants), atmospheric **mist/haze**, a soft **light
+shaft/moon rays**, and floating **motes** later. Nothing emissive belongs on the
+wood itself. All trunk-glow code was removed from `skiScene.ts`. The next night
+pass (fresh session, reference photos in hand) builds that environmental glow —
+trunks stay silhouettes, lit only by what surrounds them.
 
 *Not* covered by this ramp: **fireflies**. The first code-built additive-mote
 cloud was cut on the director's look (too many colors, glued to the camera);
