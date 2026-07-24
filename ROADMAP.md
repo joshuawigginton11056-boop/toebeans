@@ -87,6 +87,18 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   other areas.** Two forest bugs to fix with it (speed instantly drops; character drifts
   right). Full spec in the START HERE banner atop IDEAS.md. The branching graph stays in
   `route.ts` (tested), just isn't the active run.
+  **(slope-mech) speed-drop bug FIXED (2026-07-24):** the summit→forest grade shed no
+  longer slams in at the forest mouth. `GRADE_PROFILE` (route.ts) was reshaped into an
+  **ease-out** — the grade drops steeply high on the summit (`[60, 0.36]`, where bleeding
+  the plunge's speed is natural) then LEVELS onto a gentle leg (`[180, 0.28]`) that carries
+  THROUGH the forest entrance (route 120), so at the forest the decel is a fraction of the
+  COAST_DRAG cap instead of pinned to it. Verified by a numeric trace through the real
+  sim: worst decel in the forest window (route 90–150) dropped to **0.27 u/s² cruise /
+  1.07 u/s² boosted** (cap is 4.0); the hard shed now lives up high, not at the forest.
+  New route.test.ts test pins the ease-out (no grade "wall" at the mouth). Trail-scope
+  call from Josh: the single trail will **end at the back of the forest** (forest = the
+  bottom, for gauging its size). Still TODO for this redirect: the smooth single trail
+  itself (item 1) + the drift-right (item 3, subsumed by item 1).
 - **Real 3D grade on the branching map (2026-07-24) — director-approved, now VARYING.**
   The run drops for real in world-Y: an elevated summit falling ~216 units to y=0 at
   the flag. The pitch is **no longer one constant — it varies down the route** (a
