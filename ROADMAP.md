@@ -109,6 +109,27 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 - Temp keys (stand-ins for the M3 picker): **C** character, **K** skin, **H** hair
   — gated to the lobby.
 
+### Multiplayer — "Play with a friend" (ghost racing), experimental
+- **Landed early vs. the plan** (real-time co-op is M7 in DESIGN.md) as a
+  lightweight friend-testing layer, at Josh's request. **Client-only** — the sim
+  never changes, `/server` stays a stub. Each browser stays authoritative over
+  its own skier and just **broadcasts its pose ~12×/sec**; the friend is drawn as
+  a **ghost** (reusing the real rig + cat), interpolated. Purely visual: no shared
+  simulation, no collisions, no life loss — you can ski through a ghost.
+- **Rooms by short code** in the lobby ("Play with a friend" → Create / Join).
+  Two transports run at once: **Supabase Realtime broadcast** (a hosted relay, so
+  players on *different networks* connect — needs `VITE_SUPABASE_URL` +
+  `VITE_SUPABASE_ANON_KEY`, see `client/.env.example`) and a **BroadcastChannel**
+  mirror (same-machine tabs, zero setup — the local-test path). Without the
+  Supabase vars the room still works same-device and says so.
+- Files: `client/src/net.ts` (transport/room), `client/src/ghosts.ts` (remote
+  skiers in the scene), friend panel in `lobbyUi.ts`, loop wiring in `main.ts`.
+  Verified: typecheck + 134 tests + prod build green; UI flow, the net send +
+  receive paths, and ghost spawn all exercised live (the on-slope *visual* of two
+  racers is Josh's playtest — and needs the Supabase vars for the cross-network
+  case). Fast-follows (name tags, a real synced race, lazy-loading Supabase) in
+  IDEAS.md.
+
 ### Lobby, UI, systems
 - **Menu lobby / title screen** (`lobbyRender.ts` + `lobbyUi.ts`) — a live 3D
   vignette of the character + cat on dawn snow; doubles as character select.
