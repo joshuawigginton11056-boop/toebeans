@@ -106,6 +106,7 @@ function openRoom(code: string): void {
   room?.close();
   peers.clear();
   ghosts.clear();
+  lobbyScene.friends.clear();
   room = connectRoom(code, {
     onPacket: (packet) => {
       // BroadcastChannel has no self-filter, so drop echoes of our own pose.
@@ -113,6 +114,10 @@ function openRoom(code: string): void {
       const isNew = !peers.has(packet.id);
       peers.set(packet.id, performance.now());
       ghosts.ingest(packet);
+      // Also stand the friend up in the lobby vignette (lobbyRender.ts owns
+      // the presentation; it hides them while they're onSlope). onPacket has
+      // already dropped our own echo above, so this is only real friends.
+      lobbyScene.friends.set(packet.id, packet.appearance, packet.onSlope);
       if (isNew) updateRoomStatus();
     },
     onStatus: (status) => {
@@ -129,6 +134,7 @@ function leaveRoom(): void {
   room = null;
   peers.clear();
   ghosts.clear();
+  lobbyScene.friends.clear();
 }
 
 // Both scenes show the same character, so they always get the same
@@ -361,6 +367,9 @@ function loop(now: number): void {
     for (const [id, seen] of peers) {
       if (nowMs - seen > PEER_TIMEOUT_MS) {
         peers.delete(id);
+        // Their lobby stand-in leaves with them (ghosts.ts expires its own
+        // rig on the same timeout).
+        lobbyScene.friends.remove(id);
         pruned = true;
       }
     }
