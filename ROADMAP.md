@@ -5015,6 +5015,22 @@ the fling-more half** (plume + lens carve-boost on hard turns, and the landing
 Whether the new particle reads right in motion is the director's look-pass; the
 size/persistence/mix knobs are all named constants for tuning.
 
+## (slope-mech) 2026-07-24 — Direction note: Slope 1 is "the onboarding run"; the actual map is next
+
+End of the road-system session. Director reframe: **Slope 1 "The Overlook" —
+including its rock-gate pinch — is now thought of as *the onboarding run***, and
+it is **left as-is** (no changes to the rock gate or the rest of the Slope 1
+skeleton). The next session **starts on "the actual map"** (director's words) —
+the real course beyond the onboarding run.
+
+Deliberately NOT scoped here: what "the actual map" is. That gets pinned at the
+top of the next session before any code — treat this only as the pointer, not a
+spec. Context for whoever picks it up: the road-system centerline shipped this
+session (`client/src/slopePath.ts`, straight/identity but curve-ready) is the
+substrate map work builds on, and the Slope 1 gentle-curve joint-flip with
+slope-vis remains parked and independent of whatever "the actual map" turns out
+to be.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
