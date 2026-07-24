@@ -26,17 +26,18 @@ path *kinks* at the boundaries. That's "the jerky path from the gray blocks." Ki
 - The terrain must read as ONE solid mountain down that trail, not overlapping
   per-segment ribbons (`addBranchTerrain` in `skiRender.ts` currently builds one mesh
   per segment; for a single trail it's one continuous surface).
-- **OPEN Q for Josh (confirm next chat):** does the trail END at the forest (forest =
-  the bottom → the flat runout), or continue past it as one line? Assume for now the
-  summit→forest slice IS the whole played trail (matches "one trail going down towards
-  the forest").
+- **ANSWERED (Josh, 2026-07-24):** the trail **ends at the back of the forest** — forest
+  is the bottom, so he can get a feel for how big the forest should be. Build the single
+  trail as summit → (through) → back of the forest.
 
-**2. Speed instantly drops at the forest.** Summit grade 0.5 → forest 0.26 (route.ts
-`GRADE_PROFILE`), amplified by `SLOPE_SPEED_GAIN` (1.5) — cruise falls ~17 → ~9 right as
-you reach the forest, which reads as slamming the brakes. Smooth it: gentler grade
-variation over the summit→forest run, and/or ease the target-speed *change rate* so the
-mellow-out is gradual, not a wall. (`gradeSpeedFactor`/`GRADE_PROFILE` in route.ts;
-target easing in `skiing.ts`.)
+**2. Speed instantly drops at the forest. ✅ FIXED (slope-mech, 2026-07-24).** Reshaped
+`GRADE_PROFILE` (route.ts) into an ease-out: steep grade shed high on the summit
+(`[60, 0.36]`) then a gentle leg (`[180, 0.28]`) carrying through the forest mouth (route
+120) — so the decel at the forest is a fraction of the `COAST_DRAG` cap, not pinned to it.
+Numeric trace through the real sim: forest-window worst decel dropped to 0.27 u/s² cruise
+/ 1.07 u/s² boosted (cap 4.0). `SLOPE_SPEED_GAIN` left at 1.5 (it scales absolute speed,
+not the felt ratio — it's the secondary knob if Josh wants it gentler still). route.test.ts
+pins the ease-out. **Josh: feel-test on the live build — the grade shape is a look-pass knob.**
 
 **3. Character drifts right at the forest.** The forest-road corridor curves toward +x
 (`SEGMENT_SHAPES.forest-road.turn = +0.24`) = screen-right drift. The single-trail
