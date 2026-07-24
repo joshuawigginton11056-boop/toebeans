@@ -222,24 +222,18 @@ The cross-session split:
 >    Added a `sparkleGain` uniform that fades with `timeOfDay` down to a faint
 >    `NIGHT_SPARKLE_GAIN` (0.12) floor at full night — a bare moonlit shimmer,
 >    not dead matte. Set from `applyTimeOfDay`.
-> 3. **Tree trunks need to glow. ⚠ FIRST PASS BUILT, DIRECTOR SENT IT BACK
->    (slope-vis 2026-07-24, session 2).** Built: the pines' `PineBark` materials
->    are collected at decor load (`collectPineTrunkMaterials`), primed with a
->    cool cyan (`TRUNK_GLOW` = G1) native emissive, and ramped off `glowFactor`
->    in `applyGlowPhase` (`TRUNK_EMISSIVE` = 0.9; falls back to 0 by day since
->    trunks render on the decor scatter, not the hidden glow group). **Director
->    feedback on this pass (2026-07-24):** the emissive is *uniform up the whole
->    trunk* — it should instead **fade out as it rises up the tree** (bright at
->    the base, gone by the canopy — a vertical gradient), and it currently
->    **washes out the bark detail** — you must **still see the painted tree
->    detail** through/under the glow. So a flat `emissiveIntensity` isn't enough:
->    the emissive needs a height-based falloff (object-space Y in the trunk
->    material's shader — `collectPineTrunkMaterials` would `onBeforeCompile` a
->    vertical-gradient emissive term instead of a scalar) and must sit *under*
->    the painted diffuse so the bark strokes read. **Josh is starting a new
->    session with a reference photo to drive this** — match the photo. Still a
->    soft cool `GLOW` hue; judge against "light passes through" / enchanted magic
->    in the wood.
+> 3. **Tree trunks glowing: TRIED TWICE, REJECTED, REMOVED (director, 2026-07-24,
+>    session 3).** ~~Self-glowing `PineBark` emissive.~~ Two passes shipped — a
+>    flat wash up the whole trunk (session 2), then a base-bright vertical
+>    gradient textured by the bark (session 3, built to the "fade up the tree /
+>    keep bark visible" note above). The director rejected the *whole idea* on
+>    the second look: **"the tree glow looks tacky; I don't want the trees to
+>    glow themselves."** All trunk-glow code (`collectPineTrunkMaterials`,
+>    `primeTrunkGlowGradient`, the `TRUNK_*` constants, the `applyGlowPhase` ramp)
+>    was **removed from `skiScene.ts`**. New reading of the reference photos: the
+>    trees are **dark silhouettes** in an enchanted world; the glow is **around**
+>    them, never *in the wood*. This item is dead — its replacement is the
+>    **environmental night look** (#0 below).
 > 4. **Bloom must be STRONGER for glowing plants.** When bloom lands (next
 >    chunk), crank it — the director wants "a greater bloom for glowing plants";
 >    the caps/plants should really bleed halo, not just brighten. `GLOW_EMISSIVE`
@@ -255,19 +249,24 @@ The cross-session split:
 > night (the **N** debug phase) and carries over once the corridor is dressed.
 >
 > **Next chunks, in order (verdict-driven):**
-> 0. **★ Trunk-glow revision (verdict #3, sent back 2026-07-24) — DO THIS FIRST
->    with Josh's reference photo.** Fade the trunk emissive up the tree (bright
->    base → dark canopy) and keep the painted bark detail visible under it. See
->    the fleshed-out note in verdict #3 above.
+> 0. **★ Environmental night look — DO THIS FIRST with Josh's reference photos
+>    (director restart, 2026-07-24).** Trunk self-glow is dead (see verdict #3);
+>    the trees stay **dark silhouettes** and the enchantment comes from the world
+>    *around* them. Read the photos and build the glow into the environment, not
+>    the trees: brighter/nearer **glowing ground props** (mushrooms/plants) that
+>    pool light onto the snow, **atmospheric mist/haze** catching the glow, a soft
+>    **light shaft / moonlight rays**, and (later, CC0) floating **motes**. The
+>    trunk materials are back to plain painted bark — do not re-add emissive to
+>    them. Judge every pass by the photos: dark trees, lit surroundings.
 > 1. **Bloom** — the halo that makes emissive read as *glowing*, tuned STRONG
 >    (verdict #4). A render-seam add: `render()` in `skiRender.ts` (mechanics)
 >    calls `renderer.render(scene, camera)`; route it through an `EffectComposer`
 >    (`three/addons/postprocessing/…`, present in r185) with an `UnrealBloomPass`
 >    owned by `skiScene.ts`. Smallest additive seam change, mark `// slope-vis`.
-> 2. **Phase-aware darkening:** snow sparkle (verdict #2, ✅ built) + glowing tree
->    trunks (verdict #3, ⚠ first pass built, in revision — see #0). Both driven
->    off `timeOfDay`/`glowFactor`. (Also the general decor/spray darkening
->    flagged earlier — still open.)
+> 2. **Phase-aware darkening:** snow sparkle (verdict #2, ✅ built), driven off
+>    `timeOfDay`/`glowFactor`. (Trunk glow is gone — verdict #3 — so nothing to
+>    darken there. Also the general decor/spray darkening flagged earlier —
+>    still open.)
 > 3. **Real MegaKit glow props** — download + convert the mushrooms/plants Josh
 >    picks, swap them for the code-built `makeGlowCluster` primitives.
 > 4. **Realistic fireflies** from a CC0 pack (verdict #1), world-placed.
