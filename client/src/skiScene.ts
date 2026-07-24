@@ -1149,10 +1149,11 @@ function updateSnowTrail(
 // in the sun"). White powder over sunlit-white snow has no contrast, and it
 // only gets worse toward the sun glow (the brightest thing on screen). Two
 // levers, per the parked look-pass note (push count + alpha before size):
-// the plume is COOLED to snow-shadow blue (SPRAY_COLOR — real powder billows
-// self-shadow to a cool blue-white, which is exactly the value break that
-// reads against warm sunlit snow), and made denser (higher rate + peak alpha).
-// Grain size is left alone — enlarging it is what read as "orbs" last pass.
+// the plume was cooled toward snow-shadow blue and made denser (higher rate +
+// peak alpha). Grain size is left alone — enlarging it read as "orbs" last pass.
+// SHADOW PASS (2026-07-23 — director: the cool tint read in the sun but vanished
+// in shadow, blue powder on blue snow). The single cool tint became a per-grain
+// TWO-TONE mix of both snow values — see SPRAY_COLOR_SUN / SPRAY_COLOR_SHADOW.
 const SPRAY_MAX = 4000; // big pool — headroom for the raised rate + carve boost
 const SPRAY_MIN_SPEED = 2.5; // below this the skis just glide — no kick-up
 const SPRAY_FULL_SPEED = 14; // spray saturates around here
@@ -1166,9 +1167,18 @@ const SPRAY_DRAG = 2.2; // per-second velocity damping (air resistance)
 const SPRAY_TURB = 2.0; // random roil that keeps the cloud from looking rigid
 const SPRAY_GROW = 2.4; // each grain expands to ~this× as it billows out
 const SPRAY_PEAK_ALPHA = 0.52; // faint per grain — density builds the body
-// Snow-shadow blue #D3DFF0 (palette #2) — the cool cast that lets the plume
-// read against sunlit-white snow and the warm sun glow. Flurries stay white.
-const SPRAY_COLOR = new THREE.Vector3(0xd3 / 255, 0xdf / 255, 0xf0 / 255);
+// TWO-TONE PLUME (slope-vis, 2026-07-23 — director verdict: the old flat blue
+// "looks good in the sun, hard to see in shadows"). A single flat tint is stuck
+// between the two snow values and loses against whichever it matches: cool blue
+// reads on sunlit-white snow but vanishes on shadow-blue snow (which renders as
+// exactly this color by the bible's lighting). Fix: mix both snow values per
+// grain — bright sunlit-white #F8F5EF (palette #1) and cool shadow-blue #D3DFF0
+// (palette #2) — so the plume always carries a value that breaks against
+// whichever snow it flies over. Both are palette colors; no new hue, no bible
+// change. Flurries keep the material's white uniform (their aColor stays white).
+const SPRAY_COLOR_SUN = new THREE.Vector3(0xf8 / 255, 0xf5 / 255, 0xef / 255);
+const SPRAY_COLOR_SHADOW = new THREE.Vector3(0xd3 / 255, 0xdf / 255, 0xf0 / 255);
+const SPRAY_SHADOW_FRAC = 0.5; // share of grains that take the cool shadow tone
 // A respawn teleports the anchor a whole run in one frame — that reads as an
 // absurd speed. Anything past this is a jump, not skiing: emit nothing.
 const SPRAY_TELEPORT_SPEED = 40;
@@ -1212,11 +1222,13 @@ const LENS_PEAK_ALPHA = 0.34;
 const PARTICLE_VERT = `
 attribute float aSize;
 attribute float aAlpha;
+attribute vec3 aColor;
 uniform float sizeScale;
 uniform float fogNear;
 uniform float fogFar;
 varying float vAlpha;
 varying float vFog;
+varying vec3 vColor;
 void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   float dist = max(-mv.z, 0.001);
@@ -1226,6 +1238,7 @@ void main() {
   // whole screen white; spray is always farther out, so it's untouched.
   vAlpha = aAlpha * smoothstep(0.15, 1.3, dist);
   vFog = 1.0 - smoothstep(fogNear, fogFar, dist);
+  vColor = aColor;
 }
 `;
 const PARTICLE_FRAG = `
@@ -1234,10 +1247,14 @@ uniform vec3 color;
 uniform float globalAlpha;
 varying float vAlpha;
 varying float vFog;
+varying vec3 vColor;
 void main() {
   float a = texture2D(map, gl_PointCoord).a * vAlpha * vFog * globalAlpha;
   if (a < 0.01) discard;
-  gl_FragColor = vec4(color, a);
+  // Per-grain tint (vColor) times the material's global tint (color). Flurries
+  // keep aColor = white and lean on the uniform; the spray plume carries its
+  // two-tone (sun-white / shadow-blue) per grain so it reads on either snow.
+  gl_FragColor = vec4(color * vColor, a);
 }
 `;
 
@@ -1303,6 +1320,7 @@ interface SpraySystem {
   readonly sizes: Float32Array; // the DISPLAYED size (grows over life)
   readonly spawnSize: Float32Array; // the size at birth, before billowing
   readonly alphas: Float32Array;
+  readonly colors: Float32Array; // 3 per particle — the two-tone plume grain
   readonly vel: Float32Array; // 3 per particle
   readonly life: Float32Array;
   readonly maxLife: Float32Array;
@@ -1355,6 +1373,7 @@ function createSnowEffects(scene: THREE.Scene): void {
   const sPos = new Float32Array(SPRAY_MAX * 3);
   const sSize = new Float32Array(SPRAY_MAX);
   const sAlpha = new Float32Array(SPRAY_MAX); // starts all-0 = nothing drawn
+  const sColor = new Float32Array(SPRAY_MAX * 3); // per-grain two-tone
   const sGeo = new THREE.BufferGeometry();
   sGeo.setAttribute(
     "position",
@@ -1368,10 +1387,15 @@ function createSnowEffects(scene: THREE.Scene): void {
     "aAlpha",
     new THREE.BufferAttribute(sAlpha, 1).setUsage(THREE.DynamicDrawUsage),
   );
+  sGeo.setAttribute(
+    "aColor",
+    new THREE.BufferAttribute(sColor, 3).setUsage(THREE.DynamicDrawUsage),
+  );
   const sMat = createSnowParticleMaterial({ fogNear: 45, fogFar: 150 });
-  // The spray plume runs cool (snow-shadow blue) so it reads against sunlit
-  // snow; flurries keep the material's default white. See SPRAY_COLOR.
-  sMat.uniforms.color!.value.copy(SPRAY_COLOR);
+  // The plume's color is per-grain (two-tone sun-white / shadow-blue, set at
+  // emit), so the material's global tint stays neutral white and just passes
+  // the grain color through. See SPRAY_COLOR_SUN / SPRAY_COLOR_SHADOW.
+  sMat.uniforms.color!.value.set(1, 1, 1);
   const sPoints = new THREE.Points(sGeo, sMat);
   sPoints.frustumCulled = false; // the shader places points; bounds are stale
   sPoints.renderOrder = 3;
@@ -1382,6 +1406,7 @@ function createSnowEffects(scene: THREE.Scene): void {
     sizes: sSize,
     spawnSize: new Float32Array(SPRAY_MAX),
     alphas: sAlpha,
+    colors: sColor,
     vel: new Float32Array(SPRAY_MAX * 3),
     life: new Float32Array(SPRAY_MAX),
     maxLife: new Float32Array(SPRAY_MAX),
@@ -1395,6 +1420,7 @@ function createSnowEffects(scene: THREE.Scene): void {
   const fPos = new Float32Array(FLURRY_MAX * 3);
   const fSize = new Float32Array(FLURRY_MAX);
   const fAlpha = new Float32Array(FLURRY_MAX);
+  const fColor = new Float32Array(FLURRY_MAX * 3); // all white — see below
   const fOff = new Float32Array(FLURRY_MAX * 3);
   for (let i = 0; i < FLURRY_MAX; i++) {
     fOff[i * 3] = (random() * 2 - 1) * FLURRY_HALF_X;
@@ -1402,6 +1428,11 @@ function createSnowEffects(scene: THREE.Scene): void {
     fOff[i * 3 + 2] = (random() * 2 - 1) * FLURRY_HALF_Z;
     fSize[i] = 0.02 + random() * 0.05;
     fAlpha[i] = 0.4 + random() * 0.6; // per-flake base, scaled by the gust
+    // Flurries carry no per-grain tint — aColor = white so the fragment shader
+    // (color * vColor) falls through to the material's #F8F5EF sunlit-white.
+    fColor[i * 3] = 1;
+    fColor[i * 3 + 1] = 1;
+    fColor[i * 3 + 2] = 1;
   }
   const fGeo = new THREE.BufferGeometry();
   fGeo.setAttribute(
@@ -1410,6 +1441,7 @@ function createSnowEffects(scene: THREE.Scene): void {
   );
   fGeo.setAttribute("aSize", new THREE.BufferAttribute(fSize, 1));
   fGeo.setAttribute("aAlpha", new THREE.BufferAttribute(fAlpha, 1));
+  fGeo.setAttribute("aColor", new THREE.BufferAttribute(fColor, 3));
   // Fog off (near/far far past anything): flurries live at the lens.
   const fMat = createSnowParticleMaterial({ fogNear: 9000, fogFar: 10000 });
   fMat.uniforms.globalAlpha!.value = 0; // the gust brings them in
@@ -1568,6 +1600,7 @@ function updateSpray(
   s.points.geometry.attributes.position!.needsUpdate = true;
   s.points.geometry.attributes.aSize!.needsUpdate = true;
   s.points.geometry.attributes.aAlpha!.needsUpdate = true;
+  s.points.geometry.attributes.aColor!.needsUpdate = true;
 }
 
 function emitSprayParticle(
@@ -1616,6 +1649,12 @@ function emitSprayParticle(
   s.spawnSize[i] = 0.025 + r() * 0.035 + speedF * 0.02;
   s.sizes[i] = s.spawnSize[i]!;
   s.alphas[i] = SPRAY_PEAK_ALPHA;
+  // Two-tone: each grain is randomly one of the two snow values, so the plume
+  // always carries a value that breaks against whichever snow it flies over.
+  const tone = r() < SPRAY_SHADOW_FRAC ? SPRAY_COLOR_SHADOW : SPRAY_COLOR_SUN;
+  s.colors[i * 3] = tone.x;
+  s.colors[i * 3 + 1] = tone.y;
+  s.colors[i * 3 + 2] = tone.z;
 }
 
 function updateFlurries(
@@ -1795,15 +1834,20 @@ function updateLensSplash(
     // Quick appear, long fade — a splat hits then melts off.
     const alpha = s.alpha0 * Math.min(1, t * 3.5) * t;
     if (alpha <= 0.003) continue;
-    const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r);
-    g.addColorStop(0, `rgba(${LENS_TINT}, ${alpha})`);
-    g.addColorStop(0.5, `rgba(${LENS_TINT}, ${alpha * 0.5})`);
-    g.addColorStop(1, `rgba(${LENS_TINT}, 0)`);
-    ctx.fillStyle = g;
     // Slight vertical squash so a melting splat drips rather than stays a disc.
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.scale(1, 1.25);
+    // Build the gradient in this SAME local space the arc is drawn in (center
+    // at 0,0). Canvas gradients are transformed by the CTM at paint time, so an
+    // absolute-coord gradient built before the translate landed its center off
+    // the arc — every splat then sampled only the transparent tail and drew
+    // nothing (the "still no screen splat" bug, 2026-07-23).
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s.r);
+    g.addColorStop(0, `rgba(${LENS_TINT}, ${alpha})`);
+    g.addColorStop(0.5, `rgba(${LENS_TINT}, ${alpha * 0.5})`);
+    g.addColorStop(1, `rgba(${LENS_TINT}, 0)`);
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(0, 0, s.r, 0, Math.PI * 2);
     ctx.fill();

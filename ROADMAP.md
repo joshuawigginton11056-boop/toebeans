@@ -4720,6 +4720,42 @@ hand-off). Nothing changed in code yet.
 `npm run check` still passes; no code changed this session. Both fixes are
 small and localized to `skiScene.ts`; see the updated IDEAS follow-ups.
 
+## (slope-vis) 2026-07-23 — Built both spray/splat fixes: two-tone plume + the lens-splash gradient bug
+
+The two follow-ups the prior entry diagnosed (hand-off), now built. Both
+localized to `skiScene.ts`, no seam change, no bible change (both spray tones
+are existing palette colors — #1 sunlit snow, #2 snow shadow).
+
+- **Spray now reads in sun AND shadow — per-grain two-tone.** The plume was a
+  single flat `SPRAY_COLOR` = snow-shadow blue `#D3DFF0`; that read against
+  sunlit-white snow but vanished on shadowed snow, which renders as *that exact
+  blue* by the bible's lighting. Fixed by giving each grain one of the two snow
+  values at random — bright sunlit-white `#F8F5EF` or cool shadow-blue `#D3DFF0`
+  (`SPRAY_COLOR_SUN` / `SPRAY_COLOR_SHADOW`, split by `SPRAY_SHADOW_FRAC` = 0.5),
+  so the plume always carries a value that breaks against whichever snow it flies
+  over. Implemented as a per-particle `aColor` vertex attribute threaded through
+  the shared particle shader (`color * vColor`); the spray material's global
+  tint went neutral white and the color now lives per grain. Flurries got an
+  `aColor` filled with white so they still fall through to the material's
+  `#F8F5EF`. The single-uniform tint the prior entry called out is gone.
+- **Lens splash now actually paints — the canvas-gradient CTM bug.** As
+  diagnosed: `createRadialGradient` was called in absolute coords, then filled
+  under `translate(s.x,s.y)+scale(1,1.25)`, so the gradient center landed at
+  ~`(2·s.x, 2.25·s.y)` while the arc drew at `(s.x,s.y)` — every splat sampled
+  only the gradient's transparent tail and drew nothing. Fixed by building the
+  gradient at `(0,0)` *inside* the `save()/translate` block, the same local
+  space the arc is drawn in. Verified deterministically (the Browser pane still
+  pauses the render loop when hidden, so a live moving-frame look-pass is the
+  director's): replaying the exact old and new draw in a page 2D canvas and
+  sampling the splat's center pixel — old alpha **0** (invisible, the bug), new
+  alpha **86/255 ≈ 0.34**, matching `LENS_PEAK_ALPHA`.
+
+`npm run check` passes (typecheck + 113 tests). Shader compiled with no WebGL
+error (proves the new `aColor` binds/links). Still open for the director's
+look-pass on a composited frame: whether the two-tone *mix ratio* and the splat
+*frequency/opacity* read right — all named constants at the top of the spray /
+lens tuning blocks. IDEAS follow-ups updated (both threads closed).
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

@@ -154,29 +154,24 @@ this is the trick-landing flourish riding on top of it.)
 The ski-trail spray + screen flurries landed and merged. Open threads on
 them, all `skiScene.ts`:
 
-- **Spray must read in BOTH sun and shadow — OPEN (director verdict 2026-07-23:
-  "good in the sun, hard to see in shadows").** The cool snow-shadow-blue tint
-  (`SPRAY_COLOR` = `#D3DFF0`) fixed the sun but broke the shadow case: shadowed
-  snow renders as *that exact blue* by the bible's lighting construction, so the
-  plume vanishes on it. A flat color is stuck between the two snow values and
-  loses against whichever it matches. **Plan (front-runner): per-grain two-tone
-  — mix bright `#F8F5EF` and cool `#D3DFF0` grains** so the plume always carries
-  both values and stands out on either background. Needs a per-particle color
-  attribute (the material's `color` is one uniform now) or a second point
-  cloud; both palette-legal, no bible change. Heavier alternative: lighting-
-  aware per-grain tint (sample the shadow map in the particle shader). Density
-  (`SPRAY_PEAK_ALPHA` 0.52, `SPRAY_BASE_RATE` 2200, pool 4000) is fine — this is
-  a *contrast* problem, not a density one. See ROADMAP 2026-07-23 verdict entry.
-- **Lens splash renders nothing — BUG, fix identified (director 2026-07-23:
-  "still no screen splat").** Not tuning — a canvas-gradient transform bug in
-  `updateLensSplash`: the radial gradient is built at absolute `(s.x, s.y)` but
-  filled under `translate(s.x,s.y)+scale(1,1.25)`, so the gradient is offset off
-  the arc and every splat fills fully transparent. **Fix: create the gradient at
-  `(0,0)` inside the `save()/translate` block** (`createRadialGradient(0,0,0,
-  0,0, s.r)`). Everything else (emission, lifetime, placement, visibility-
-  mirroring) is correct. After it's visible, then tune tint (`LENS_TINT`) /
-  frequency (`LENS_SPLAT_RATE`, `LENS_PEAK_ALPHA`) and consider tying a heavier
-  one-shot splat to the **landing "poof"** below (share the impulse hook).
+- **Spray must read in BOTH sun and shadow — DONE (built 2026-07-23), awaiting
+  director look-pass.** The old flat cool tint (`SPRAY_COLOR` = `#D3DFF0`) read
+  in the sun but vanished on shadowed snow (which renders as *that exact blue*).
+  Fixed with the front-runner plan: **per-grain two-tone** — each grain is
+  randomly `SPRAY_COLOR_SUN` `#F8F5EF` or `SPRAY_COLOR_SHADOW` `#D3DFF0` (split
+  `SPRAY_SHADOW_FRAC` = 0.5), via a per-particle `aColor` vertex attribute
+  through the shared shader (`color * vColor`). Palette-legal, no bible change.
+  *Open only as a look-pass:* the mix ratio (`SPRAY_SHADOW_FRAC`) is a director's
+  eye call on a composited frame. See ROADMAP 2026-07-23 build entry.
+- **Lens splash renders nothing — FIXED (built 2026-07-23), awaiting director
+  look-pass.** The canvas-gradient CTM bug: the radial gradient was built at
+  absolute `(s.x,s.y)` but filled under `translate(s.x,s.y)+scale(1,1.25)`, so it
+  offset off the arc and every splat filled transparent. Fixed by building the
+  gradient at `(0,0)` inside the `save()/translate` block. Verified with a
+  center-pixel sample (old alpha 0 → new ≈0.34). Now that it paints, the *tuning*
+  is open for the director: tint (`LENS_TINT`), frequency (`LENS_SPLAT_RATE`,
+  `LENS_PEAK_ALPHA`), and tying a heavier one-shot splat to the **landing "poof"**
+  below (share the impulse hook).
 - **Landing "poof" puff.** A one-shot outward burst of the same powder on
   touchdown from a jump (and on the trick-landing slide). The emitter's already
   there; it needs an impulse hook off the airborne→grounded transition (the
