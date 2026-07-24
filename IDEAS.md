@@ -35,22 +35,29 @@ testing/fun layer at Josh's request. Parked next steps, roughly ordered:
   interpolate) across a segment boundary — fine for the Overlook (single
   segment), revisit when detour worlds are playable.
 
-## (slope-mech) Steepness → speed — the steeper the terrain, the faster the run (director, 2026-07-24)
+## (slope-mech ✅ LANDED 2026-07-24) Steepness → speed — the steeper the terrain, the faster the run (director)
 
-Director directive (kicking off the map-layout continuation): **"steepness
-increases speed. the steeper the area, the faster the skiing."** Today the grade
-is a single constant (`SEGMENT_GRADE` 0.35, ~19° everywhere on the branching map)
-and the sim (`shared/src/skiing.ts`) is grade-blind — speed targets come from
-`BASE_SPEED`/lean/boost with no terrain term. So this directive has **two halves,
-and they're a pair**: (1) **per-segment (or per-distance) grade variation** — a
-steep plunge off the summit, mellow into the forest, a steep drop in the ice
-valley — because a constant grade gives "steeper = faster" nothing to vary
-against; and (2) **couple the sim's downhill pull to the local grade** so steeper
-pitch pulls the run to a higher natural cruise. The seam: the grade lives in
-`slopePath.ts` (presentation) today; to let the pure sim read it, pass the local
-pitch into `stepSkiing` as segment/route data (a small additive field on the sim
-side), keeping `skiing.ts` pure. This is **the next slope-mech chunk** after the
-curves below.
+Director directive: **"steepness increases speed. the steeper the area, the faster
+the skiing."** **Built (slope-mech, 2026-07-24), director picked "pronounced/punchy":**
+both halves landed. (1) **Grade variation** — the constant `SEGMENT_GRADE` is gone;
+the branching map's grade is now a shared profile in `shared/src/route.ts`
+(`GRADE_PROFILE` control points → `routeGradeAt`/`routeHeightAt`), keyed to route
+distance so "same clock, same flag" holds in elevation for free: a steep ~27° summit
+plunge, a mellow ~15° forest/lake, a steep lower pitch. `slopePath.ts` embeds it
+(world-Y + per-point `segmentPitch(id, distance)`); `skiRender.ts` rides the varying
+pitch (skier/camera/hazards + per-facet grayblock). (2) **Speed coupling** — the pure
+sim reads `gradeSpeedFactor(segmentId, distance)` and scales the target cruise + boost
+by grade/`REFERENCE_GRADE` (1.0 no-op at the locked ~19° and on the flat Overlook),
+capped at `GRADE_TOP_SPEED`. **Tuning knobs** (Josh look-passes on the live build):
+`GRADE_PROFILE` (steepness spread — steep zones held under the camera's ~27° framing,
+raise the camera to go steeper), `REFERENCE_GRADE`, `GRADE_TOP_SPEED`. **Follow-ups
+parked:** per-route (not per-depth) steep zones would need breaking the height=f(route
+distance) invariant (deferred — it'd complicate equal-drop); a steeper-than-27° pitch
+wants a camera-elevation change too.
+
+**↳ (slope-vis) the snow-surface tilt must now follow the VARYING pitch.** The parked
+"sit + tilt the snow to the grade" task (below) can no longer use one constant pitch —
+use `segmentPitch(id, distance)` per-point (it varies down the route now).
 
 ## (slope-mech ✅ curves landed 2026-07-24 / rest still open) Branching map — the §4 layout landed; now make it PLAYABLE (2026-07-24)
 

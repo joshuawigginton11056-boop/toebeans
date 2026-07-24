@@ -21,7 +21,6 @@ import {
   segmentPitch,
   segmentToWorld,
   slopeCenterline,
-  slopeGradePitch,
 } from "./slopePath";
 import {
   createChasmMesh,
@@ -558,7 +557,7 @@ export function syncSkiSceneToState(
   // (negative rotation.x is the downhill/forward direction, same convention as
   // the crash tip below), 0 on the un-graded Overlook so its skier stays
   // upright. Pitches within the road-yawed frame (rotation.order = "YXZ").
-  const slopePitch = -segmentPitch(state.segmentId);
+  const slopePitch = -segmentPitch(state.segmentId, state.distance);
   // The crash tip-over: chasms are the game's only crash now (turning
   // round 3 removed the fall-over), and a chasm always reads as a forward
   // drop — downhill, the way you were traveling, whatever the stance.
@@ -589,7 +588,7 @@ export function syncSkiSceneToState(
     marker.position.set(pt.x, pt.y + 0.02, pt.z);
     // Lie the slab flat on the graded ground: yaw to the tangent, pitch to the
     // slope (0 on the flat Overlook). YXZ so the two compose like the rig.
-    marker.rotation.set(-segmentPitch(state.segmentId), -pt.heading, 0, "YXZ");
+    marker.rotation.set(-segmentPitch(state.segmentId, checkpoint), -pt.heading, 0, "YXZ");
     handle.scene.add(marker);
     checkpointMeshes.set(checkpoint, marker);
   }
@@ -602,9 +601,10 @@ export function syncSkiSceneToState(
       handle.scene.add(mesh);
       meshes.set(chasm.id, mesh);
     }
-    const pt = segmentCenterline(state.segmentId, chasm.start + chasm.width / 2);
+    const chasmMid = chasm.start + chasm.width / 2;
+    const pt = segmentCenterline(state.segmentId, chasmMid);
     mesh.position.set(pt.x, pt.y + 0.01, pt.z);
-    mesh.rotation.set(-segmentPitch(state.segmentId), -pt.heading, 0, "YXZ");
+    mesh.rotation.set(-segmentPitch(state.segmentId, chasmMid), -pt.heading, 0, "YXZ");
   }
 
   // The camera rig: ease the orbit distance toward the zoom target, hold the
@@ -725,11 +725,12 @@ export function addBranchGrayblock(handle: SkiSceneHandle): void {
 
   // Facet length along a corridor: the curved floor/walls are laid as a strip of
   // short boxes sampled every FACET units of travel, each turned onto the local
-  // tangent. The gentle map curves read smooth at this step; each facet's depth
-  // is stretched by 1/cos(grade) to cover its pitched span, with a hair of
-  // overlap so no seam gaps open between tilted boxes.
+  // tangent AND tilted to the local grade (which varies down the route now — a
+  // steep summit, a mellow forest, a steep lower pitch). The gentle map curves
+  // read smooth at this step; each facet's depth is stretched by 1/cos(pitch) to
+  // cover its pitched span, with a hair of overlap so no seam gaps open between
+  // tilted boxes.
   const FACET = 12;
-  const pitchDepth = 1 / Math.cos(slopeGradePitch);
 
   for (const id of Object.keys(SEGMENT_PLACEMENTS)) {
     const seg = BRANCH_SEGMENTS[id];
@@ -737,14 +738,15 @@ export function addBranchGrayblock(handle: SkiSceneHandle): void {
     const onRoad = road.has(id);
     // The corridor descends in world-Y (the real grade) AND curves in x/z, so its
     // floor and walls are a ramped, bending strip. Each facet sits at its arc
-    // midpoint, tilted by the grade pitch and turned onto the local heading.
-    const pitch = -segmentPitch(id);
+    // midpoint, tilted by the LOCAL grade pitch and turned onto the local heading.
     const facets = Math.max(1, Math.ceil(seg.length / FACET));
     for (let i = 0; i < facets; i++) {
       const s0 = (i * seg.length) / facets;
       const s1 = ((i + 1) * seg.length) / facets;
       const mid = (s0 + s1) / 2;
-      const depth = (s1 - s0) * pitchDepth + 0.1;
+      const facetPitch = segmentPitch(id, mid);
+      const pitch = -facetPitch;
+      const depth = (s1 - s0) / Math.cos(facetPitch) + 0.1;
       const c = segmentCenterline(id, mid);
       const yaw = -c.heading;
       // FLOOR facet — a descending ramp so there's real ground under the skier
@@ -790,7 +792,7 @@ export function addBranchGrayblock(handle: SkiSceneHandle): void {
       0.1,
       1,
       onRoad ? 0x44506a : 0x6a9a72,
-      pitch,
+      -segmentPitch(id, 0),
       -entrance.heading,
       false,
     );
