@@ -55,6 +55,19 @@ Touch points: `shared/src/route.ts` (grade profile + graph/triggers),
 The branching architecture below is now PARKED for the played path — keep it, don't
 delete it, but the active run is one non-branching trail until Josh says otherwise.
 
+## (slope-vis) The music bed is a placeholder — pick the real direction (2026-07-24)
+
+The lobby session's settings menu needed a **music on/off toggle** to be worth
+building, so `audio.ts` grew a minimal ambient bed (an additive seam change,
+marked in-file): a soft detuned pad + a slow A-minor-pentatonic bell on a
+lookahead scheduler, routed through master so volume/mute cover it. It's
+deliberately tiny and defaults **off** — a stand-in, not the music direction.
+This is your call to make (the "timed per-slope songs à la Geometry Dash" M2
+item): when you take it, replace `buildMusic()` with the real thing and keep
+the `setMusicEnabled` seam the settings toggle already drives. Volume also got
+a `setVolume` setter (the settings slider) — leave that; it's just the master
+gain the old hardcoded `0.9` used to be.
+
 ## (multiplayer) Ghost racing — fast-follows past the first slice (2026-07-24)
 
 The first slice landed (see ROADMAP): two players in a room by code, each

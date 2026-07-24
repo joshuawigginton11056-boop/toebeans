@@ -224,8 +224,20 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 - **Menu lobby / title screen** (`lobbyRender.ts` + `lobbyUi.ts`) — a live 3D
   vignette of the character + cat on dawn snow; doubles as character select.
   This **replaced the scrapped walkable bedroom**; there is no walkable home space.
-- **HUD** (`client/src/hud.ts`): nine cat-face lives, crash/forfeit banners,
-  keycap hints — middle-ground restyle.
+- **HUD** (`client/src/hud.ts`): nine cat-face lives with a **"N lives left!"**
+  caption, crash/forfeit banners. **Losing a life plays out** (lobby, 2026-07-24):
+  the spent cat takes a red X, shakes, and tumbles off the row, leaving a faint
+  ghost of where it was so the count reads at a glance. The old one-line hint bar
+  became a **ghost keyboard** — at the start of a run the control keys flash on a
+  translucent keyboard with a legend beside it, then after 5s it fades to a small
+  strip of just the key images + what they do. Keys shown follow the player's
+  actual bindings.
+- **Settings menu** (`client/src/settings.ts` + `settingsMenu.ts`, lobby
+  2026-07-24): a modal from the lobby with a master-volume slider, a music
+  on/off toggle, and **rebindable controls** (click a key, press the new one;
+  swaps to avoid duplicates). Stored under its own `toebeans-settings`
+  localStorage key — client preferences, kept out of the versioned game save.
+  Input in `main.ts` reads bindings from it live.
 - **Save/load:** browser storage, `SAVE_VERSION 5`. Snapshots dynamic state only;
   static layout reloads from `createInitial*`; strict + self-healing decode.
 
@@ -368,7 +380,11 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       the "play the summit → forest ride" slice above.
       Full plan in IDEAS.md (slope-vis).
 - [ ] **Music:** timed per-slope songs à la Geometry Dash (tense before big jumps)
-      — deliberately the **last** M2 item.
+      — deliberately the **last** M2 item. *Partial (lobby, 2026-07-24):* the
+      settings menu now has a **music on/off toggle** backed by a deliberately
+      minimal ambient bed in `audio.ts` (a pad + a slow pentatonic bell), default
+      **off**. It's a placeholder so the toggle means something — the real
+      per-slope direction is still (slope-vis)'s to pick; see IDEAS.md.
 - [ ] **End-of-M2 tuning pass:** the parked picky visual tweaks + carve-hiss volume,
       done in one sweep rather than nibbled between features.
 
