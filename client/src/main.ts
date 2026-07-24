@@ -1,4 +1,5 @@
 import {
+  createBranchingSkiState,
   createDefaultAppearance,
   createInitialSkiState,
   createSave,
@@ -12,11 +13,26 @@ import {
   type SkiInput,
 } from "@toebeans/shared";
 import { createAudio } from "./audio";
+import { createBranchDebug, type BranchDebug } from "./branchDebug";
 import { createHud } from "./hud";
 import { createLobbyScene, renderLobby, syncLobbyScene } from "./lobbyRender";
 import { createLobbyUi, type LobbyCycle } from "./lobbyUi";
 import { readSave, writeSave } from "./save";
-import { createSkiScene, render, syncSkiSceneToState } from "./skiRender";
+import {
+  addBranchGrayblock,
+  createSkiScene,
+  render,
+  syncSkiSceneToState,
+} from "./skiRender";
+
+// Dev-only entry to the branching map (SLOPE_BRANCHING.md — "the actual map").
+// Append ?branch=1 to the URL and every trip to the slope loads the grayblock
+// branching route (createBranchingSkiState) with a proof readout, instead of
+// the Overlook. Off by default, so normal play is untouched. Grayblock scaffold
+// + debug panel are set up lazily on the first slope entry below.
+const BRANCH_MAP = new URLSearchParams(location.search).has("branch");
+let branchGrayblockAdded = false;
+let branchDebug: BranchDebug | null = null;
 
 const container = document.getElementById("app");
 if (!container) {
@@ -73,7 +89,19 @@ function goSkiing(): void {
   mode = "slope";
   // Every trip to the slope is a fresh run — full lives, back to the top.
   // This is also how you retry after a forfeit.
-  skiState = createInitialSkiState();
+  if (BRANCH_MAP) {
+    skiState = createBranchingSkiState();
+    // The grayblock corridors/tree/markers live in the scene for good once
+    // dropped in — only the run state resets per trip.
+    if (!branchGrayblockAdded) {
+      addBranchGrayblock(skiScene);
+      branchGrayblockAdded = true;
+    }
+    if (!branchDebug) branchDebug = createBranchDebug();
+    branchDebug.reset();
+  } else {
+    skiState = createInitialSkiState();
+  }
   showActiveCanvas();
   persist();
 }
@@ -198,6 +226,8 @@ function loop(now: number): void {
     skiState = stepSkiing(skiState, readSkiInput(), dt);
     syncSkiSceneToState(skiScene, skiState, dt);
     render(skiScene);
+    // The branching map's live proof readout (dev-only, ?branch=1).
+    branchDebug?.update(skiState, dt);
     // Finishing the slope coasts to a stop and then auto-returns to the lobby
     // (director call, 2026-07-23): once the post-finish linger runs out, head
     // back. goSkiing() will start a fresh run next time Play is pressed.

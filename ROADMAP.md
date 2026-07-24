@@ -5031,6 +5031,81 @@ substrate map work builds on, and the Slope 1 gentle-curve joint-flip with
 slope-vis remains parked and independent of whatever "the actual map" turns out
 to be.
 
+## (slope-mech) 2026-07-24 — The actual map, begun: the branching-fork de-risk
+
+"The actual map" got pinned before any code (as the prior note demanded):
+director handed over **SLOPE_BRANCHING.md** — the map is **one continuous
+summit-to-flag descent with branching detour worlds** (a tree swallows you, a
+yeti smashes the ice, a penguin dives you underwater), all obeying one law:
+**"same clock, same flag"** — every detour returns you to the same place at the
+same time, every full route is the same length, so no line is a shortcut. That
+doc's §8 says how to *begin*: grayblock only, and **prove the handoff with ONE
+Type A fork first** (enter a detour → ski it → rejoin the spine at the same
+world-point at the same elapsed time) — the riskiest system in the whole
+concept. Director greenlit exactly that this session. Built:
+
+- **The key idea — "same clock, same flag" is a construction constraint, not a
+  script.** A Type A detour segment is built the *same length* as the road it
+  bypasses, so — skied at identical physics — it takes the same time and rejoins
+  the spine automatically. Prove the length equality and the law holds for free.
+- **New `shared/src/route.ts`** — the sim-side route graph: a run is now a small
+  chain of SEGMENTS (spine + detour), each with its own length/hazards/checkpoints
+  and a `next`, plus an optional Type A `trigger` volume. Grayblock topology: one
+  tree fork — `spine-1 (120) → {spine-2 | tree} (100 each) → spine-3 (120)`, both
+  full routes 340 long. Pure data + helpers (`routeDistanceOf`, `TOTAL_ROUTE_LENGTH`).
+- **`shared/src/skiing.ts` made segment-aware, additively.** `SkiState` gains
+  `segmentId` + `divertTo` (a pending fork); at a segment's end the sim either
+  transitions to the next segment (swapping in its hazards, resetting the respawn
+  to its entrance per §6) or, if terminal, finishes. **The Overlook is bit-for-bit
+  unchanged**: its single `"main"` segment has no registry entry and no `next`, so
+  every branch of the new logic is inert and the finish reduces to the old
+  `distance >= finishDistance` check. New `createBranchingSkiState()` seeds a run
+  on the map. The trigger arms `divertTo` when you ski into the great tree's
+  volume (a down-window × a lateral window); it's consumed at the next boundary; a
+  crash/respawn clears it.
+- **Renderer routed through segments** (`client/src/slopePath.ts` +
+  `skiRender.ts`): a new per-segment world placement (`segmentCenterline` /
+  `segmentToWorld`) maps `(segmentId, distance, lateral)` to a corridor in the
+  world — the spine chained down −z, the tree detour offset +50 in x as its own
+  "world." `"main"` has no placement, so it falls straight through to the existing
+  global road: **the Overlook renders identically**. A forked run visibly cuts
+  across into the tree corridor and cuts back onto the spine at the rejoin — the
+  diegetic handoff (tree swallows you / bird drops you back). New
+  `addBranchGrayblock()` drops box corridors, the great tree, and start/rejoin/
+  finish markers — grayblock only, no `skiScene.ts` (slope-vis) touched.
+- **Dev entry + live proof readout.** `?branch=1` loads the grayblock map instead
+  of the Overlook (off by default; normal play untouched). A dev overlay
+  (`client/src/branchDebug.ts`) shows segment, route distance, **distance-to-flag
+  (identical on either route)**, and elapsed clock.
+
+`npm run check` passes (typecheck + **129 tests**, was 119 — 10 new pin the law:
+road and detour finish on the *same step* at the *same route distance*, the
+trigger arms/consumes, boundaries load the next segment, §6 respawn). **Verified
+live in the served browser bundle** (not just vitest): both routes finish in
+exactly 2175 steps at route-distance 340.08 and rejoin spine-3 at the identical
+world point `(0, −220)` — same clock, same flag, end to end, world-space rejoin
+included. The animated *look* of the grayblock scene is the director's look-pass
+(the hidden Browser pane pauses the render loop — the wall every prior slope
+entry hit).
+
+**Save/SAVE_VERSION:** untouched. The new state fields aren't saved (branching is
+dev-only; a restore rebuilds from the Overlook), so no bump and no cross-session
+`npm install` — nothing for the other sessions to absorb but the merge itself.
+
+**Note (untracked doc):** SLOPE_BRANCHING.md currently lives **untracked in the
+main checkout** (`C:\Users\joshu\Toebeans`), placed there by the director. The
+code references it by name but it isn't in git yet — left that call to the
+director rather than commit a doc placed as a local reference.
+
+**Next (director's to steer, per SLOPE_BRANCHING.md §7):** the handoff is
+de-risked, so the map can grow on this foundation — the tree detour's actual
+*detour segment* content (right now it's just an equal-length corridor), then the
+Frozen Lake (second Type A) and Yeti's Peak (the one Type B route split). But §7's
+open reconciliation is the director's first: is branching the template for **all**
+slopes or **one** big branching map among linear others; how collectibles/
+achievements relate to XP; and the friend-race framing is later-phase MP, not
+v1.0. None of that blocks the de-risk that landed; all of it shapes what's next.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

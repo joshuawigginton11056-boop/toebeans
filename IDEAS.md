@@ -3,6 +3,37 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope-mech / slope-vis) Branching map — parked follow-ups from the de-risk (2026-07-24)
+
+The branching-fork de-risk landed (see ROADMAP + SLOPE_BRANCHING.md): one Type A
+"tree" fork, grayblock, "same clock, same flag" proven. Parked from it, **none to
+build until the director resolves SLOPE_BRANCHING.md §7** (branching-as-template
+vs. one branching map; collectibles/achievements; MP-only friend race):
+
+- **(slope-vis) Do NOT dress `?branch=1` yet.** The branching map is dev-only
+  grayblock (a URL flag; normal play is the Overlook, untouched). When the map
+  direction is confirmed, the detour "worlds" (tree/lake/yeti) want real art — but
+  that's a whole scene each and gated on §7. Heads-up only so the flag isn't a
+  surprise. Grayblock lives in `skiRender.ts` (`addBranchGrayblock`), NOT
+  `skiScene.ts` — deliberately, to keep it out of your dressed scene.
+- **(slope-mech) The tree detour is a hollow equal-length corridor.** It exists to
+  prove the handoff, not to be fun yet — no detour content, no collectible, no
+  distinct feel. Real detour segments (the ~8s animal world → tallest tree → bird)
+  are the next mechanics layer once the map is greenlit.
+- **(slope-mech) Per-segment differing hazards are a data change, deferred.** The
+  grayblock keeps the road and detour flat/equal so the *handoff* was on trial,
+  not balancing. §5's design (road tenser, detour a lower-stakes reward run) is
+  just editing each segment's `chasms`/`checkpoints` in `route.ts`.
+- **(slope-mech) Grayblock rough edges to revisit when the map is real:** the
+  `routeDistanceOf` offsets in `route.ts` are hand-authored for this one fork (a
+  general graph would derive them); old-segment chasm/checkpoint meshes linger in
+  the scene after a transition (fine off in a passed corridor, ugly if reused);
+  and the dev debug overlay + grayblock markers are scaffolding to remove.
+- **The Type B route split (Yeti's Peak)** — a fork that does NOT rejoin until the
+  flag — is untouched. It's a bigger routing change (two whole alternate segments
+  to the finish, both time-balanced) and SLOPE_BRANCHING.md §8 says do it *after*
+  both Type A forks (tree, then lake) work.
+
 ## (slope-vis) Adopt the road centerline so the curve can turn on (2026-07-24)
 
 **Hand-off from slope-mech.** The route bend is now a *shared road*, not a

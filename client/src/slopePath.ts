@@ -195,3 +195,65 @@ export function slopeToWorld(
 ): { readonly x: number; readonly z: number } {
   return centerlineToWorld(SLOPE, distance, lateral);
 }
+
+// ---------------------------------------------------------------------------
+// The branching map's segment placement (slope-mech, 2026-07-24 — the §8
+// de-risk of SLOPE_BRANCHING.md). Presentation-only, the same as the road
+// above: the sim (route.ts) knows a run as (segmentId, segment-local distance);
+// this maps that to a world point + facing. Each segment is a straight
+// grayblock corridor with its own world origin — the spine chained down −z, the
+// tree detour offset far to the side so it reads as a separate "world." A run
+// that forks jumps between corridors at the handoff (the tree swallows you /
+// the bird drops you back on the road): a deliberate, diegetic cut, exactly the
+// enter→detour→rejoin the de-risk is proving.
+//
+// "main" (the Overlook's single segment) has NO placement here, so the segment
+// functions fall straight through to the road above — the un-branched run is
+// bit-for-bit unchanged. Grayblock straight; the real map's shaped corridors
+// (and the visuals session's dressing) come later.
+
+/** A segment's world anchor: where its entrance sits and which way it heads. */
+export interface SegmentPlacement {
+  readonly originX: number;
+  readonly originZ: number;
+  /** Tangent yaw; 0 = straight downhill (−z), like the road's heading 0. */
+  readonly heading: number;
+}
+
+export const SEGMENT_PLACEMENTS: Readonly<Record<string, SegmentPlacement>> = {
+  // Spine: chained straight down −z. spine-1 [0,120], spine-2 [120,220],
+  // spine-3 [220,340] (matching route.ts's segment lengths).
+  "spine-1": { originX: 0, originZ: 0, heading: 0 },
+  "spine-2": { originX: 0, originZ: -120, heading: 0 },
+  // The detour "world": a parallel corridor offset +50 in x, spanning the same
+  // downhill extent as spine-2. Entering/leaving it cuts across that gap.
+  tree: { originX: 50, originZ: -120, heading: 0 },
+  "spine-3": { originX: 0, originZ: -220, heading: 0 },
+};
+
+/** The centerline point (world x/z + tangent) at a distance down a segment.
+ * Unknown segment ("main") → the Overlook's global road, so it's unchanged. */
+export function segmentCenterline(segmentId: string, distance: number): SlopePoint {
+  const p = SEGMENT_PLACEMENTS[segmentId];
+  if (!p) return slopeCenterline(distance);
+  return {
+    x: p.originX + Math.sin(p.heading) * distance,
+    z: p.originZ - Math.cos(p.heading) * distance,
+    heading: p.heading,
+  };
+}
+
+/** World x/z for a (segmentId, distance, lateral) triple — the lane on a segment. */
+export function segmentToWorld(
+  segmentId: string,
+  distance: number,
+  lateral: number,
+): { readonly x: number; readonly z: number } {
+  const p = SEGMENT_PLACEMENTS[segmentId];
+  if (!p) return slopeToWorld(distance, lateral);
+  const c = segmentCenterline(segmentId, distance);
+  return {
+    x: c.x + Math.cos(c.heading) * lateral,
+    z: c.z + Math.sin(c.heading) * lateral,
+  };
+}
