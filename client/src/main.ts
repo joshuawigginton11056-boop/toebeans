@@ -34,12 +34,20 @@ import {
 } from "./skiRender";
 import { cycleTimeOfDay } from "./skiScene";
 
-// Dev-only entry to the branching map (SLOPE_BRANCHING.md — "the actual map").
-// Append ?branch=1 to the URL and every trip to the slope loads the grayblock
-// branching route (createBranchingSkiState) with a proof readout, instead of
-// the Overlook. Off by default, so normal play is untouched. Grayblock scaffold
-// + debug panel are set up lazily on the first slope entry below.
-const BRANCH_MAP = new URLSearchParams(location.search).has("branch");
+// The branching map (SLOPE_BRANCHING.md — "the actual map") is the DEFAULT slope
+// now (director, 2026-07-24: the graded "real mountain" run must be what the live
+// build shows — no more hiding it behind a dev flag; the old flat Overlook felt
+// unchanged because the grade only ever lived on the branching map). Every trip to
+// the slope loads the graded grayblock branching route (createBranchingSkiState).
+// `?overlook=1` still loads the old flat Overlook for comparison. It's grayblock
+// today (boxes + descending corridors, no dressing) — the real snow/forest is the
+// slope-visuals session's parallel job; the mechanics (the 3D drop) are here now.
+const params = new URLSearchParams(location.search);
+const BRANCH_MAP = !params.has("overlook");
+// The live proof readout stays a dev-only overlay (?branch or ?debug) so the
+// default run isn't covered in dev text; the grayblock scenery always shows
+// because it's the only ground until the visuals seam dresses it.
+const BRANCH_DEBUG = params.has("branch") || params.has("debug");
 let branchGrayblockAdded = false;
 let branchDebug: BranchDebug | null = null;
 
@@ -62,11 +70,11 @@ const restored = (() => {
   return save === null ? null : restoreSave(save);
 })();
 
-// Under the branching-map dev flag, never resume a saved slope run: a restore
-// always rebuilds the Overlook (branching state isn't saved), so `?branch=1`
-// would silently drop you onto the wrong slope with no grayblock — which is
-// exactly why the tree "wasn't there." Force a clean lobby start and auto-enter
-// the branching map below; appearance/mute still come from the save.
+// On the branching map (now the default), never resume a saved slope run: a
+// restore always rebuilds the Overlook (branching state isn't saved), so resuming
+// would silently drop you onto the wrong slope with no grayblock. Force a clean
+// lobby start; appearance/mute still come from the save. (`?overlook=1` turns
+// BRANCH_MAP off and restores the saved Overlook run as before.)
 let mode: SceneMode = BRANCH_MAP ? "lobby" : (restored?.mode ?? "lobby");
 let skiState = restored?.ski ?? createInitialSkiState();
 let muted = restored?.muted ?? false;
@@ -173,8 +181,11 @@ function goSkiing(): void {
       addBranchGrayblock(skiScene);
       branchGrayblockAdded = true;
     }
-    if (!branchDebug) branchDebug = createBranchDebug();
-    branchDebug.reset();
+    // The proof readout only under the dev flag (?branch/?debug) — see BRANCH_DEBUG.
+    if (BRANCH_DEBUG) {
+      if (!branchDebug) branchDebug = createBranchDebug();
+      branchDebug.reset();
+    }
   } else {
     skiState = createInitialSkiState();
   }
@@ -238,10 +249,10 @@ hud.sync(mode, skiState);
 const audio = createAudio(muted);
 lobbyUi.setMuted(muted);
 
-// ?branch=1: drop straight into the grayblock branching map — goSkiing sets up
-// the segment run, the grayblock corridors/tree/markers, and the proof readout,
-// so the map is on screen immediately instead of hiding behind a save-resume.
-if (BRANCH_MAP) goSkiing();
+// ?branch/?debug: drop straight into the map so it's on screen immediately (a dev
+// convenience). The default flow keeps the lobby first — load, see the menu, press
+// "Hit the slopes" to ride the graded mountain.
+if (BRANCH_DEBUG) goSkiing();
 
 const AUTOSAVE_SECONDS = 5;
 let autosaveTimer = 0;

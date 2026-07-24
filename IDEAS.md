@@ -83,10 +83,12 @@ The cross-session split:
   TILT the snow surface (and treeline/trails/decor) to the grade** — follow
   `anchor.y` for height and pitch the surface by `slopeGradePitch` (import from
   `slopePath.ts`), so the dressed descent lands under the skier. Do it with the
-  segment-aware surface rework above (same chunk). Until then the branching map's
-  snow is flat under a descending run — visible only under `?branch=1`, and the
-  Overlook is unaffected (its anchor.y stays 0). Grayblock ramp is the stand-in
-  ground meanwhile.
+  segment-aware surface rework above (same chunk). **URGENCY BUMP (2026-07-24): the
+  branching map is now the DEFAULT slope** (main.ts — "Hit the slopes" loads it at
+  the plain URL, `?overlook=1` opts out), so the flat snow under a descending run is
+  what everyone sees on the live build now, not a hidden dev view. The grayblock ramp
+  is the stand-in ground until this lands. The Overlook (now `?overlook=1`) is still
+  unaffected (its anchor.y stays 0).
 - **(slope-mech) Real entry + grayblock cleanup.** Promote entry off the
   `?branch=1` dev flag into real play (the exact UX is lobby's — below); gate the
   debug readout (`branchDebug.ts`) and the grayblock markers (`addBranchGrayblock`)
