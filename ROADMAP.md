@@ -4911,6 +4911,56 @@ Concrete directions for the next session (all in `skiScene.ts`'s lens block):
 turns, and the landing "poof" needing the `justLanded`/impact seam field) from
 the earlier hand-off, untouched.
 
+## (slope-mech) 2026-07-24 — The road system (centerline), shipped straight
+
+Began the map's last open skeleton piece: the **route bend**. DESIGN.md flagged
+whether Slope 1 curves as "the biggest remaining skeleton decision" — a scenic
+showcase wants to bend around the vista and dogleg past the rock gate rather
+than run as a straight tube. Director call this session: **"road system first,
+curve on together"** — the bend is a two-session change, so lay the shared road
+now (straight, nothing looks broken), have the visuals session adopt it, and
+flip the actual curve on once both sides follow it.
+
+What landed — all mechanics-side, sim untouched:
+
+- **New `client/src/slopePath.ts`** — the centerline: a pure module that maps
+  the sim's `(distance, lateral)` to a world `(x, z, heading)`. It's
+  **presentation-only** by design — the same trick as the faked flat grade, so
+  none of the turning/speed physics is touched or at risk. The curve is defined
+  by a list of smooth raised-cosine `BENDS` (each accumulates a set turn over a
+  span), integrated arc-length so a hazard at distance D still sits ~D of travel
+  down the road. **`BENDS` is empty today**, so every function reduces to the
+  exact old mapping (`slopeToWorld(d, lat) === { x: lat, z: -d }`, heading 0) —
+  the world is bit-for-bit what it was. The mechanism is real and tested (6 new
+  tests in `slopePath.test.ts` pin both the straight identity and a sample
+  curved centerline: heading accumulates the bend's turn, travel ≈ distance,
+  lateral rides the normal), so turning the curve on later is a data change, not
+  a rewrite.
+- **`skiRender.ts` routed through the road** — the skier, the camera rig (built
+  in the skier's tangent frame, then rotated by the road heading and dropped at
+  the world point), the chasm slabs, the checkpoint markers, and the
+  environment anchor now all place via `slopeCenterline` / the world mapping,
+  and yaw to `-heading`. The player group's rotation order is now `YXZ` so the
+  crash tip-over pitches *within* the road-yawed frame. Straight → all of this
+  is the old world-axis math exactly (verified: identity math + live smoke test,
+  slope boots and auto-skis with no console errors).
+
+**Seam / hand-off to slope-vis:** the road is exported for the visuals session
+to adopt — the snow window, the treeline/decor scatter, and the ski trails key
+off the straight axis today, so they must draw against the same centerline
+before the curve turns on, or the skier would drift off a straight corridor
+(trees in the lane). Parked as the top `(slope-vis)` item in IDEAS.md, with the
+one seam subtlety noted there (the `SnowTrailInput.heading` is still
+fall-line-relative; combine it with `slopeCenterline(distance).heading` for
+world-space trails). No dependency bump; no `npm install` needed after merging.
+
+`npm run check` passes (typecheck + 119 tests, was 113).
+
+**Next:** with the road in place, the actual gentle S-curve is a joint flip —
+give `BENDS` real amplitudes (the vista bend + the rock-gate dogleg) once
+slope-vis is drawing the ground against the centerline. Until then the map is
+the finite straight skeleton it already was.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

@@ -74,11 +74,17 @@ concrete build list is the `(slope-mech)` entry in [IDEAS.md](IDEAS.md).
   skiing). Crossing the line wins the run (`RunStatus "finished"`); it coasts
   to a stop and auto-returns to the lobby. This retired the endless sandbox
   and unblocks the timed per-slope song (the Geometry-Dash music direction).
-- **Route:** *still open* — built **straight** for now. A showcase wants to
-  **bend** (curve around the vista, dogleg past the rock gate), but the sim
-  models distance as a straight axis, so a curved centerline is its own
-  cross-seam chunk (the biggest remaining skeleton decision). Slope-vis lean:
-  yes, gentle.
+- **Route:** **road system built, shipped straight (2026-07-24, slope-mech).**
+  A showcase wants to **bend** (curve around the vista, dogleg past the rock
+  gate); the decision is made (yes, gentle). The bend is a two-session change,
+  so per director call ("road system first, curve on together") the shared
+  centerline now exists — `client/src/slopePath.ts` maps the sim's straight
+  `(distance, lateral)` to a curved world `(x, z, heading)`, presentation-only
+  (the sim is untouched, like the faked grade) — but ships with no bends so it's
+  still a straight axis. The curve turns on once the visuals session draws the
+  ground against the same centerline (snow, treeline, trails); until then the
+  map is straight. See the ROADMAP entry and the `(slope-vis)` hand-off in
+  IDEAS.md.
 - **Grade:** flat-underneath model kept for v1 (the downhill read comes from
   motion + framing, not real elevation change).
 - **Width:** **built with a pinch.** `laneHalfWidth(distance)` narrows the

@@ -11,6 +11,7 @@ import {
 } from "@toebeans/shared";
 import { createCatRig, type CatRig } from "./catModel";
 import { createSkierRig, type SkierRig } from "./skierModel";
+import { slopeCenterline } from "./slopePath";
 import {
   createChasmMesh,
   createCheckpointMarker,
@@ -192,6 +193,11 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   const environment = createEnvironment(scene, renderer);
 
   const player = new THREE.Group();
+  // Yaw-then-pitch: the road's curve yaws the whole rig to the centerline
+  // tangent (rotation.y, straight = 0 today), and the crash tip-over pitches
+  // it forward (rotation.x) inside that turned frame. YXZ so the two compose
+  // cleanly once the curve turns on.
+  player.rotation.order = "YXZ";
 
   // A real person on the skis now, not a blue box. The rig owns the model's
   // quirks (scale, which clip is which, the forward ski lean) and takes its
@@ -519,29 +525,46 @@ export function syncSkiSceneToState(
 
   handle.cat.update(dt);
   handle.skier.update(dt);
-  handle.player.position.set(state.lateral, state.height, -state.distance);
+  // The road maps the sim's (distance, lateral) to world space (slopePath.ts):
+  // straight today, so this is exactly the old `(lateral, height, -distance)`,
+  // but everything pinned to the lane now curves together when the road does.
+  // `-heading` yaws the body onto the tangent (0 while straight).
+  const skierPt = slopeCenterline(state.distance);
+  const skierCosH = Math.cos(skierPt.heading);
+  const skierSinH = Math.sin(skierPt.heading);
+  const skierX = skierPt.x + skierCosH * state.lateral;
+  const skierZ = skierPt.z + skierSinH * state.lateral;
+  const curveYaw = -skierPt.heading;
+  handle.player.position.set(skierX, state.height, skierZ);
   // The crash tip-over: chasms are the game's only crash now (turning
   // round 3 removed the fall-over), and a chasm always reads as a forward
   // drop — downhill, the way you were traveling, whatever the stance.
   // Animated over the start of the crash pause — the respawn timer doubles
   // as the clock (forfeit holds it at 0 = fully tipped) — and accelerating
-  // like a real topple, not a linear hinge.
+  // like a real topple, not a linear hinge. The tip pitches within the
+  // road-yawed frame (rotation.order = "YXZ"), so it stays a forward drop
+  // down the curve.
   if (state.status === "skiing") {
-    handle.player.rotation.set(0, 0, 0);
+    handle.player.rotation.set(0, curveYaw, 0);
   } else {
     const progress = Math.min(
       1,
       (RESPAWN_DELAY - state.respawnTimer) / TIP_DURATION,
     );
     const tip = (Math.PI / 2) * progress * progress;
-    handle.player.rotation.set(-tip, 0, 0);
+    handle.player.rotation.set(-tip, curveYaw, 0);
   }
 
+  // Hazards and checkpoints span the lane at their distance, so they ride the
+  // road too: centered on the centerline (lateral 0) and yawed to its tangent,
+  // so the slab lies square across the curve. Straight today → x 0, no yaw.
   const checkpointMeshes = handle.checkpointMeshes as Map<number, THREE.Mesh>;
   for (const checkpoint of state.checkpoints) {
     if (checkpoint === 0 || checkpointMeshes.has(checkpoint)) continue;
     const marker = createCheckpointMarker();
-    marker.position.set(0, 0.02, -checkpoint);
+    const pt = slopeCenterline(checkpoint);
+    marker.position.set(pt.x, 0.02, pt.z);
+    marker.rotation.y = -pt.heading;
     handle.scene.add(marker);
     checkpointMeshes.set(checkpoint, marker);
   }
@@ -554,7 +577,9 @@ export function syncSkiSceneToState(
       handle.scene.add(mesh);
       meshes.set(chasm.id, mesh);
     }
-    mesh.position.set(0, 0.01, -(chasm.start + chasm.width / 2));
+    const pt = slopeCenterline(chasm.start + chasm.width / 2);
+    mesh.position.set(pt.x, 0.01, pt.z);
+    mesh.rotation.y = -pt.heading;
   }
 
   // The camera rig: ease the orbit distance toward the zoom target, hold the
@@ -578,24 +603,42 @@ export function syncSkiSceneToState(
     MAX_ELEVATION,
   );
   const flat = cam.radius * Math.cos(elevation);
+  // The rig is built in the skier's tangent frame (+z = uphill, +x = lane
+  // right) exactly as before, then rotated by the road's heading and dropped
+  // at the skier's world point — so "behind and above, looking downhill"
+  // follows the curve. Straight today (skierPt.heading 0) → skierCosH 1,
+  // skierSinH 0, and this is bit-for-bit the old world-axis math.
+  const localPosX = flat * Math.sin(azimuth);
+  const localPosZ = flat * Math.cos(azimuth);
   handle.camera.position.set(
-    state.lateral + flat * Math.sin(azimuth),
+    skierX + localPosX * skierCosH - localPosZ * skierSinH,
     state.height + cam.radius * Math.sin(elevation),
-    -state.distance + flat * Math.cos(azimuth),
+    skierZ + localPosX * skierSinH + localPosZ * skierCosH,
   );
   const yawSin = Math.sin(cam.lookYaw);
   const yawCos = Math.cos(cam.lookYaw);
+  const localAimX = AIM_X * yawCos + AIM_Z * yawSin;
+  const localAimZ = AIM_Z * yawCos - AIM_X * yawSin;
   handle.camera.lookAt(
-    state.lateral + AIM_X * yawCos + AIM_Z * yawSin,
+    skierX + localAimX * skierCosH - localAimZ * skierSinH,
     state.height + AIM_Y,
-    -state.distance + AIM_Z * yawCos - AIM_X * yawSin,
+    skierZ + localAimX * skierSinH + localAimZ * skierCosH,
   );
 
   // Atmosphere follows the run downhill — the offsets are skiScene's.
   // (slope-visuals seam addition) the snow also gets the two numbers it
   // needs to carve ski trails: which way the skis point, and whether
   // they're on the snow at all.
-  const anchor = new THREE.Vector3(state.lateral, 0, -state.distance);
+  //
+  // The anchor is the skier's world ground point on the road (straight today,
+  // so = the old `(lateral, 0, -distance)`). SEAM NOTE (slope-mech →
+  // slope-vis): when the curve turns on, the snow window/decor/trails need the
+  // road too — the anchor already carries the curved position, but `heading`
+  // here is still fall-line-relative (from the sim). Combine it with the
+  // centerline tangent (`slopeCenterline(state.distance).heading`) on the
+  // visuals side so trails point the right way in world space. Parked in
+  // IDEAS.md (slope-vis).
+  const anchor = new THREE.Vector3(skierX, 0, skierZ);
   syncEnvironment(handle.environment, anchor, handle.camera, {
     heading: state.heading,
     grounded: state.height <= 0 && state.status === "skiing",

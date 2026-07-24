@@ -3,12 +3,58 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope-vis) Adopt the road centerline so the curve can turn on (2026-07-24)
+
+**Hand-off from slope-mech.** The route bend is now a *shared road*, not a
+straight axis: `client/src/slopePath.ts` maps the sim's `(distance, lateral)`
+to a world `(x, z, heading)`, and the mechanics side (skier, camera, chasm/
+checkpoint meshes, the environment anchor) already places through it. It ships
+**straight** (`BENDS` is empty → `slopeToWorld(d, lat) === { x: lat, z: -d }`,
+heading 0), on purpose: the director wants the curve turned on *together* so the
+skier never drifts off a straight treeline.
+
+To let the curve turn on, `skiScene.ts` needs to draw the ground against the
+same road instead of the straight `-z` axis. Import from `../slopePath` (already
+in `client/src`) and use `slopeCenterline(distance)` / `slopeToWorld(distance,
+lateral)`:
+
+- **Snow window** (`syncEnvironment` / the snowfield plane): today it slides a
+  flat plane along the anchor's `z` only. Under a curved road the anchor's world
+  `x` moves too (already passed correctly), so the plane should follow the
+  anchor's world x/z and ideally orient to the tangent — or be wide enough /
+  re-centered so the skier stays on it through the bend.
+- **Decor scatter** (`updateSlopeDecor` + the bands): trees are laid in straight
+  world-`z` strips at fixed `x = ±LANE_EDGE`. They must instead scatter along
+  the centerline — place each at `slopeToWorld(cellDistance, ±(LANE_EDGE +
+  jitter))` and, if oriented, yaw by `-slopeCenterline(cellDistance).heading`.
+  This is the piece that actually breaks if skipped (trees end up in the lane).
+- **Ski trails / spray** (`updateSnowTrail`, `updateSnowEffects`): they build
+  from the anchor's world motion, so they mostly follow for free, but the
+  `SnowTrailInput.heading` handed across the seam is still **fall-line-relative**
+  (from the sim). For world-space grooves, combine it with the centerline
+  tangent: `worldHeading = state.heading + slopeCenterline(distance).heading`.
+  (slope-mech left it fall-line-relative rather than change the seam field's
+  meaning while straight — flagged in `skiRender.ts` at the `syncEnvironment`
+  call.)
+- Also note `laneHalfWidth(distance)` (the rock-gate pinch) still wants the
+  visual lane to follow it — the older seam note in `skiing.ts` — which composes
+  naturally once the lane is drawn along the road.
+
+Once `skiScene.ts` is drawing against the centerline, slope-mech gives `BENDS`
+real amplitudes (a gentle S: bend around the vista ~300–420, an opposite dogleg
+past the rock gate ~560) and the curve appears coherently on both sides. Keep it
+gentle (DESIGN's "scenic showcase" lean, not a slalom).
+
 ## (slope-mech) ~~Slope 1 "The Overlook" skeleton — the mechanics build~~ — SKELETON BUILT 2026-07-23
 
 **BUILT 2026-07-23** (see the ROADMAP entry): items #1 (length + finish) and
 #2 (layout to the beats) landed, and #4 (variable width) was pulled forward as
-the rock-gate pinch (director call). Still open: **#3 route bending** (its own
-chunk — the sim still models distance as a straight axis) and, by design, #5
+the rock-gate pinch (director call). **#3 route bending — road system built
+straight 2026-07-24** (`client/src/slopePath.ts`; see that ROADMAP entry): the
+centerline that maps `(distance, lateral) → world (x, z, heading)` now exists
+and the mechanics side (skier, camera, hazards) routes through it, but shipped
+with an *empty* `BENDS` list so it's still a straight axis — the actual curve is
+a joint flip pending slope-vis adopting the road (the next entry). By design, #5
 grade stays flat. The `(slope-vis)` visuals half at the bottom is now unblocked
 — real finish distance (800) + beat positions exist to build against, and
 `laneHalfWidth(distance)` is exported for the visual lane / rock-gate spires to
