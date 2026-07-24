@@ -80,6 +80,13 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   segment's end opens into a flat runout — you coast off the mountain rather than
   winning + auto-returning to the lobby (leave by forfeiting). The Overlook still
   finishes at 800.
+  **⚠ REDIRECT (director look-pass, 2026-07-24 — NEXT, slope-mech):** the branching
+  is being PARKED for the played path. The per-segment constant-curvature arcs kink at
+  their seams (curvature sign flips) — "jerky" — and the forks aren't wanted yet.
+  Target: **one solid mountain, a SINGLE smooth trail summit → forest, no switching to
+  other areas.** Two forest bugs to fix with it (speed instantly drops; character drifts
+  right). Full spec in the START HERE banner atop IDEAS.md. The branching graph stays in
+  `route.ts` (tested), just isn't the active run.
 - **Real 3D grade on the branching map (2026-07-24) — director-approved, now VARYING.**
   The run drops for real in world-Y: an elevated summit falling ~216 units to y=0 at
   the flag. The pitch is **no longer one constant — it varies down the route** (a
@@ -226,11 +233,15 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       for all slopes vs. one branching map; collectibles/achievements vs. XP;
       friend-race = later-phase MP, not v1.0). Art comes after the layout stands.
 - [ ] **Play the branching map — first slice: the summit → forest ride (director,
-      2026-07-24).** Turn the grayblock map into something you actually *play*,
-      starting with the top: drop in at the summit and ride down into the forest,
-      dressed for real (this is the run that becomes the game). A coordinated
-      cross-session slice — the ride already works mechanically (proven by tests),
-      what's missing is a real entry + real visuals:
+      2026-07-24).** Turn the map into something you actually *play*, starting with the
+      top: drop in at the summit and ride down into the forest, dressed for real (this
+      is the run that becomes the game). A coordinated cross-session slice — the ride
+      works mechanically (proven by tests), what's missing is a smooth single trail +
+      real visuals.
+      **⚠ REDIRECT (director look-pass, 2026-07-24): NO branching for this slice — one
+      solid mountain, a single SMOOTH trail summit → forest (the per-segment arcs kink;
+      forks not wanted yet), + fix two forest bugs (instant speed drop, drift right).
+      Full spec: START HERE banner atop IDEAS.md (slope-mech, next chat).**
       - **(slope-mech) — real 3D grade + curves + steepness→speed ✅ landed
         (2026-07-24):** the branching map drops for real ("ride down a REAL mountain",
         director). `slopePath.ts`'s `segmentCenterline` returns a `y`; the corridors

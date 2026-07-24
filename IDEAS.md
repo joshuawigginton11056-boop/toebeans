@@ -3,6 +3,52 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## ⏭ START HERE (slope-mech) — ONE solid mountain, one trail to the forest + 2 forest bugs (director look-pass, 2026-07-24)
+
+Director look-pass on the real-terrain build. **Redirect: stop branching. Build one
+solid mountain with a SINGLE trail going down toward the forest — no forks, no
+switching over to other areas — and make the path smooth, not jerky.** Plus two feel
+bugs at the forest. Fix in the next chat; this session only captured it here.
+
+**1. One trail, no switching, NOT jerky.** The run still rides the branching segment
+graph — each segment is a constant-curvature arc whose curvature SIGN FLIPS at every
+seam (summit turns −0.24 toward −x, then forest-road turns +0.24 toward +x, …), so the
+path *kinks* at the boundaries. That's "the jerky path from the gray blocks." Kill it:
+- Route the played run down a SINGLE continuous, smooth centerline summit → forest —
+  one gentle line (or straight), **no per-segment curvature discontinuities**, no
+  detour peel-offs. (Reshape `SEGMENT_SHAPES` in `client/src/slopePath.ts` and/or route
+  a single path; a continuous-curvature centerline like the Overlook's `BENDS`
+  integrator is the smooth model, not per-segment constant arcs meeting at kinks.)
+- Disable the forks for now — the `trigger`s in `shared/src/route.ts`
+  (summit→forest-tree, lake→water, yeti→ledge) — and don't route/render the detour
+  corridors. The branching graph can STAY in route.ts (still tested), just not be the
+  active played path.
+- The terrain must read as ONE solid mountain down that trail, not overlapping
+  per-segment ribbons (`addBranchTerrain` in `skiRender.ts` currently builds one mesh
+  per segment; for a single trail it's one continuous surface).
+- **OPEN Q for Josh (confirm next chat):** does the trail END at the forest (forest =
+  the bottom → the flat runout), or continue past it as one line? Assume for now the
+  summit→forest slice IS the whole played trail (matches "one trail going down towards
+  the forest").
+
+**2. Speed instantly drops at the forest.** Summit grade 0.5 → forest 0.26 (route.ts
+`GRADE_PROFILE`), amplified by `SLOPE_SPEED_GAIN` (1.5) — cruise falls ~17 → ~9 right as
+you reach the forest, which reads as slamming the brakes. Smooth it: gentler grade
+variation over the summit→forest run, and/or ease the target-speed *change rate* so the
+mellow-out is gradual, not a wall. (`gradeSpeedFactor`/`GRADE_PROFILE` in route.ts;
+target easing in `skiing.ts`.)
+
+**3. Character drifts right at the forest.** The forest-road corridor curves toward +x
+(`SEGMENT_SHAPES.forest-road.turn = +0.24`) = screen-right drift. The single-trail
+straight/gentle-line redirect (item 1) removes it; if any curve stays, keep it gentle
+and symmetric so the run tracks straight down the fall line toward the forest.
+
+Touch points: `shared/src/route.ts` (grade profile + graph/triggers),
+`client/src/slopePath.ts` (`SEGMENT_SHAPES`, centerline), `client/src/skiRender.ts`
+(`addBranchTerrain`), `shared/src/skiing.ts` (`SLOPE_SPEED_GAIN`, fork trigger logic).
+The branching architecture below is now PARKED for the played path — keep it, don't
+delete it, but the active run is one non-branching trail until Josh says otherwise.
+
 ## (multiplayer) Ghost racing — fast-follows past the first slice (2026-07-24)
 
 The first slice landed (see ROADMAP): two players in a room by code, each
