@@ -4816,6 +4816,18 @@ pixels (numbers above). **Still open — the fling-more half of the hand-off**
 (plume + lens carve-boost on hard turns, and the landing "poof" that needs the
 `justLanded`/impact seam field) is deliberately a separate next chunk; see IDEAS.
 
+## (slope-vis) 2026-07-24 — Next direction on the splat: smaller, detailed, sticky flakes (hand-off)
+
+Director look-pass on the make-it-read pass above, same day: the splat should go
+**smaller and higher-detail, and stick to the lens for a longer duration** —
+away from big soft smears, toward individual flakes with real shape that cling
+before melting. No code changed this turn; this is the hand-off, the build
+starts fresh next session. Full spec (three levers — smaller radius, real flake
+shape via a pre-rendered sprite, longer `LENS_LIFE` + softer fade — plus the
+replace-vs-mix and cap-headroom decisions) is the lens-splat item in
+[IDEAS.md](IDEAS.md). Supersedes the *size* half of the make-it-read tuning;
+opacity / frequency / edge-frost from that pass stand as the starting point.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
