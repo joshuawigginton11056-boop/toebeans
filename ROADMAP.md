@@ -4911,6 +4911,49 @@ Concrete directions for the next session (all in `skiScene.ts`'s lens block):
 turns, and the landing "poof" needing the `justLanded`/impact seam field) from
 the earlier hand-off, untouched.
 
+## (slope-vis) 2026-07-24 — Lens splat: real snow particles, not crystal flakes (build)
+
+Cashed in the director's 2026-07-24 verdict ("the snowflakes are tacky, I
+wanted actual snow particles"): the six-arm crystal sprite is gone, replaced
+by naturalistic snow clumps. Snow on glass is *irregular and asymmetric* — no
+symmetry, no geometric star — so the "detail" now comes from shape/edge + grain,
+not a motif. All in `skiScene.ts`'s lens block; no seam crossed, no bible change
+(still the one cool `LENS_TINT` snow-white). The smaller/sticky levers the
+director approved (radius, `LENS_LIFE`/`LENS_LIFE_VAR`, the softened
+`min(1, age·12)·√t` fade, low drip/spread, the soft "direct hit" blobs, the
+edge-frost vignette, idle-skip zero-fill) are all **untouched** — this was a
+shape swap only.
+
+- **`makeFlakeSprite()` → `makeSnowSprites()` (a set of 4 variants).**
+  `makeSnowClump()` builds each: a packed-powder core of 3–5 soft radial blobs
+  at jittered offsets/sizes (they overlap into one asymmetric, feathered,
+  non-circular mass) plus a scatter of 12–21 tiny soft grains, center-biased
+  (`pow(r,0.7)`), at varied alpha — the "packed clump + scattered fine grains"
+  the spec asked for. Pre-rendered once to 64px offscreen canvases; each flake
+  splat picks a variant (`sprite` index) and birth rotation (now full 2π) at
+  emit, so a screenful doesn't read repetitive. Still blit-cheap — `drawImage`
+  scaled + rotated, no per-frame pathing.
+- **Draw-time directional smear.** Each flake blits under a mild
+  `scale(1.28, 0.82)` in its rotated local frame, so it reads as snow flung at
+  an angle onto the glass rather than a centred dot (the optional motion-streak
+  from the spec, kept subtle).
+- **Interface/system:** `LensSplat` gains `sprite: number`; `LensSplashSystem`
+  holds `flakeSprites: HTMLCanvasElement[]` (was a single `flakeSprite`).
+
+`npm run check` passes (typecheck + 113 tests). **Live in-scene look-pass is the
+director's** — same wall as every prior entry in this thread (the Browser pane
+pauses the render loop when hidden, so moving splats can't be captured, and it
+needs skiing at speed). Verified the *shape* deterministically instead: replayed
+the exact `makeSnowClump()` code in a live page and measured the generated
+sprites — quadrant alpha imbalance **0.30–0.66** and centroid offset up to
+**5.4 px** (a symmetric star sits at ~0 on both), grain peaks at ~217–229/255,
+coverage ~28–34% (a compact clump, not a full-canvas smear), every variant
+distinct. Irregular, asymmetric, grainy — the actual-snow read. **Still open —
+the fling-more half** (plume + lens carve-boost on hard turns, and the landing
+"poof" needing the `justLanded`/impact seam field): untouched, separate chunk.
+Whether the new particle reads right in motion is the director's look-pass; the
+size/persistence/mix knobs are all named constants for tuning.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
