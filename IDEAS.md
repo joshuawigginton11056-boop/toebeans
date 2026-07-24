@@ -6,9 +6,16 @@ land here instead of in code.
 ## (slope-mech / slope-vis) Branching map — parked follow-ups from the de-risk (2026-07-24)
 
 The branching-fork de-risk landed (see ROADMAP + SLOPE_BRANCHING.md): one Type A
-"tree" fork, grayblock, "same clock, same flag" proven. Parked from it, **none to
-build until the director resolves SLOPE_BRANCHING.md §7** (branching-as-template
-vs. one branching map; collectibles/achievements; MP-only friend race):
+"tree" fork, grayblock, "same clock, same flag" proven. **Director redirect
+(2026-07-24): the next session lays out the ACTUAL §4 map** (summit → forest →
+lake → yeti's peak, three same-clock routes to the flag) as grayblock on this
+foundation — replacing the placeholder `spine-1/2/3`+tree topology in `route.ts`
+and its placements in `slopePath.ts` — rather than adding toy forks one at a
+time. The §8 "tree, then lake, then yeti, one at a time" order is superseded by
+"lay out the whole real topology first." §7's open reconciliation
+(branching-as-template vs. one branching map; collectibles/achievements vs. XP;
+MP-only friend race) stays the director's but doesn't block the layout. Parked
+from the de-risk:
 
 - **(slope-vis) Do NOT dress `?branch=1` yet.** The branching map is dev-only
   grayblock (a URL flag; normal play is the Overlook, untouched). When the map
@@ -16,10 +23,16 @@ vs. one branching map; collectibles/achievements; MP-only friend race):
   that's a whole scene each and gated on §7. Heads-up only so the flag isn't a
   surprise. Grayblock lives in `skiRender.ts` (`addBranchGrayblock`), NOT
   `skiScene.ts` — deliberately, to keep it out of your dressed scene.
-- **(slope-mech) The tree detour is a hollow equal-length corridor.** It exists to
-  prove the handoff, not to be fun yet — no detour content, no collectible, no
-  distinct feel. Real detour segments (the ~8s animal world → tallest tree → bird)
-  are the next mechanics layer once the map is greenlit.
+- **(slope-mech) The placeholder topology is throwaway.** `spine-1/2/3` + one
+  hollow tree corridor exist only to prove the handoff — they get replaced by the
+  real §4 layout next session. Detour *content* (the ~8s animal world → tallest
+  tree → bird; the penguin dive; the ice castle) is a later layer still, once the
+  real segments are placed.
+- **(slope-mech) Entry now auto-loads.** `?branch=1` drops straight into the map
+  and no longer lets a saved slope run bypass the grayblock setup (that bypass is
+  why the tree looked missing — a restore rebuilds the Overlook). Fixed in
+  `main.ts`; the real map will want a proper slope-select entry eventually, not a
+  URL flag.
 - **(slope-mech) Per-segment differing hazards are a data change, deferred.** The
   grayblock keeps the road and detour flat/equal so the *handoff* was on trial,
   not balancing. §5's design (road tenser, detour a lower-stakes reward run) is
@@ -30,9 +43,11 @@ vs. one branching map; collectibles/achievements; MP-only friend race):
   the scene after a transition (fine off in a passed corridor, ugly if reused);
   and the dev debug overlay + grayblock markers are scaffolding to remove.
 - **The Type B route split (Yeti's Peak)** — a fork that does NOT rejoin until the
-  flag — is untouched. It's a bigger routing change (two whole alternate segments
-  to the finish, both time-balanced) and SLOPE_BRANCHING.md §8 says do it *after*
-  both Type A forks (tree, then lake) work.
+  flag — is the one genuinely new routing shape in the §4 layout (two whole
+  alternate segment chains to the finish, both time-balanced to the same clock;
+  the current graph only models rejoining Type A detours). Laying out the actual
+  map means the segment model must handle it — the main new-mechanics piece of the
+  layout work, on top of placing the real segments.
 
 ## (slope-vis) Night follow-ups — from the "sun sets as we race" night look (2026-07-24)
 

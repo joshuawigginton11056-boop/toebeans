@@ -54,7 +54,12 @@ const restored = (() => {
   return save === null ? null : restoreSave(save);
 })();
 
-let mode: SceneMode = restored?.mode ?? "lobby";
+// Under the branching-map dev flag, never resume a saved slope run: a restore
+// always rebuilds the Overlook (branching state isn't saved), so `?branch=1`
+// would silently drop you onto the wrong slope with no grayblock — which is
+// exactly why the tree "wasn't there." Force a clean lobby start and auto-enter
+// the branching map below; appearance/mute still come from the save.
+let mode: SceneMode = BRANCH_MAP ? "lobby" : (restored?.mode ?? "lobby");
 let skiState = restored?.ski ?? createInitialSkiState();
 let muted = restored?.muted ?? false;
 let appearance: Appearance = restored?.appearance ?? createDefaultAppearance();
@@ -152,6 +157,11 @@ hud.sync(mode, skiState);
 // Sound effects (see audio.ts). Reads state only, like the HUD.
 const audio = createAudio(muted);
 lobbyUi.setMuted(muted);
+
+// ?branch=1: drop straight into the grayblock branching map — goSkiing sets up
+// the segment run, the grayblock corridors/tree/markers, and the proof readout,
+// so the map is on screen immediately instead of hiding behind a save-resume.
+if (BRANCH_MAP) goSkiing();
 
 const AUTOSAVE_SECONDS = 5;
 let autosaveTimer = 0;

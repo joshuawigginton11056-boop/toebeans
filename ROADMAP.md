@@ -50,17 +50,22 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   a landing grip window, landing lockout + a "tired hop" cue.
 - **Road system** (`client/src/slopePath.ts`): a presentation-only centerline,
   curve-ready but **straight/identity today** (bit-for-bit the old world).
-- **Branching map (the "actual map") — foundation begun.** Per SLOPE_BRANCHING.md
-  (director's new direction: one continuous descent that grabs you into detour
-  worlds, all obeying **"same clock, same flag"**), the §8 de-risk landed: a
-  sim-side **segment graph** (`shared/src/route.ts`) with one grayblock Type A
-  "tree" fork, proving the riskiest system — enter a detour, ski it, rejoin the
-  spine at the same world-point at the same time (a detour built the same length
-  as the road it bypasses ⇒ the law holds by construction, no scripting). Renderer
-  places per-segment (`segmentCenterline`/`addBranchGrayblock`, grayblock boxes,
-  no `skiScene.ts`). Dev-only behind **`?branch=1`** with a live proof readout; the
-  Overlook's single `"main"` segment is inert, so normal play is unchanged. Not
-  yet: detour content, the lake/yeti forks, art.
+- **Branching map (the "actual map") — mechanism proven; real layout is next.**
+  Per SLOPE_BRANCHING.md (director's new direction: one continuous descent that
+  grabs you into detour worlds, all obeying **"same clock, same flag"**), a
+  sim-side **segment graph** now exists (`shared/src/route.ts`): a run is a chain
+  of segments (spine + detours), the renderer places each in its own world
+  corridor (`segmentCenterline`/`addBranchGrayblock`, grayblock boxes, no
+  `skiScene.ts`), and a detour built the same length as the road it bypasses
+  rejoins the spine at the same world-point at the same time — the law holds by
+  construction, proven on one throwaway Type A "tree" fork (129 tests + live
+  bundle). **The current topology is a placeholder** (`spine-1/2/3` + one tree),
+  not the real map. **Director redirect (2026-07-24): next session lays out the
+  ACTUAL §4 map** — real segments (summit → enchanted forest → frozen lake →
+  yeti's peak) and the three same-clock routes to the flag — as grayblock on this
+  foundation, rather than adding toy forks one at a time. Dev-only behind
+  **`?branch=1`** (auto-loads the map now — a save no longer bypasses it); the
+  Overlook's single `"main"` segment is inert, so normal play is unchanged.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
   across all 24 slope models; decor scatter follows the run. (Old birches removed.)
 - **Realism snow:** procedural displaced surface + GPU-carved ski trails.
@@ -119,13 +124,16 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 - [ ] **Slope 1 gentle S-curve:** give `slopePath.ts` `BENDS` real amplitudes — a
       joint slope-mech + slope-vis flip, once visuals draw against the centerline.
 - [ ] **"The actual map"** (SLOPE_BRANCHING.md — a branching summit-to-flag map
-      with detour worlds). The Type A fork **handoff is de-risked** (grayblock,
-      `?branch=1`; see Ski slope). Next: §7 director calls (branching as the
-      template for all slopes vs. one branching map; how collectibles/achievements
-      relate to XP; friend-race = later-phase MP, not v1.0), then real detour
-      content + the lake (2nd Type A) and Yeti's Peak (the Type B route split).
-      *(SLOPE_BRANCHING.md is untracked in the main checkout — director's call
-      whether it goes in git.)*
+      with detour worlds). Segment/handoff **mechanism is de-risked** on a
+      placeholder tree fork (`?branch=1`; see Ski slope). **Next (director redirect,
+      2026-07-24): lay out the ACTUAL §4 map** as grayblock — the real segments
+      (summit descent → enchanted forest → frozen lake → yeti's peak) and the three
+      same-clock routes to the flag (Ice / Cave / Water Lines) — replacing the toy
+      `spine-1/2/3` topology in `route.ts`. §7's open reconciliation is still the
+      director's (branching as the template for all slopes vs. one branching map;
+      collectibles/achievements vs. XP; friend-race = later-phase MP, not v1.0) but
+      doesn't block laying out the topology. Detour *content* (animal world, bird,
+      penguin, ice castle) and art come after the layout stands.
 - [ ] **Night: sun sets *as you race*.** The night end-state look is built (see
       Ski slope); the auto-transition trigger is a director call (linear distance?
       which map branch?), plus a designed dusk/golden-hour midpoint and night

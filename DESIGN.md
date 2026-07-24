@@ -38,6 +38,15 @@ interact with your space for more XP → repeat.
 
 ### The handcrafted slopes — Slope 1: "The Overlook" (scenic showcase)
 
+> **Direction note (2026-07-24):** "The Overlook" is now framed as the
+> **onboarding run**; "the actual map" beyond it is specced in
+> [SLOPE_BRANCHING.md](SLOPE_BRANCHING.md) — a single continuous *branching* map
+> (detour worlds that leave and rejoin at the same clock). That doc's §7 open
+> questions are unresolved, so the three-linear-slopes model below still stands
+> as written; the two are reconciled by the director before this section is
+> rewritten. The segment/handoff mechanism is de-risked (grayblock, `?branch=1`);
+> laying out the actual §4 map is the next slope-mechanics job.
+
 The first of the three v1.0 handcrafted slopes. **Identity (director call,
 2026-07-23): a scenic showcase** — built around one signature moment (a
 vista reveal + a dramatic cliff jump), moderate hazard density. Because the
