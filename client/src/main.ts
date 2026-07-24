@@ -24,6 +24,7 @@ import {
   render,
   syncSkiSceneToState,
 } from "./skiRender";
+import { cycleTimeOfDay } from "./skiScene";
 
 // Dev-only entry to the branching map (SLOPE_BRANCHING.md — "the actual map").
 // Append ?branch=1 to the URL and every trip to the slope loads the grayblock
@@ -176,6 +177,13 @@ window.addEventListener("keydown", (event) => {
     cycleAppearance(
       event.code === "KeyC" ? "character" : event.code === "KeyK" ? "skin" : "hair",
     );
+    return;
+  }
+  // Debug (slope-vis, 2026-07-24): N cycles time of day dawn → dusk → night →
+  // dawn so the director can look-pass the night atmosphere. Slope-only; a
+  // stand-in until the "sun sets as you race" auto-transition lands.
+  if (event.code === "KeyN") {
+    if (mode === "slope") cycleTimeOfDay();
     return;
   }
   // Camera round 3 (slope-mech): the slope camera is all mouse/touch now —
