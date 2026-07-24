@@ -61,31 +61,33 @@ use `segmentPitch(id, distance)` per-point (it varies down the route now).
 
 ## (slope-mech ✅ curves landed 2026-07-24 / rest still open) Branching map — the §4 layout landed; now make it PLAYABLE (2026-07-24)
 
-> **⏭ START HERE NEXT SESSION (handoff 2026-07-24, director): REPLACE THE GRAYBLOCK
-> RAMP WITH A REAL MOUNTAIN.** The branching map (the default slope) rides on a
-> grayblock ramp today — descending, curving floor/wall boxes built by
-> `addBranchGrayblock` in `skiRender.ts`. Make it a real, dressed mountain surface.
-> This is chiefly the **(slope-vis)** lift — `skiScene.ts`'s snow surface must go
-> **segment-aware** and lay real ground under every corridor — plus a small
-> **(slope-mech)** cleanup to retire the grayblock once real ground exists. Two hard
-> requirements from THIS session's work, both already exposed on `slopePath.ts`:
+> **⏭ START HERE (slope-vis): DRESS THE REAL MOUNTAIN. The geometry now exists.**
+> The grayblock ramp is GONE. (slope-mech, 2026-07-24, director "create the real
+> mountain") replaced it with a real terrain SURFACE — `addBranchTerrain` in
+> `skiRender.ts` builds a continuous mountain mesh per segment: a smooth playable
+> lane flush with the sim's ground, flanked by snowbanks rising into rolling
+> mountainside, following the curved centerlines AND the varying grade. It's a
+> **plain-shaded placeholder** (a soft off-white MeshStandard, fork spots marked by
+> boulders). **slope-vis's job is to DRESS it** — snow material/displacement, decor,
+> ski-trail carving — re-skinning that mesh or replacing it with your own segment-aware
+> surface. The old framing ("make skiScene's flat snow plane segment-aware and tilt it
+> to the grade") is obsolete: the ground already sits + tilts to the grade and follows
+> the curves. What you build against, all on `slopePath.ts` (already in `client/src`):
 >
-> 1. **Follow the CURVES.** Corridors are constant-curvature arcs now, not straight —
->    build the surface along `segmentCenterline(id, distance)` (world x/z + `heading`)
->    and `segmentToWorld(id, distance, lateral)`, per segment, not one straight strip
->    down −z. The spine weaves an S; detours peel to the sides (`SEGMENT_SHAPES`).
-> 2. **Follow the VARYING grade.** The pitch is no longer one constant — use
->    `segmentPitch(id, distance)` **per-point** (it changes down the route: steep ~27°
->    summit, mellow ~15° forest/lake, steep lower pitch) and `segmentCenterline(...).y`
->    for height. Do NOT tilt by a single `slopeGradePitch` — that's only the
->    reference/average now. The height/grade truth is `routeHeightAt`/`routeGradeAt`
->    in `shared/src/route.ts` if you want it raw.
+> 1. **Follow the CURVES.** Corridors are constant-curvature arcs — sample
+>    `segmentCenterline(id, distance)` (world x/z + `heading`) and
+>    `segmentToWorld(id, distance, lateral)`, per segment. The spine weaves an S;
+>    detours peel to the sides (`SEGMENT_SHAPES`).
+> 2. **Follow the VARYING grade.** Height is `segmentCenterline(...).y`; local pitch is
+>    `segmentPitch(id, distance)` **per-point** (steep ~27° summit, mellow ~15°
+>    forest/lake, steep lower pitch). Raw truth: `routeHeightAt`/`routeGradeAt` in
+>    `shared/src/route.ts`. Past the flag both go flat — that's the no-finish runout.
 >
-> **(slope-mech) cleanup half:** once the real surface is under the run, gate
-> `addBranchGrayblock` (and the `branchDebug` readout) so the placeholder boxes +
-> proof text don't show in real play — see "Real entry + grayblock cleanup" below.
-> Detour worlds (lake/yeti/penguin/ice-castle) still dress in later; summit→forest is
-> the first slice, as before.
+> Reference `addBranchTerrain` for the lane/flank cross-section it uses (lane
+> `|lateral| ≤ LATERAL_LIMIT` flat at the centerline y; flanks rise to ±46). If you
+> replace the mesh, (slope-mech) can retire `addBranchTerrain` — coordinate. Detour
+> worlds (lake/yeti/penguin/ice-castle) still dress in later; summit→forest is the
+> first slice.
 
 **Shaped corridors landed (slope-mech, 2026-07-24):** the branching map's segments
 CURVE now — each a constant-curvature arc (`SEGMENT_SHAPES` in `slopePath.ts`), the

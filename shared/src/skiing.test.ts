@@ -1417,9 +1417,16 @@ describe("The branching map: same clock, same flag", () => {
     let state = createBranchingSkiState();
     const segments = [state.segmentId];
     let steps = 0;
+    // The branching map has NO finish line now (director 2026-07-24): the run
+    // reaches the flag (route distance TOTAL) and would coast off down the open
+    // runout. We stop AT the flag so the step counts across routes stay
+    // comparable — "same clock, same flag" is still the law, just measured on
+    // route distance rather than the (now removed) "finished" status.
     for (
       ;
-      steps < 6000 && state.status !== "finished" && state.status !== "forfeited";
+      steps < 6000 &&
+      state.status !== "forfeited" &&
+      routeDistanceOf(state.segmentId, state.distance) < TOTAL_ROUTE_LENGTH;
       steps++
     ) {
       // Arm this segment's divert once, the frame we're on it.
@@ -1442,7 +1449,11 @@ describe("The branching map: same clock, same flag", () => {
         segments.push(state.segmentId);
       }
     }
-    expect(state.status).toBe("finished");
+    // Reached the flag still skiing (no finish line) — never forfeited/timed out.
+    expect(state.status).toBe("skiing");
+    expect(
+      routeDistanceOf(state.segmentId, state.distance),
+    ).toBeGreaterThanOrEqual(TOTAL_ROUTE_LENGTH);
     return { steps, segments, final: state };
   }
 
@@ -1671,7 +1682,7 @@ describe("steepness → speed (M2 grade coupling)", () => {
     expect(overlook).toBeCloseTo(BASE_SPEED, 1);
   });
 
-  it("cruises FASTER on a steep segment than on the mellow flats", () => {
+  it("cruises FASTER the steeper the segment, and the graded map out-paces the flat Overlook", () => {
     const steep = cruise({ ...createBranchingSkiState(), chasms: [] }); // summit, steep
     const mellow = cruise({
       ...createBranchingSkiState(),
@@ -1681,7 +1692,10 @@ describe("steepness → speed (M2 grade coupling)", () => {
       finishDistance: 1000,
     });
     const overlook = cruise({ ...createInitialSkiState(), chasms: [] });
-    expect(steep).toBeGreaterThan(overlook);
-    expect(overlook).toBeGreaterThan(mellow);
+    // The steepness law: steeper terrain skis faster.
+    expect(steep).toBeGreaterThan(mellow);
+    // "Increase speed on slopes" (director 2026-07-24): the whole graded mountain
+    // is quick now — even its mellow zones out-pace the flat baseline Overlook.
+    expect(mellow).toBeGreaterThan(overlook);
   });
 });

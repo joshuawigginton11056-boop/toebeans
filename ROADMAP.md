@@ -51,7 +51,7 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   a landing grip window, landing lockout + a "tired hop" cue.
 - **Road system** (`client/src/slopePath.ts`): a presentation-only centerline,
   curve-ready but **straight/identity today** (bit-for-bit the old world).
-- **Branching map (the "actual map") — the real §4 layout is in, as grayblock.**
+- **Branching map (the "actual map") — the real §4 layout is in, on real terrain.**
   Per SLOPE_BRANCHING.md (director's direction: one continuous descent that grabs
   you into detour worlds, all obeying **"same clock, same flag"**), a sim-side
   **segment graph** (`shared/src/route.ts`) chains the real map: **summit →
@@ -60,19 +60,26 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   **Cave** (…yeti·cave·cliff), **Ice** (…yeti·ledge·valley·ice-castle), **Water**
   (…lake·water·cliff) — each **640** units by construction, with the Cave/Water
   reconvergence (`cliff`) landing at the identical route-offset (540) whichever
-  way it's reached. The renderer places each segment in its own grayblock world
-  corridor (`SEGMENT_PLACEMENTS`/`addBranchGrayblock`, now fully data-driven off
-  the registry — boxes only, no `skiScene.ts`); `roadSegmentIds()` is the single
-  source of truth for spine-vs-detour. **The corridors CURVE now (2026-07-24):**
-  each segment is a constant-curvature arc (`SEGMENT_SHAPES` in `slopePath.ts`),
-  the spine weaving a gentle S down the middle and the detours peeling off to
-  their sides — chained smoothly on continuous runs (no kink), cut at fork
-  handoffs; the grayblock floor/walls facet along the arc to follow it. 144 tests
-  (incl. a behavioral proof all three routes + the tree no-op reach the flag on
-  the same step, the grade, and the arcs' length/continuity).
-  **It is now the DEFAULT slope (2026-07-24)** — "Hit the slopes" loads it at the
-  live URL; **`?overlook=1`** keeps the old flat Overlook; the proof readout is
-  gated dev-only (`?branch`/`?debug`).
+  way it's reached. The renderer places each segment in its own world corridor
+  (`SEGMENT_PLACEMENTS`, data-driven off the registry); `roadSegmentIds()` is the
+  single source of truth for spine-vs-detour. **The corridors CURVE:** each segment
+  is a constant-curvature arc (`SEGMENT_SHAPES` in `slopePath.ts`), the spine
+  weaving a gentle S down the middle and the detours peeling off to their sides —
+  chained smoothly on continuous runs (no kink), cut at fork handoffs.
+  **REAL TERRAIN now, no longer grayblock boxes (slope-mech, 2026-07-24 — "create
+  the real mountain," director):** `addBranchTerrain` (skiRender.ts) builds a
+  continuous mountain SURFACE per segment — a smooth playable lane flush with the
+  sim's ground, flanked by snowbanks that rise into rolling mountainside — following
+  the curved centerlines + varying grade. Plain-shaded placeholder (slope-vis owns
+  the dressed look and re-skins/replaces it). Fork spots marked by boulders, not
+  gray boxes. 153 tests (incl. a behavioral proof all three routes + the tree no-op
+  reach the flag on the same clock, plus the arcs' length/continuity).
+  **It is the DEFAULT slope** — "Hit the slopes" loads it at the live URL;
+  **`?overlook=1`** keeps the old flat Overlook; the proof readout is gated dev-only
+  (`?branch`/`?debug`). **NO FINISH LINE yet (director, 2026-07-24):** a terminal
+  segment's end opens into a flat runout — you coast off the mountain rather than
+  winning + auto-returning to the lobby (leave by forfeiting). The Overlook still
+  finishes at 800.
 - **Real 3D grade on the branching map (2026-07-24) — director-approved, now VARYING.**
   The run drops for real in world-Y: an elevated summit falling ~216 units to y=0 at
   the flag. The pitch is **no longer one constant — it varies down the route** (a
@@ -81,19 +88,25 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   `routeHeightAt`) keyed to route distance so every route still drops the same total
   ("same clock, same flag" in elevation). The reference ~19° is the director's
   locked-"invigorating" baseline. `slopePath.ts` embeds the profile (world-Y +
-  per-point `segmentPitch(id, distance)`); the skier, camera, hazards, and grayblock
-  all ride it; the Overlook stays flat (no placement). **The corridors also curve now
-  (see the branching-map bullet).** **Still grayblock, and the dressed snow is still
-  FLAT under it** — tilting the snow surface to the grade is the slope-vis half (now
-  it must follow the VARYING per-point pitch; see IDEAS.md).
+  per-point `segmentPitch(id, distance)`); the skier, camera, hazards, and the real
+  terrain surface all ride it; the Overlook stays flat (no placement). **The corridors
+  also curve (see the branching-map bullet).** The playable lane of the real terrain
+  now sits + tilts to the grade; the slope-vis half is to DRESS that surface (snow
+  material/displacement/decor/trails), following the VARYING per-point pitch — see
+  IDEAS.md.
 - **Steepness → speed (2026-07-24, director "the steeper the area, the faster the
   skiing").** The sim (`shared/src/skiing.ts`) reads the local grade and scales the
   target cruise (and boost) by it — `gradeSpeedFactor` in route.ts, 1.0 (a no-op) at
-  the reference ~19° and on the flat Overlook, so the locked feel is untouched and
-  only the graded map gains terrain-driven pace: steep pitches genuinely fast, mellow
-  flats slower, capped at `GRADE_TOP_SPEED`. Detour *content* (animal world, bird,
-  penguin/ice castles) and per-route hazard balancing (§5) come after; §7's open
-  reconciliations remain the director's.
+  the reference ~19° and on the flat Overlook, so the Overlook's locked feel is
+  untouched and only the graded map gains terrain-driven pace: steep pitches
+  genuinely fast, mellow flats slower, capped at `GRADE_TOP_SPEED`. **Turned UP
+  (slope-mech, 2026-07-24 — director "increase speed on slopes"):** a
+  `SLOPE_SPEED_GAIN` (1.5) amplifies the coupling so the whole graded mountain skis
+  faster — steeps really move, even the mellow forest out-paces the flat baseline;
+  `GRADE_TOP_SPEED` raised 22→28. Both are live-build LOOK-PASS knobs; the Overlook
+  stays a hard no-op. Detour *content* (animal world, bird, penguin/ice castles) and
+  per-route hazard balancing (§5) come after; §7's open reconciliations remain the
+  director's.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
   across all 24 slope models; decor scatter follows the run. (Old birches removed.)
 - **Realism snow:** procedural displaced surface + GPU-carved ski trails.
@@ -229,13 +242,16 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
         on the flat Overlook). The skier, camera, hazards, and grayblock (descending,
         curving, per-point-pitched ramps) ride it; the `anchor` carries `anchor.y`.
         153 tests. Reference ~19° stays the director-locked "invigorating" baseline.
-      - **(slope-vis) — REPLACE THE RAMP WITH A REAL MOUNTAIN — the next slice
-        (director, 2026-07-24, next session).** The run rides a grayblock ramp; make
-        `skiScene.ts`'s snow surface segment-aware and lay real dressed ground under
-        it, following the **curved centerlines** (`segmentCenterline`/`segmentToWorld`)
-        AND the **varying per-point pitch** (`segmentPitch(id, distance)`, not one
-        constant). Then (slope-mech) gates off `addBranchGrayblock`. See the START
-        HERE banner in IDEAS.md.
+      - **(slope-vis) — DRESS THE REAL MOUNTAIN (the geometry now exists).** The
+        grayblock ramp is GONE: (slope-mech) built a real terrain surface
+        (`addBranchTerrain`, skiRender.ts — smooth playable lane + rising snowbank
+        flanks, following the curved centerlines + varying grade). It's a
+        PLAIN-SHADED placeholder. slope-vis's job is now to DRESS it — snow
+        material/displacement, decor, ski-trail carving — re-skinning or replacing
+        that mesh, using the same `segmentCenterline`/`segmentToWorld`/`segmentPitch`
+        exports. (No more "make the flat snow plane segment-aware and tilt it"; the
+        ground already sits + tilts to the grade.) See the START HERE banner in
+        IDEAS.md.
       - **(slope-mech) — branching map is now the DEFAULT slope ✅ (2026-07-24):**
         director couldn't see the grade because it was hidden behind `?branch=1` and
         the live build's plain URL served the flat Overlook. Promoted: the graded

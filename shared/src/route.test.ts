@@ -22,9 +22,12 @@ describe("route — the descent's grade profile (steepness → speed)", () => {
     }
   });
 
-  it("clamps out-of-range route distances to the ends", () => {
+  it("clamps below the route to the summit; flattens past the flag to a runout", () => {
     expect(routeGradeAt(-50)).toBe(routeGradeAt(0));
-    expect(routeGradeAt(9999)).toBe(routeGradeAt(TOTAL_ROUTE_LENGTH));
+    // Past the flag the mountain runs out FLAT — no finish line yet (director
+    // 2026-07-24): a terminal segment opens into an open runout you coast off.
+    expect(routeGradeAt(TOTAL_ROUTE_LENGTH + 100)).toBe(0);
+    expect(routeGradeAt(9999)).toBe(0);
   });
 
   it("drops the height monotonically to exactly 0 at the flag", () => {

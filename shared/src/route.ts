@@ -306,8 +306,15 @@ const HEIGHT_TABLE: Float64Array = (() => {
 })();
 
 /** The local grade (tan of the downhill pitch) at a route distance — steep near
- * the summit and the lower pitch, mellow through the forest/lake. */
+ * the summit and the lower pitch, mellow through the forest/lake.
+ *
+ * Past the flag the mountain RUNS OUT FLAT (slope-mech, 2026-07-24 — "no finish
+ * line yet", director): a terminal segment opens into an open runout you coast
+ * off rather than a win, so grade drops to 0 there. That keeps the runout terrain
+ * flat and consistent with the clamped height (routeHeightAt is already 0 past the
+ * flag) and eases the speed coupling into a gentle coast on the valley floor. */
 export function routeGradeAt(routeDistance: number): number {
+  if (routeDistance > TOTAL_ROUTE_LENGTH) return 0;
   return gradeProfileAt(routeDistance);
 }
 

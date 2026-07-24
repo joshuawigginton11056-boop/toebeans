@@ -3,7 +3,6 @@ import {
   BASE_SPEED,
   BOOST_SPEED,
   BRANCH_SEGMENTS,
-  BRANCH_START,
   JUMP_CHARGE_TIME,
   LATERAL_LIMIT,
   MIN_SPEED,
@@ -679,165 +678,125 @@ export function syncSkiSceneToState(
   });
 }
 
-// The branching map's grayblock scaffolding (slope-mech, 2026-07-24 — the §4 map
-// of SLOPE_BRANCHING.md). Box shapes only, no art: enough to *see* the three
-// routes, the three forks, and the handoffs while proving "same clock, same
-// flag." Each detour world sits in its own offset corridor (SEGMENT_PLACEMENTS),
-// so a forked run visibly cuts across to it and cuts back. Fully data-driven off
-// the route registry — adding segments to route.ts draws them here automatically.
-// Called once when a branching run starts (main.ts, dev-only). Deliberately in
-// skiRender (slope-mech) and NOT skiScene (slope-vis): grayblock placeholders,
-// not the visuals session's dressed scene.
-export function addBranchGrayblock(handle: SkiSceneHandle): void {
-  // `pitch` tilts a box around world-x onto the grade; `yaw` turns it about
-  // world-Y onto the corridor's local heading (the corridors CURVE now — see
-  // slopePath.ts — so a straight box per segment no longer covers the arc). The
-  // rotation order matches the skier rig and hazards: YXZ, yaw then pitch. `cast`
-  // is off for the many ramp/wall facets (flat grayblock ground) and on for the
-  // few tall landmarks.
-  const addBox = (
-    x: number,
-    y: number,
-    z: number,
-    w: number,
-    h: number,
-    d: number,
-    color: number,
-    pitch = 0,
-    yaw = 0,
-    cast = true,
-  ): void => {
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshStandardMaterial({ color }),
-    );
-    mesh.position.set(x, y, z);
-    mesh.rotation.set(pitch, yaw, 0, "YXZ");
-    mesh.castShadow = cast;
-    mesh.receiveShadow = true;
-    handle.scene.add(mesh);
-  };
-
-  // Which segments are the default road (walked from BRANCH_START) vs. detour
-  // worlds — the single source of truth in route.ts, so the coloring can't drift
-  // from the topology.
+// The branching map's TERRAIN (slope-mech, 2026-07-24 — "create the real
+// mountain", director). Was grayblock box-strips; now a real, believable mountain
+// SURFACE: one continuous mesh per segment, the playable lane smooth and flush
+// with the sim's ground, flanked by snowbanks that rise into rolling mountainside
+// so you ski down a real hill, not a chute of stacked boxes. Follows the curved
+// centerlines (segmentToWorld) AND the varying grade (segmentCenterline.y /
+// segmentPitch) so the ground descends + bends exactly under the run. Terminal
+// segments (cliff, ice-castle) extend a flat RUNOUT past the flag — there is no
+// finish line yet (director), so the run coasts off the mountain onto the valley
+// floor. Built once when a branching run starts (main.ts).
+//
+// SEAM NOTE (slope-mech → slope-vis): this is a PLAIN-SHADED placeholder surface —
+// real geometry, no dressing. skiScene.ts (slope-vis) owns the final look (snow
+// material/displacement, decor, ski-trail carving) and will re-skin or replace
+// this mesh; the geometry helpers it needs are the same slopePath.ts exports used
+// here. Deliberately in skiRender (slope-mech): it's the ground the sim rides.
+export function addBranchTerrain(handle: SkiSceneHandle): void {
+  // Which segments are the default road vs. detour worlds — the single source of
+  // truth in route.ts. Kept as the faintest snow tint (road cool, detours a hair
+  // greener) so the topology still reads without debug boxes.
   const road = roadSegmentIds();
 
-  // Facet length along a corridor: the curved floor/walls are laid as a strip of
-  // short boxes sampled every FACET units of travel, each turned onto the local
-  // tangent AND tilted to the local grade (which varies down the route now — a
-  // steep summit, a mellow forest, a steep lower pitch). The gentle map curves
-  // read smooth at this step; each facet's depth is stretched by 1/cos(pitch) to
-  // cover its pitched span, with a hair of overlap so no seam gaps open between
-  // tilted boxes.
-  const FACET = 12;
+  // The cross-section of a corridor: a flat playable LANE (|lateral| ≤ LANE_HALF,
+  // exactly the sim's ground so the skier sits flush at any lane position), then
+  // FLANKS that rise into snowbanks out to ±FLANK_HALF. Columns are anchored at
+  // 0 and ±LANE_HALF so the lane stays crisply flat, coarser out on the banks.
+  const LANE_HALF = LATERAL_LIMIT; // 12
+  const FLANK_HALF = 46;
+  const BERM_HEIGHT = 12; // how high the banks climb by the outer edge
+  const COLS = [
+    -46, -38, -30, -22, -16, -LANE_HALF, -6, 0, 6, LANE_HALF, 16, 22, 30, 38, 46,
+  ];
+  const STEP_LONG = 5; // longitudinal sample spacing (units of travel)
+  const RUNOUT = 180; // flat coast-out past a terminal segment's flag
+
+  // Gentle rolling relief on the banks (a few octaves of sin, deterministic and
+  // built once), faded to 0 at the lane edge so the piste stays clean.
+  const flankRelief = (x: number, z: number): number =>
+    3.2 * Math.sin(x * 0.06 + z * 0.02) +
+    1.8 * Math.sin(x * 0.15 - z * 0.09) +
+    2.0 * Math.cos(z * 0.11 + x * 0.045);
+
+  // The height of a cross-section vertex: flat across the lane at the centerline
+  // y, rising smoothly into a noisy bank beyond it.
+  const crossY = (centerY: number, lat: number, wx: number, wz: number): number => {
+    const a = Math.abs(lat);
+    if (a <= LANE_HALF) return centerY;
+    const t = Math.min(1, (a - LANE_HALF) / (FLANK_HALF - LANE_HALF));
+    const smooth = t * t * (3 - 2 * t);
+    return centerY + (BERM_HEIGHT + flankRelief(wx, wz)) * smooth;
+  };
 
   for (const id of Object.keys(SEGMENT_PLACEMENTS)) {
     const seg = BRANCH_SEGMENTS[id];
     if (!seg) continue;
-    const onRoad = road.has(id);
-    // The corridor descends in world-Y (the real grade) AND curves in x/z, so its
-    // floor and walls are a ramped, bending strip. Each facet sits at its arc
-    // midpoint, tilted by the LOCAL grade pitch and turned onto the local heading.
-    const facets = Math.max(1, Math.ceil(seg.length / FACET));
-    for (let i = 0; i < facets; i++) {
-      const s0 = (i * seg.length) / facets;
-      const s1 = ((i + 1) * seg.length) / facets;
-      const mid = (s0 + s1) / 2;
-      const facetPitch = segmentPitch(id, mid);
-      const pitch = -facetPitch;
-      const depth = (s1 - s0) / Math.cos(facetPitch) + 0.1;
-      const c = segmentCenterline(id, mid);
-      const yaw = -c.heading;
-      // FLOOR facet — a descending ramp so there's real ground under the skier
-      // (the dressed snow is flat until the visuals seam lands). Road reads
-      // cool/gray, detour worlds read green.
-      addBox(
-        c.x,
-        c.y - 0.05,
-        c.z,
-        LATERAL_LIMIT * 2,
-        0.1,
-        depth,
-        onRoad ? 0x3c4654 : 0x365a3e,
-        pitch,
-        yaw,
-        false,
-      );
-      // Lane-edge walls down both sides, riding the same ramp and curve.
-      for (const side of [-1, 1]) {
-        const w = segmentToWorld(id, mid, side * LATERAL_LIMIT);
-        addBox(
-          w.x,
-          c.y + 0.6,
-          w.z,
-          0.4,
-          1.2,
-          depth,
-          onRoad ? 0x5a6a7a : 0x4a7a52,
-          pitch,
-          yaw,
-          false,
-        );
+    const isTerminal = seg.next === null;
+    const spanEnd = seg.length + (isTerminal ? RUNOUT : 0);
+    const rows = Math.max(2, Math.ceil(spanEnd / STEP_LONG) + 1);
+    const cols = COLS.length;
+
+    const positions = new Float32Array(rows * cols * 3);
+    for (let i = 0; i < rows; i++) {
+      const s = (i / (rows - 1)) * spanEnd;
+      const centerY = segmentCenterline(id, s).y;
+      for (let j = 0; j < cols; j++) {
+        const lat = COLS[j]!;
+        const w = segmentToWorld(id, s, lat);
+        const k = (i * cols + j) * 3;
+        positions[k] = w.x;
+        positions[k + 1] = crossY(centerY, lat, w.x, w.z);
+        positions[k + 2] = w.z;
       }
     }
-    // A colored entrance stripe — on the road these mark the reconvergence
-    // points (where a detour cuts back and both routes are the same clock).
-    const entrance = segmentCenterline(id, 0);
-    addBox(
-      entrance.x,
-      entrance.y + 0.05,
-      entrance.z,
-      LATERAL_LIMIT * 2,
-      0.1,
-      1,
-      onRoad ? 0x44506a : 0x6a9a72,
-      -segmentPitch(id, 0),
-      -entrance.heading,
-      false,
-    );
-    // The "world reaches out and grabs you" marker at each trigger volume: the
-    // great tree, the yeti's hole, the ledge shove — one tall box (kept upright)
-    // on the side the trigger's lateral window sits, standing on the grade.
-    if (seg.trigger) {
-      const t = seg.trigger;
-      const grab = segmentToWorld(id, t.at, (t.lateralMin + t.lateralMax) / 2);
-      const grabY = segmentCenterline(id, t.at).y;
-      addBox(grab.x, grabY + 2, grab.z, 2, 4, 2, 0x2f6b3a);
+
+    // Two triangles per grid cell, wound so the normals face up (+y).
+    const indices: number[] = [];
+    for (let i = 0; i < rows - 1; i++) {
+      for (let j = 0; j < cols - 1; j++) {
+        const a = i * cols + j;
+        const b = i * cols + j + 1;
+        const c = (i + 1) * cols + j;
+        const d = (i + 1) * cols + j + 1;
+        indices.push(a, b, c, b, d, c);
+      }
     }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshStandardMaterial({
+        color: road.has(id) ? 0xe4edf6 : 0xdbe8e0,
+        roughness: 1,
+      }),
+    );
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    handle.scene.add(mesh);
   }
 
-  // Start gate (the summit, up high) and a finish gate at every terminal segment
-  // (the routes reconverge at the flag — same clock and, since the grade, the
-  // same height y = 0, wherever the curved corridors land them in x/z). Turned
-  // onto each gate's local heading.
-  const start = segmentCenterline(BRANCH_START, 0);
-  addBox(
-    start.x,
-    start.y + 1.5,
-    start.z,
-    LATERAL_LIMIT * 2 + 2,
-    3,
-    0.5,
-    0x888888,
-    0,
-    -start.heading,
-  );
+  // The "world reaches out and grabs you" landmark at each fork trigger (the great
+  // tree, the yeti's hole, the ledge shove) — a boulder marking the spot on the
+  // side the lateral window sits, so the fork is findable. A rock, not a gray box.
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x6b6f76, roughness: 1 });
   for (const id of Object.keys(SEGMENT_PLACEMENTS)) {
     const seg = BRANCH_SEGMENTS[id];
-    if (!seg || seg.next !== null) continue;
-    const finish = segmentCenterline(id, seg.length);
-    addBox(
-      finish.x,
-      finish.y + 1.5,
-      finish.z,
-      LATERAL_LIMIT * 2 + 2,
-      3,
-      0.5,
-      0xffffff,
-      0,
-      -finish.heading,
-    );
+    if (!seg?.trigger) continue;
+    const t = seg.trigger;
+    const c = segmentCenterline(id, t.at);
+    const w = segmentToWorld(id, t.at, (t.lateralMin + t.lateralMax) / 2);
+    const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(3, 0), rockMat);
+    rock.position.set(w.x, c.y + 1.6, w.z);
+    rock.scale.set(1.1, 0.75, 1.1);
+    rock.rotation.set(0.3, w.x * 0.5, 0.2);
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+    handle.scene.add(rock);
   }
 }
 
