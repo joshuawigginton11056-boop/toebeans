@@ -152,6 +152,17 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       dressed for real (this is the run that becomes the game). A coordinated
       cross-session slice — the ride already works mechanically (proven by tests),
       what's missing is a real entry + real visuals:
+      - **(slope-mech) — real 3D grade ✅ landed (2026-07-24):** the branching map
+        drops for real now ("ride down a REAL mountain", director). `slopePath.ts`'s
+        `segmentCenterline` returns a `y` — the corridors descend from an elevated
+        summit (~115) to y=0 at the flag, a constant ~10° pitch keyed to route
+        distance so every route falls the same total height (same-clock → same
+        floor); the Overlook stays flat (no placement → y=0). The skier, camera,
+        hazards, and grayblock (now descending floor ramps + tilted walls) ride the
+        grade, and the environment `anchor` carries `anchor.y`. **Snow-follow is the
+        slope-vis half** (tilt the surface to the grade — folds into the main lift;
+        see IDEAS.md). 139 tests. Dev-only (`?branch=1`), so shipped play is
+        unchanged. Grade steepness is a live tuning knob (`SEGMENT_GRADE`).
       - **(slope-vis) — the main lift:** dress the summit + forest corridors. The
         grayblock map renders boxes only (`addBranchGrayblock`, mechanics-owned) and
         `skiScene.ts` draws along the *single* Overlook road, not per-segment — it

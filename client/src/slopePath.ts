@@ -26,12 +26,24 @@
 // rewrite. slopePath.test.ts pins both the straight identity and a sample
 // curved centerline (arc-length ≈ distance, heading matches the bends).
 
+import { routeDistanceOf, TOTAL_ROUTE_LENGTH } from "@toebeans/shared";
+
 /** A point on the centerline, in the same world axes the renderer uses. */
 export interface SlopePoint {
   /** World X of the centerline at this distance. */
   readonly x: number;
   /** World Z — downhill is −z, matching the old `-distance` mapping. */
   readonly z: number;
+  /**
+   * World Y of the ground at this point (slope-mech, 2026-07-24 — real grade).
+   * The Overlook stays a faked-flat plane at y = 0 (the whole road is 0), so
+   * nothing there moves. The BRANCHING map's segments descend for real: the run
+   * drops in 3D from an elevated summit to y ≈ 0 at the flag (see
+   * segmentCenterline / SEGMENT_GRADE below). The renderer places the skier,
+   * camera, hazards, and grayblock at this y, and passes it across the
+   * visuals seam as `anchor.y` so the snow surface can follow the grade.
+   */
+  readonly y: number;
   /**
    * Tangent yaw in radians: 0 = straight downhill (−z); positive bends the
    * road toward world +x. Straight today (always 0). The renderer turns the
@@ -136,6 +148,9 @@ export function centerlineAt(line: Centerline, distance: number): SlopePoint {
     return {
       x: xs[0]! + Math.sin(h0) * distance,
       z: zs[0]! - Math.cos(h0) * distance,
+      // The road (the Overlook) is faked-flat — grade lives only on the
+      // branching segments (segmentCenterline), never here.
+      y: 0,
       heading: h0,
     };
   }
@@ -149,6 +164,7 @@ export function centerlineAt(line: Centerline, distance: number): SlopePoint {
     return {
       x: xs[last]! + Math.sin(hl) * extra,
       z: zs[last]! - Math.cos(hl) * extra,
+      y: 0,
       heading: hl,
     };
   }
@@ -156,6 +172,7 @@ export function centerlineAt(line: Centerline, distance: number): SlopePoint {
   return {
     x: xs[i]! + (xs[i + 1]! - xs[i]!) * t,
     z: zs[i]! + (zs[i + 1]! - zs[i]!) * t,
+    y: 0,
     heading: headings[i]! + (headings[i + 1]! - headings[i]!) * t,
   };
 }
@@ -227,6 +244,53 @@ export interface SegmentPlacement {
   readonly heading: number;
 }
 
+// The branching map's grade (slope-mech, 2026-07-24 — "ride down a REAL mountain
+// into the forest", director call). The §4 map descends for real in world-Y: the
+// summit sits up high and the hill falls away beneath you all the way to the
+// flag. This is grade only for the BRANCHING map — the Overlook stays faked-flat
+// (its "main" segment has no placement, so segmentCenterline falls through to the
+// flat road above and nothing there moves).
+//
+// Height is keyed to ROUTE distance (route.ts's same-clock offset), not world z:
+//   y = SEGMENT_GRADE * (TOTAL_ROUTE_LENGTH − routeDistanceOf(segment, distance))
+// so the drop-per-unit-travelled is identical on every route and every fork
+// reconvergence sits at one height whichever way you reached it — "same clock,
+// same flag" extended to elevation (every route drops the SAME total height to
+// the flag), for free from the construction. The flag (routeDistance =
+// TOTAL_ROUTE_LENGTH) lands at y = 0; the summit (routeDistance 0) is highest, so
+// the whole run rides ABOVE the flat y = 0 snow plane — no sinking under it while
+// the visuals seam is still flat (see the seam note below).
+//
+// SEAM NOTE (slope-mech → slope-vis): the grayblock corridors this drives live in
+// skiRender.ts (mine) and ride the grade today. The DRESSED snow surface lives in
+// skiScene.ts (slope-vis) and is still a flat plane at y = 0 — it only follows the
+// anchor's z, ignoring anchor.y. The renderer now passes the real ground y as
+// `anchor.y`; slope-vis makes the snow surface sit + tilt to it (and the treeline/
+// trails/decor along with it) to dress the descent. Parked in IDEAS.md (slope-vis).
+//
+// Constant grade for now (one pitch the whole way) — a tuning knob; atan(0.18) ≈
+// 10°, dropping ~115 units over the 640-unit route. Per-segment grade (steeper up
+// top, leveling into the forest) can come later by making this a placement field.
+const SEGMENT_GRADE = 0.18;
+
+/** The slope's downhill pitch in radians (atan of the grade) — the renderer tilts
+ * the grayblock corridors and the skier rig to lie along it. */
+export const slopeGradePitch = Math.atan(SEGMENT_GRADE);
+
+/** The local downhill pitch on a segment: the grade pitch on a placed (branching)
+ * segment, 0 on the flat road / Overlook — so pitching the rig/scenery to the
+ * slope never tilts the un-graded Overlook. */
+export function segmentPitch(segmentId: string): number {
+  return SEGMENT_PLACEMENTS[segmentId] ? slopeGradePitch : 0;
+}
+
+/** The ground height of a placed (branching) segment at a segment-local distance;
+ * 0 for the flat road / Overlook ("main" has no placement). */
+function segmentGroundY(segmentId: string, distance: number): number {
+  if (!SEGMENT_PLACEMENTS[segmentId]) return 0;
+  return SEGMENT_GRADE * (TOTAL_ROUTE_LENGTH - routeDistanceOf(segmentId, distance));
+}
+
 export const SEGMENT_PLACEMENTS: Readonly<Record<string, SegmentPlacement>> = {
   // The spine, straight down −z at x=0 (each origin = the previous end):
   summit: { originX: 0, originZ: 0, heading: 0 }, // [0, −120]
@@ -253,6 +317,7 @@ export function segmentCenterline(segmentId: string, distance: number): SlopePoi
   return {
     x: p.originX + Math.sin(p.heading) * distance,
     z: p.originZ - Math.cos(p.heading) * distance,
+    y: segmentGroundY(segmentId, distance),
     heading: p.heading,
   };
 }

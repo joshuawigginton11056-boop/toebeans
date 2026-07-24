@@ -35,6 +35,26 @@ The cross-session split:
   auto-transition's trigger is now answered: **it rides the summit→forest
   descent.** Wire `setTimeOfDay` off route progress (`routeDistanceOf`, or the
   segment id: summit → dusk, forest → dark).
+- **(slope-mech ✅ landed / slope-vis TODO) The branching map has a REAL 3D grade
+  now — the snow surface must follow it.** Director call 2026-07-24 ("ride down a
+  REAL mountain into the forest"): `slopePath.ts`'s `segmentCenterline(id, d)` now
+  returns a `y` — the branching corridors descend for real (summit y≈115 → flag
+  y=0, a constant ~10° pitch keyed to route distance so every route drops the same
+  total height; `slopeGradePitch`/`segmentPitch(id)` export the pitch; the Overlook
+  stays y=0, untouched). `skiRender.ts` rides it end-to-end: the skier, camera,
+  hazards, and grayblock corridors (now descending floor ramps + tilted walls) all
+  sit at the real y, and the **environment `anchor` now carries `anchor.y = the
+  ground y`.** BUT the dressed snow surface in `skiScene.ts` still ignores
+  `anchor.y` — it recenters the flat plane on `anchor.z` only (line ~479,
+  `slope.position.z = centerZ`), so on the branching map the skier rides the
+  grayblock ramp while the real snow stays flat at y=0. **The slope-vis half: sit +
+  TILT the snow surface (and treeline/trails/decor) to the grade** — follow
+  `anchor.y` for height and pitch the surface by `slopeGradePitch` (import from
+  `slopePath.ts`), so the dressed descent lands under the skier. Do it with the
+  segment-aware surface rework above (same chunk). Until then the branching map's
+  snow is flat under a descending run — visible only under `?branch=1`, and the
+  Overlook is unaffected (its anchor.y stays 0). Grayblock ramp is the stand-in
+  ground meanwhile.
 - **(slope-mech) Real entry + grayblock cleanup.** Promote entry off the
   `?branch=1` dev flag into real play (the exact UX is lobby's — below); gate the
   debug readout (`branchDebug.ts`) and the grayblock markers (`addBranchGrayblock`)
