@@ -104,10 +104,15 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   fades in past dusk). **Director look-passed (2026-07-24):** keep the glowing
   props; **cut the fireflies** (too many colors, glued in front of the skier —
   realistic ones come from a CC0 pack later); and next: **stronger bloom**,
-  **darken the snow sparkle at night**, and **make the tree trunks glow**. Still
-  to do (verdict-ordered): bloom (strong), phase-aware snow-sparkle + glowing
-  trunks, real MegaKit glow props, realistic fireflies, moonlight *rays*, the
-  auto-transition, night audio. ⚠ amends the bible's "bright only" rule (DESIGN.md).
+  **darken the snow sparkle at night**, and **make the tree trunks glow**.
+  **Session 2 (slope-vis 2026-07-24):** snow sparkle now dims with the phase
+  (`sparkleGain`, done — awaiting look-pass); glowing pine trunks first pass
+  built then **sent back** — director wants the glow to **fade up the tree**
+  (bright base → dark canopy) and to **keep the bark detail visible** (driven by
+  a reference photo in a new session). Still to do (verdict-ordered): **trunk-glow
+  revision (ref photo)**, bloom (strong), general decor/spray darkening, real
+  MegaKit glow props, realistic fireflies, moonlight *rays*, the auto-transition,
+  night audio. ⚠ amends the bible's "bright only" rule (DESIGN.md).
 - **Loose snow:** ski-trail spray, screen flurries, and a lens splat of
   naturalistic snow-clump particles (director-approved).
 - **Camera:** free zoom, fixed angle, pointer-lock mouse look.
