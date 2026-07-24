@@ -488,16 +488,33 @@ parked in [IDEAS.md](IDEAS.md).
 
 ### Lighting & atmosphere
 
-> **⚠ Amended for the slope (director call, 2026-07-24 — the branching-map
+> **⚠ Amended for the slope (director calls, 2026-07-24 — the branching-map
 > "sun sets as we race" idea):** "the whole game is bright — dark moods are
-> out of scope" no longer holds unconditionally. The slope now has a
-> **moonlit night** end-state (built this session; see the ROADMAP entry) —
-> readable, never black, every night color a cool value-shift of an existing
-> palette entry, the cat's signal red left as the one warm thing in frame.
-> How far this amendment reaches (slope-only? game-wide? only certain map
-> branches?) is a **director-framing call not yet made** — so the "bright
-> only" rule below is left standing as written until the look-pass settles
-> it; this note is the flag that night now exists.
+> out of scope" no longer holds for the night slope. Direction, in two steps:
+>
+> - A first **moonlit night** end-state was built (a `timeOfDay` phase; see
+>   the ROADMAP entry) — but the director's look-pass called it **too bright
+>   and too evenly lit.**
+> - **The real target is an *enchanted forest at night* (director redirect,
+>   2026-07-24):** the forest is **extremely dark**, with only **a few rays of
+>   moonlight** breaking through the canopy, and it is **lit by glowing assets**
+>   — emissive props (mushrooms, crystals, luminous plants, fireflies/spores,
+>   maybe lanterns) that pool light on the snow — so the light sources are
+>   *objects in the world*, not a sky fill. Dark moods are now explicitly in
+>   scope for night. This brings **new art vocabulary the daylight bible never
+>   had**: emissive/glow materials, bloom, and probably a small **glow palette**
+>   (cool bioluminescent hues, added by director call the way the character
+>   ramps were carved out separately from the landscape 12). Signal red stays
+>   reserved; the cat's scarf must still read as the one red thing. Gameplay
+>   caveat: the glow assets have to carry **lane readability** in the dark, so
+>   their placement is a design concern, not just decor.
+>
+> This is the next slope-vis session's build. How far the amendment reaches
+> (slope-only? game-wide? only certain map branches?) is a **director-framing
+> call not yet made** — so the "bright only" rule below is left standing as
+> written and folds into the bible's pending rewrite. Full plan + the open
+> sub-decisions (sourcing, the glow ramp, bloom, moonlight-ray technique) are
+> in [IDEAS.md](IDEAS.md) under the enchanted-forest entry.
 
 - **One sun, bright and high-key.** A single directional light, sun low
   enough to throw long readable shadows. The whole game is bright — dark

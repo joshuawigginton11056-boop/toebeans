@@ -55,11 +55,12 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 - **Realism snow:** procedural displaced surface + GPU-carved ski trails.
 - **Lighting/haze:** warm sun, palette-exact blue shadows, dawn-pink fog, sun disc.
   Now on a **`timeOfDay` phase** (`skiScene.ts`): 0 = that dawn (a verified no-op),
-  1 = a **moonlit night** (branching-map "sun sets as we race" idea, director
-  2026-07-24) — cool dimmed lights solved onto palette-family snow (#8FA0BE lit /
-  #3F4D70 shadow), moon disc, navy sky, fade-in stars. Debug key **N** cycles
-  dawn→dusk→night for the look-pass; auto-transition not wired yet. ⚠ amends the
-  bible's "bright only" rule (DESIGN.md note).
+  1 = night, cycled by the debug key **N**. A first **moonlit night** was built
+  (branching-map "sun sets as we race" idea, director 2026-07-24) but the
+  look-pass called it **too bright / too evenly lit** → **redirected to an
+  *enchanted forest*: extremely dark, a few moonlight rays, lit by glowing
+  emissive assets** (next slope-vis session — plan in IDEAS.md). Auto-transition
+  not wired yet. ⚠ amends the bible's "bright only" rule (DESIGN.md note).
 - **Loose snow:** ski-trail spray, screen flurries, and a lens splat of
   naturalistic snow-clump particles (director-approved).
 - **Camera:** free zoom, fixed angle, pointer-lock mouse look.
@@ -109,10 +110,13 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       joint slope-mech + slope-vis flip, once visuals draw against the centerline.
 - [ ] **"The actual map"** beyond the onboarding run — next slope-mechanics
       session; scope pinned at that session's start (unscoped on purpose).
-- [ ] **Night: sun sets *as you race*.** The night end-state look is built (see
-      Ski slope); the auto-transition trigger is a director call (linear distance?
-      which map branch?), plus a designed dusk/golden-hour midpoint and night
-      decor/audio/lobby. IDEAS.md (slope-vis) has the full list.
+- [ ] **Night → the enchanted forest (director redirect 2026-07-24).** First
+      moonlit night was too bright; new target is an *extremely dark* forest with
+      a few moonlight rays, lit by **glowing emissive assets** (mushrooms/crystals/
+      fireflies) — needs a glow palette + bloom + sourcing calls. Then the "sun
+      sets *as you race*" auto-transition (trigger is a director call — distance?
+      which map branch?), a designed dusk midpoint, and night audio/lobby. Full
+      plan in IDEAS.md (slope-vis).
 - [ ] **Music:** timed per-slope songs à la Geometry Dash (tense before big jumps)
       — deliberately the **last** M2 item.
 - [ ] **End-of-M2 tuning pass:** the parked picky visual tweaks + carve-hiss volume,

@@ -3,44 +3,87 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (slope-vis) Night follow-ups — from the "sun sets as we race" night look (2026-07-24)
+## (slope-vis) NIGHT → the enchanted forest — director redirect (2026-07-24)
 
-The night time-of-day landed (see the ROADMAP entry): a `timeOfDay` phase in
-`skiScene.ts` lerps dawn ⇄ moonlit night (sky, fog, moon disc, cool dimmed
-lighting solved onto palette-family snow targets, a fade-in starfield), driven
-today by a debug key (`N`) for the director's look-pass. Open threads, all
-slope-vis unless noted:
+**Redirect after the first night look-pass (director, 2026-07-24):** the
+moonlit night I built is **too bright and too evenly lit**. The new target:
 
-- **The auto-transition — "the sun sets *as you race*."** This is the actual
-  branching-map ask; only the *end-state look* is built. Wiring is easy on the
-  visuals side (run progress is derivable from the anchor — `-anchor.z` while
-  straight, or add a tiny additive `distance` seam field for robustness under
-  the curve), but the **trigger is a director call**: linear distance down the
-  run? tied to *which branch* of the branching map you take (so a branch can be
-  "the night branch")? a fixed wall-clock over the run? Don't guess — pin it
-  with the director, then drive `setTimeOfDay` from it in `syncEnvironment`.
-- **A designed dusk / golden hour.** The mid-phase (t≈0.5) is a plain day→night
-  colour lerp — a passable dusky twilight, but not a *designed* fiery sunset
-  (a real golden hour peaks warm-orange, which a straight lerp between dawn-pink
-  and night-blue skips). If the director wants the sunset itself to be a moment,
-  add a third warm endpoint and make the phase a 3-stop ramp (dawn → sunset →
-  night) instead of a 2-endpoint lerp.
-- **Decor / trees / spray under moonlight.** The frosted-green pines, rocks, and
-  the snow spray/flurries all still render as if lit at dawn (their materials
-  don't read the phase). At full night they'll look a touch bright against the
-  dimmed ground. If it reads wrong in the look-pass: tint the decor toward the
-  night ambient with the phase, and cool the spray's two-tone toward the moon.
-- **Night audio (`audio.ts`).** Nothing changes on the ear at night. A colder
-  wind bed, a sparser ambience, maybe a distant owl — cheap mood once the visual
-  lands and the transition trigger is known (so audio can ride the same phase).
+> **Night should be much darker. The forest should be *extremely dark*, with
+> only a few rays of moonlight breaking through. We light it with *glowing
+> assets* that make the forest look *enchanted*.**
+
+So night stops being "the same scene, dimmed and cooled" and becomes its own
+mood: a near-black enchanted forest where **the light sources are objects in
+the world** — glowing props — not a moon fill. This is the plan for the **next
+slope-vis session**; the current build is the starting baseline to darken.
+
+**What's already there to build on** (this session, see ROADMAP): a `timeOfDay`
+phase in `skiScene.ts` lerps dawn → night across every atmosphere param
+(ambient, directional light, fog, sky dome, the sun/moon disc, a star field),
+cycled by the debug key **N**. The knobs to push are the `NIGHT` constants +
+the `nightAtmosphere` endpoint. What the redirect changes:
+
+- **Crush the ambient + moon fill toward black.** The night snow targets
+  (#8FA0BE lit / #3F4D70 shadow) are far too luminous — the *whole point* is
+  that the open snow reads dark and you only see clearly where a glow pool
+  falls. Drop the ambient hard; the ground away from a light source should be
+  deep, near-black cool blue. (Watch the floor: too dark and the run is
+  unreadable — the glowing assets have to carry lane readability, so their
+  placement is a gameplay concern, not just decor. Call this out at build.)
+- **Moonlight = a few *rays*, not a wash.** "A few rays breaking through" is
+  discrete light shafts through the canopy — god-ray cones / volumetric-ish
+  beams hitting the snow in bright patches, dark everywhere between — not the
+  even directional light we have now. Options to weigh next session: cheap
+  faked light-shaft cones (additive cones/quads angled from the canopy gaps),
+  a real volumetric pass, or a handful of tight spot-lights masked to look like
+  beams. The current single directional moon likely stays only as a very faint
+  key so silhouettes don't vanish.
+- **Glowing assets are the new lighting model — the big piece.** Emissive props
+  scattered in the forest that actually cast light: think enchanted-forest
+  vocabulary — glowing mushrooms, luminous plants/flowers, crystals, floating
+  spores / fireflies, maybe lanterns. Each = an emissive material (reads as
+  "lit" regardless of scene light) + a real light (point light, or a cheaper
+  faked glow pool on the snow) so it pools light on the ground around it.
+  **Bloom** almost certainly wanted here — emissive without bloom won't feel
+  "glowing"; that's a post-processing add (EffectComposer / UnrealBloomPass),
+  a first for this renderer, so budget for it. Sub-decisions for the session:
+  - *Sourcing* (per the bible checklist): do the glow props come from a CC0
+    pack (Quaternius/Kenney have mushrooms/crystals/plants), or are the
+    existing frosted-green pines/rocks re-lit and a few new glow props added?
+    Ask the director's download preference first, per the download rule.
+  - *A glow palette.* The 13-color palette is all daylight and has no emissive
+    hues. Enchanted glow probably needs its **own small ramp** (cool bioluminescent
+    teals/greens/violets — maybe a warm lantern amber), added by director call
+    the way the character ramps were carved out separately from the landscape 12.
+    Signal red stays reserved; glow must not fight the cat's scarf.
+  - *Firefly / spore motes* — drifting emissive points (the star field code is a
+    near-template) sell "enchanted" cheaply and double as ambient sparkle.
+- **Decor / spray / audio still ride the phase.** The pines/rocks and the snow
+  spray currently render as if lit at dawn regardless of `timeOfDay`; in a
+  near-black forest that breaks completely — their materials must darken with
+  the phase (and pick up the glow-pool light). Night audio (`audio.ts`) wants
+  its own enchanted-forest bed (sparse, magical — chimes/hush over the cold
+  wind) once the look lands.
+
+**Still open from the first pass (unchanged by the redirect):**
+
+- **The auto-transition — "the sun sets *as you race*."** Only the end-state is
+  built. Wiring is easy on the visuals side (run progress derivable from the
+  anchor — `-anchor.z` while straight, or a tiny additive `distance` seam
+  field), but the **trigger is a director call**: linear distance? tied to
+  *which branch* of the branching map (a branch can be "the night branch")? Pin
+  it, then drive `setTimeOfDay` from `syncEnvironment`.
+- **A designed dusk / golden hour.** The mid-phase is a plain lerp, not a
+  designed warm sunset. If the sunset should be its own moment, add a third warm
+  endpoint (dawn → sunset → night 3-stop ramp).
 - **The lobby vignette's own night.** The lobby (`lobbyRender.ts`, lobby
-  session) has its own dawn sky/light and can't see `skiScene`'s phase. If the
-  director wants the menu to also turn to night, that's a lobby-session port of
-  the same idea — tagged there, not here.
-- **Bible amendment.** The Art Style Bible's "the whole game is bright — dark
-  moods are out of scope" is now in tension (DESIGN.md carries a ⚠ pointer). The
-  full rewrite is a director-framing call (slope-only vs game-wide) — folds into
-  the bible's already-pending shape-language/sourcing rewrite.
+  session) has its own dawn sky and can't see `skiScene`'s phase — a
+  lobby-session port if the menu should turn enchanted too.
+- **Bible amendment.** With the enchanted-dark direction, the bible's "the whole
+  game is bright — dark moods are out of scope" is firmly amended for the night
+  slope, and glow/emissive + a glow palette are new art vocabulary. DESIGN.md
+  carries the ⚠ pointer; the framing (slope-only vs game-wide) and the glow
+  ramp fold into the bible's pending rewrite.
 
 ## (slope-vis) Adopt the road centerline so the curve can turn on (2026-07-24)
 
