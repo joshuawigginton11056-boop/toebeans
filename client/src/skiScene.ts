@@ -203,6 +203,13 @@ let activeScene: THREE.Scene | null = null;
 let dayAtmosphere: Atmosphere | null = null;
 let nightAtmosphere: Atmosphere | null = null;
 let timeOfDay = 0; // persists across runs; re-asserted when the env rebuilds
+// The snow shader's glitter gain (slope-vis verdict #2): 1 by day, faded to
+// NIGHT_SPARKLE_GAIN at full night so the twinkle stops fighting the dark.
+// Held here because the uniform lives inside the material's compile closure.
+let snowSparkleGain: { value: number } | null = null;
+// How much of the daytime glitter survives at full night. Not zero — a faint
+// moonlit shimmer keeps the snow from reading as dead matte.
+const NIGHT_SPARKLE_GAIN = 0.12;
 // How "on" the enchanted glow is (0 by day, 1 at full night). Ramps in only
 // past dusk — glowing mushrooms at golden hour would look wrong — so glow is a
 // gated remap of timeOfDay, not the phase itself. Read by the GLOW updates.
@@ -253,6 +260,11 @@ function applyTimeOfDay(t: number): void {
   const starMat = env.stars.material as THREE.PointsMaterial;
   starMat.opacity = d.stars + (n.stars - d.stars) * k;
   env.stars.visible = starMat.opacity > 0.001;
+
+  // Snow glitter dims as the light goes (slope-vis verdict #2) — tracks the
+  // whole dawn→night fade, not the dusk-gated glow, since it's the sun's
+  // specular twinkle that's leaving.
+  if (snowSparkleGain) snowSparkleGain.value = 1 - (1 - NIGHT_SPARKLE_GAIN) * k;
 
   // Enchanted glow ramps in only past dusk (GLOW_ONSET), full by night.
   glowFactor = Math.min(1, Math.max(0, (k - GLOW_ONSET) / (1 - GLOW_ONSET)));
@@ -1077,6 +1089,13 @@ function createSnowMaterial(
     shader.uniforms.grainMap = { value: snow.grain };
     shader.uniforms.carveMap = { value: carveTexture };
     shader.uniforms.sunDir = { value: SUN_DIRECTION.clone() };
+    // slope-vis (verdict #2, 2026-07-24): the glitter below is a light-
+    // independent additive flash, so it stayed just as bright once the scene
+    // went near-black — the director's "snow sparkle too bright at night".
+    // A phase gain fades it out with the night; driven from applyTimeOfDay.
+    const sparkleGain = { value: 1 };
+    shader.uniforms.sparkleGain = sparkleGain;
+    snowSparkleGain = sparkleGain;
     shader.vertexShader =
       SNOW_HEIGHT_GLSL +
       "varying vec3 vSnowWorld;\n" +
@@ -1089,7 +1108,7 @@ vSnowWorld = vec3(snowW.x, snowW.y + snowH, snowW.z);`,
     shader.fragmentShader =
       SNOW_HEIGHT_GLSL +
       SNOW_NORMAL_GLSL +
-      "varying vec3 vSnowWorld;\nuniform vec3 sunDir;\n" +
+      "varying vec3 vSnowWorld;\nuniform vec3 sunDir;\nuniform float sparkleGain;\n" +
       shader.fragmentShader
         .replace(
           "#include <color_fragment>",
@@ -1134,7 +1153,8 @@ normal = normalize((viewMatrix * vec4(snowNormal(vSnowWorld.xz), 0.0)).xyz);`,
   float fade = 1.0 - smoothstep(16.0, 45.0, length(cameraPosition - vSnowWorld));
   float crust = 1.0 - 0.7 * snowCarveCore(snowCarve(vSnowWorld.xz));
   // Sun-glow tinted (#FFF4DA) — the bible's brightest value.
-  reflectedLight.directSpecular += vec3(1.0, 0.957, 0.855) * (flash * gate * fade * crust * 1.6);
+  // sparkleGain fades the twinkle out at night (slope-vis verdict #2).
+  reflectedLight.directSpecular += vec3(1.0, 0.957, 0.855) * (flash * gate * fade * crust * 1.6 * sparkleGain);
 }`,
         );
   };
@@ -2370,6 +2390,7 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
   const loader = new GLTFLoader();
   const names = Object.values(DECOR_MODELS).flat();
   const templates = new Map<string, THREE.Group>();
+  pineTrunkMaterials = []; // re-collected below; reset in case decor reloads
   try {
     await Promise.all(
       names.map(async (name) => {
@@ -2386,6 +2407,12 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
         // patch the template once — every scattered clone() shares the
         // patched materials, so the whole slope pays for one material set.
         applyPaintedDetail(gltf.scene);
+        // slope-vis (verdict #3): grab the pines' trunk materials so the
+        // night phase can light them. Scatter clones share the template's
+        // materials, so ramping these lights every trunk on the slope.
+        if (DECOR_MODELS.pines.includes(name as never)) {
+          collectPineTrunkMaterials(gltf.scene);
+        }
         templates.set(name, gltf.scene);
       }),
     );
@@ -2396,6 +2423,11 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
   }
 
   decorState = { scene, templates, placed: new Map() };
+
+  // Decor loads async — if the phase was already night when it landed (a
+  // persisted phase, or the director hit N before the trees loaded), light the
+  // freshly-collected trunks now instead of waiting for the next phase change.
+  if (activeEnvironment) applyGlowPhase(activeEnvironment, glowFactor);
 }
 
 // The scatter is a recycling window, like the snowfield (found 2026-07-23:
@@ -2574,6 +2606,17 @@ const GLOW_ONSET = 0.55;
 const GLOW_EMISSIVE = 2.2;
 // Peak opacity of a prop's additive snow pool at full night.
 const POOL_ALPHA = 0.55;
+
+// Glowing tree trunks (slope-vis verdict #3, 2026-07-24; the glow ramp already
+// names them, DESIGN.md). The frosted-green pines' bark glows a cool cyan at
+// night — the enchanted magic living in the wood. Native emissive on the
+// existing PineBark material (no shader surgery — painted detail only touches
+// diffuseColor), collected at decor load and ramped by applyGlowPhase.
+const TRUNK_GLOW = GLOW.cyan; // G1, the base cool glow
+// Kept well below the mushroom caps' 2.2: a trunk is a huge surface, so a
+// little emissive reads as plenty of glow and won't blow out once bloom lands.
+const TRUNK_EMISSIVE = 0.9;
+let pineTrunkMaterials: THREE.MeshStandardMaterial[] = [];
 
 // A soft round dot (radial white → transparent) — stretched flat, the shape of
 // a glow pool on the snow. Generated once, tinted per use by the material's color.
@@ -2763,8 +2806,13 @@ function updateGlowField(field: GlowField, anchorZ: number): void {
 function applyGlowPhase(env: SlopeEnvironment, factor: number): void {
   const on = factor > 0.01;
   env.glow.group.visible = on;
+  const ease = on ? factor * factor : 0; // slow start so glow blooms late
+  // Glowing pine trunks (verdict #3) ride the same dusk-gated fade. Unlike the
+  // caps/pools (parked in the hidden glow group by day), the trunks live on the
+  // decor scatter and always render — so their emissive MUST fall back to 0
+  // when off, or they'd glow in daylight too.
+  for (const trunk of pineTrunkMaterials) trunk.emissiveIntensity = TRUNK_EMISSIVE * ease;
   if (!on) return;
-  const ease = factor * factor; // slow start so glow blooms late in the fade
   for (const cap of glowCapMaterials) cap.emissiveIntensity = GLOW_EMISSIVE * ease;
   for (const pool of glowPoolMaterials) pool.opacity = POOL_ALPHA * ease;
 }
@@ -2994,5 +3042,27 @@ function applyPaintedDetail(object: THREE.Object3D): void {
       return clone;
     });
     child.material = Array.isArray(child.material) ? patched : patched[0]!;
+  });
+}
+
+// slope-vis (verdict #3, 2026-07-24): find the PineBark trunk materials on a
+// painted pine template and prime them to glow. The emissive *color* is set
+// once here (changing it later would recompile); applyGlowPhase only ramps the
+// intensity, which is free. MeshStandardMaterial always carries an emissive
+// term, and painted detail only rewrites diffuseColor, so the two compose.
+function collectPineTrunkMaterials(object: THREE.Object3D): void {
+  const glow = new THREE.Color(TRUNK_GLOW);
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const materials = Array.isArray(child.material)
+      ? child.material
+      : [child.material];
+    for (const material of materials) {
+      if (!(material instanceof THREE.MeshStandardMaterial)) continue;
+      if (material.name.replace(/\.\d+$/, "") !== "PineBark") continue;
+      material.emissive.copy(glow);
+      material.emissiveIntensity = 0; // dark by day; applyGlowPhase brings it up
+      pineTrunkMaterials.push(material);
+    }
   });
 }

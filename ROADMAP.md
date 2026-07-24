@@ -189,10 +189,17 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       **Director look-pass verdict (2026-07-24):** keep the props; **fireflies cut**
       (rainbow + glued to the skier — realistic ones from a CC0 pack later);
       **bloom must be stronger**, **snow sparkle too bright at night**, **tree
-      trunks need to glow**. Still open, verdict-ordered: **bloom (strong)**,
-      **phase-aware snow-sparkle + glowing trunks**, **real MegaKit glow props**,
-      **realistic fireflies (CC0)**, **moonlight rays**, a designed dusk midpoint,
-      night audio/lobby. **The auto-transition trigger is answered** (director,
+      trunks need to glow**. **Session 2 (slope-vis 2026-07-24):** (3) **snow
+      sparkle now dims with the night phase** (`sparkleGain` uniform → `NIGHT_SPARKLE_GAIN`
+      floor) — done, awaiting look-pass; (4) **glowing pine trunks — first pass
+      built then SENT BACK:** the emissive lit the whole trunk evenly; director
+      wants it to **fade out up the tree** (bright base → dark canopy) and to
+      **keep the painted bark detail visible** under the glow. Josh is opening a
+      new session with a **reference photo** to drive the trunk-glow revision —
+      that's the next chunk. Still open, verdict-ordered: **trunk-glow revision
+      (ref photo)**, **bloom (strong)**, general decor/spray darkening, **real
+      MegaKit glow props**, **realistic fireflies (CC0)**, **moonlight rays**, a
+      designed dusk midpoint, night audio/lobby. **The auto-transition trigger is answered** (director,
       2026-07-24): the enchanted forest *is* the branching map's forest segment, so
       the sunset→dark transition rides the **summit→forest descent** — folds into
       the "play the summit → forest ride" slice above.
