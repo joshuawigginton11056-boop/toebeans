@@ -167,8 +167,7 @@ export interface SlopeEnvironment {
   readonly stars: THREE.Points; // fade in with night
   readonly slope: THREE.Mesh;
   readonly trail: SnowTrail;
-  // Enchanted-night lighting (fade in with the night phase; see GLOW section).
-  readonly fireflies: Fireflies; // drifting emissive motes
+  // Enchanted-night lighting (fades in with the night phase; see GLOW section).
   readonly glow: GlowField; // scattered glowing props + their snow pools
 }
 
@@ -378,11 +377,8 @@ export function createEnvironment(
   // to find its DOM parent and to mirror its visibility).
   createLensSplash(renderer);
 
-  // Enchanted-night lighting: the drifting firefly cloud and the glowing-prop
-  // field. Both start fully faded out (day) — applyTimeOfDay/applyGlowPhase
-  // bring them in with the night phase.
-  const fireflies = createFireflies();
-  scene.add(fireflies.points);
+  // Enchanted-night lighting: the glowing-prop field. Starts fully faded out
+  // (day) — applyTimeOfDay/applyGlowPhase brings it in with the night phase.
   const glow = createGlowField();
   scene.add(glow.group);
 
@@ -394,7 +390,6 @@ export function createEnvironment(
     stars,
     slope,
     trail,
-    fireflies,
     glow,
   };
 
@@ -485,10 +480,9 @@ export function syncEnvironment(
   // The decor scatter is a recycling window that follows the run — see
   // updateSlopeDecor below.
   updateSlopeDecor(anchor.z);
-  // Enchanted-night glow rides the same anchor: the firefly cloud drifts
-  // around the skier and the glowing props recycle along the run. Both no-op
-  // cheaply when glowFactor is 0 (daytime), so this stays free by day.
-  updateFireflies(environment.fireflies, anchor, camera);
+  // Enchanted-night glow rides the same anchor: the glowing props recycle
+  // along the run. No-ops cheaply when glowFactor is 0 (daytime), so this
+  // stays free by day.
   updateGlowField(environment.glow, anchor.z);
   environment.skyDome.position.copy(camera.position);
   environment.stars.position.copy(camera.position);
@@ -2549,18 +2543,19 @@ function updateSlopeDecor(anchorZ: number): void {
 const EMPTY_CELL = new THREE.Object3D();
 
 // ---------------------------------------------------------------------------
-// ENCHANTED NIGHT — glowing props + fireflies (slope-vis 2026-07-24)
+// ENCHANTED NIGHT — glowing props (slope-vis 2026-07-24)
 //
 // The night's lighting model (DESIGN.md Lighting amendment + the IDEAS.md
 // night entry, director redirect 2026-07-24): the forest is extremely dark and
 // lit by *objects in the world* — emissive glow props that pool light on the
 // snow — not a moon fill. This chunk builds that first layer: code-built
 // glowing mushroom clusters (real MegaKit props swap in a later chunk) with
-// faked additive snow pools, plus a drifting cloud of firefly/spore motes.
-// Everything fades in with the night phase (glowFactor, set in applyTimeOfDay)
-// and renders as pure emissive, so it reads "lit" regardless of the near-black
-// scene light. Bloom — the halo that makes emissive actually *glow* — is the
-// next chunk (a small render-seam add in skiRender.ts).
+// faked additive snow pools. It fades in with the night phase (glowFactor, set
+// in applyTimeOfDay) and renders as pure emissive, so it reads "lit" regardless
+// of the near-black scene light. Bloom — the halo that makes emissive actually
+// *glow* — is the next chunk (a small render-seam add in skiRender.ts).
+// (A code-built firefly cloud was here too but was cut on the director's look —
+// realistic fireflies come from a CC0 pack later; see the IDEAS.md night entry.)
 //
 // Glow hues are their own ramp, carved out of the daylight 13 the way the
 // character ramps were (director sign-off 2026-07-24). Signal red stays
@@ -2579,12 +2574,9 @@ const GLOW_ONSET = 0.55;
 const GLOW_EMISSIVE = 2.2;
 // Peak opacity of a prop's additive snow pool at full night.
 const POOL_ALPHA = 0.55;
-// Peak opacity of a firefly mote at full night.
-const FIREFLY_ALPHA = 0.9;
 
-// A soft round dot (radial white → transparent) — the firefly sprite and,
-// stretched flat, the shape of a glow pool on the snow. Generated once, tinted
-// per use by the material's color.
+// A soft round dot (radial white → transparent) — stretched flat, the shape of
+// a glow pool on the snow. Generated once, tinted per use by the material's color.
 function makeGlowSprite(falloff: number): THREE.CanvasTexture {
   const size = 64;
   const canvas = document.createElement("canvas");
@@ -2761,108 +2753,9 @@ function updateGlowField(field: GlowField, anchorZ: number): void {
   }
 }
 
-interface Fireflies {
-  readonly points: THREE.Points;
-  readonly slotX: Float32Array; // resting offset from the anchor, lateral
-  readonly slotY: Float32Array; // resting height
-  readonly slotZ: Float32Array; // resting offset ahead(−)/behind(+) the anchor
-  readonly phase: Float32Array; // per-mote drift phase
-  readonly swaySpeed: Float32Array;
-}
-
-// A drifting swarm of emissive motes that hovers around the skier at night —
-// fireflies/spores, the cheap "enchanted" tell (director ask 2026-07-24). Built
-// off the star-field template: a Points cloud with a soft additive sprite, but
-// world-placed near the lane and animated each frame with a gentle bob/sway.
-const FIREFLY_COUNT = 90;
-const FIREFLY_HALF_X = 16; // spread across the lane and a bit past the edges
-const FIREFLY_AHEAD = 42; // reach downhill of the skier
-const FIREFLY_BEHIND = 8;
-
-function createFireflies(): Fireflies {
-  const positions = new Float32Array(FIREFLY_COUNT * 3);
-  const colors = new Float32Array(FIREFLY_COUNT * 3);
-  const slotX = new Float32Array(FIREFLY_COUNT);
-  const slotY = new Float32Array(FIREFLY_COUNT);
-  const slotZ = new Float32Array(FIREFLY_COUNT);
-  const phase = new Float32Array(FIREFLY_COUNT);
-  const swaySpeed = new Float32Array(FIREFLY_COUNT);
-  // Seeded scatter, matching the file's no-Math.random convention.
-  let seed = 0xf1e5;
-  const rand = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 0xffffffff;
-  };
-  // Mostly cool motes (cyan/moss), a scattering of warm amber and a few violet
-  // — the swarm carries the whole glow ramp so it ties to the props.
-  const paletteWeights: Array<readonly [number, number]> = [
-    [GLOW.cyan, 0.42],
-    [GLOW.moss, 0.34],
-    [GLOW.amber, 0.16],
-    [GLOW.violet, 0.08],
-  ];
-  const tmp = new THREE.Color();
-  for (let i = 0; i < FIREFLY_COUNT; i++) {
-    slotX[i] = (rand() * 2 - 1) * FIREFLY_HALF_X;
-    slotY[i] = 0.4 + rand() * 4.5;
-    slotZ[i] = -rand() * FIREFLY_AHEAD + FIREFLY_BEHIND * (rand() - 0.5);
-    phase[i] = rand() * Math.PI * 2;
-    swaySpeed[i] = 0.4 + rand() * 0.8;
-    let roll = rand();
-    let hue: number = GLOW.cyan;
-    for (const [h, w] of paletteWeights) {
-      if (roll < w) {
-        hue = h;
-        break;
-      }
-      roll -= w;
-    }
-    tmp.set(hue);
-    colors[i * 3] = tmp.r;
-    colors[i * 3 + 1] = tmp.g;
-    colors[i * 3 + 2] = tmp.b;
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  const material = new THREE.PointsMaterial({
-    map: makeGlowSprite(0.5),
-    size: 0.55,
-    sizeAttenuation: true,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    fog: true,
-  });
-  const points = new THREE.Points(geometry, material);
-  points.visible = false;
-  points.frustumCulled = false; // it re-centers on the skier every frame
-  return { points, slotX, slotY, slotZ, phase, swaySpeed };
-}
-
-function updateFireflies(
-  fireflies: Fireflies,
-  anchor: THREE.Vector3,
-  _camera: THREE.Camera,
-): void {
-  if (!fireflies.points.visible) return; // off by day — skip the animation
-  const t = performance.now() * 0.001;
-  const geometry = fireflies.points.geometry;
-  const attr = geometry.getAttribute("position") as THREE.BufferAttribute;
-  const pos = attr.array as Float32Array;
-  for (let i = 0; i < FIREFLY_COUNT; i++) {
-    const p = fireflies.phase[i]!;
-    const s = fireflies.swaySpeed[i]!;
-    const sway = Math.sin(t * s + p) * 1.1;
-    const bob = Math.sin(t * s * 0.7 + p * 1.7) * 0.5;
-    pos[i * 3] = anchor.x + fireflies.slotX[i]! + sway;
-    pos[i * 3 + 1] = fireflies.slotY[i]! + bob;
-    pos[i * 3 + 2] = anchor.z + fireflies.slotZ[i]! + Math.cos(t * s + p) * 1.1;
-  }
-  attr.needsUpdate = true;
-}
+// NOTE (director, 2026-07-24): the code-built firefly mote cloud was removed —
+// too many colors and glued in front of the skier. Realistic fireflies come
+// from a CC0 pack in a later chunk (see IDEAS.md night entry).
 
 // Bring the whole enchanted layer in/out with the night phase. Called from
 // applyTimeOfDay whenever the phase moves; scales the shared materials so one
@@ -2870,13 +2763,10 @@ function updateFireflies(
 function applyGlowPhase(env: SlopeEnvironment, factor: number): void {
   const on = factor > 0.01;
   env.glow.group.visible = on;
-  env.fireflies.points.visible = on;
   if (!on) return;
   const ease = factor * factor; // slow start so glow blooms late in the fade
   for (const cap of glowCapMaterials) cap.emissiveIntensity = GLOW_EMISSIVE * ease;
   for (const pool of glowPoolMaterials) pool.opacity = POOL_ALPHA * ease;
-  (env.fireflies.points.material as THREE.PointsMaterial).opacity =
-    FIREFLY_ALPHA * ease;
 }
 
 // ---------------------------------------------------------------------------

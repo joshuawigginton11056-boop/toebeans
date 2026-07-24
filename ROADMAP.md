@@ -87,12 +87,14 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   faint down-lane key so the lit lane (`#4E608A`) still reads until the glow
   assets carry lane light. (2) **the glowing-forest first layer** — the glow
   ramp (G1–G4, DESIGN.md) + code-built emissive mushroom clusters with faked
-  additive snow pools scattered along both treelines + a drifting firefly/spore
-  mote cloud, all night-gated (`glowFactor`, fades in past dusk). Real MegaKit
-  props swap in next; **bloom** (the halo that makes emissive read as *glowing*)
-  is the next chunk — a small render-seam add in `skiRender.ts`. Still to do:
-  bloom, real glow props, moonlight *rays*, phase-aware decor/spray/audio, the
-  auto-transition. ⚠ amends the bible's "bright only" rule (DESIGN.md note).
+  additive snow pools scattered along both treelines, night-gated (`glowFactor`,
+  fades in past dusk). **Director look-passed (2026-07-24):** keep the glowing
+  props; **cut the fireflies** (too many colors, glued in front of the skier —
+  realistic ones come from a CC0 pack later); and next: **stronger bloom**,
+  **darken the snow sparkle at night**, and **make the tree trunks glow**. Still
+  to do (verdict-ordered): bloom (strong), phase-aware snow-sparkle + glowing
+  trunks, real MegaKit glow props, realistic fireflies, moonlight *rays*, the
+  auto-transition, night audio. ⚠ amends the bible's "bright only" rule (DESIGN.md).
 - **Loose snow:** ski-trail spray, screen flurries, and a lens splat of
   naturalistic snow-clump particles (director-approved).
 - **Camera:** free zoom, fixed angle, pointer-lock mouse look.
@@ -183,15 +185,17 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       — `NIGHT` ambient/sky crushed toward near-black, faint moon key kept for lane
       readability; (2) the **glow ramp signed off** (G1–G4, DESIGN.md) and the
       **glowing-forest first layer** — code-built emissive mushroom clusters +
-      additive snow pools + a firefly/spore mote cloud, night-gated. Sourcing call
-      made (MegaKit mushrooms/plants, CC0). Still open, in order: **bloom** (render-
-      seam add, makes emissive actually glow), **real MegaKit glow props** (swap the
-      code-built ones), **moonlight rays**, **phase-aware decor/spray darkening**, a
-      designed dusk midpoint, and night audio/lobby. **The auto-transition trigger
-      is now answered** (director, 2026-07-24): the enchanted forest *is* the
-      branching map's forest segment, so the sunset→dark transition rides the
-      **summit→forest descent** — this folds into the "play the summit → forest
-      ride" slice above.
+      additive snow pools, night-gated (MegaKit sourcing call made, CC0).
+      **Director look-pass verdict (2026-07-24):** keep the props; **fireflies cut**
+      (rainbow + glued to the skier — realistic ones from a CC0 pack later);
+      **bloom must be stronger**, **snow sparkle too bright at night**, **tree
+      trunks need to glow**. Still open, verdict-ordered: **bloom (strong)**,
+      **phase-aware snow-sparkle + glowing trunks**, **real MegaKit glow props**,
+      **realistic fireflies (CC0)**, **moonlight rays**, a designed dusk midpoint,
+      night audio/lobby. **The auto-transition trigger is answered** (director,
+      2026-07-24): the enchanted forest *is* the branching map's forest segment, so
+      the sunset→dark transition rides the **summit→forest descent** — folds into
+      the "play the summit → forest ride" slice above.
       Full plan in IDEAS.md (slope-vis).
 - [ ] **Music:** timed per-slope songs à la Geometry Dash (tense before big jumps)
       — deliberately the **last** M2 item.

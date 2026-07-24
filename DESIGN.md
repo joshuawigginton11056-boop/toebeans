@@ -451,8 +451,16 @@ props/motes use these; nothing in the daylight landscape may.** Signal red
 Mostly cool (G1/G2); G4 is a deliberate minority so the forest reads cold-
 enchanted, not fairy-lights. These are *emissive* (read "lit" regardless of
 the near-black scene light) and pair with a faked additive pool on the snow
-(and, once it lands, **bloom** — emissive without bloom won't feel glowing).
-Implemented as `GLOW` in `client/src/skiScene.ts`.
+(and, once it lands, **bloom** — emissive without bloom won't feel glowing; the
+director wants the bloom pushed *strong* on the plants). Used by night emissive
+props: glowing mushrooms, **glowing tree trunks** (director look-pass 2026-07-24
+— the pines' trunks glow at night), and other luminous plants. Implemented as
+`GLOW` in `client/src/skiScene.ts`.
+
+*Not* covered by this ramp: **fireflies**. The first code-built additive-mote
+cloud was cut on the director's look (too many colors, glued to the camera);
+real fireflies come from a **CC0 pack** later and read *realistic* — warm-white,
+sparse, blinking — not the multi-hue glow ramp.
 
 ### Characters & customization — how it's built
 
