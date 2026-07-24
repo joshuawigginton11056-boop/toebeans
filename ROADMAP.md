@@ -128,14 +128,16 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   realistic ones come from a CC0 pack later); and next: **stronger bloom**,
   **darken the snow sparkle at night**, and **make the tree trunks glow**.
   **Session 2 (slope-vis 2026-07-24):** snow sparkle now dims with the phase
-  (`sparkleGain`, done — awaiting look-pass); glowing pine trunks first pass
-  built then **sent back** (flat wash). **Revised (session 3, ref photos):** the
-  trunk glow is now a **vertical object-space gradient** (bright base → dark
-  canopy) **textured by the bark** so the strokes read through it
-  (`primeTrunkGlowGradient`) — awaiting look-pass. Still to do (verdict-ordered):
-  bloom (strong), general decor/spray darkening, real MegaKit glow props,
-  realistic fireflies, moonlight *rays*, the auto-transition, night audio.
-  ⚠ amends the bible's "bright only" rule (DESIGN.md).
+  (`sparkleGain`, done — awaiting look-pass). **Self-glowing tree trunks: tried
+  twice, REJECTED and REMOVED** (director, 2026-07-24 — "tacky; I don't want the
+  trees to glow themselves"): flat wash, then a base-bright bark-textured
+  gradient, both cut. New direction from the reference photos: **trees are dark
+  silhouettes; the glow lives in the environment** (ground props, mist/haze, a
+  light shaft/rays, motes) — a fresh session rebuilds night from the photos.
+  Still to do (verdict-ordered): the **environmental night look (dark tree
+  silhouettes + glow around them)**, bloom (strong), general decor/spray
+  darkening, real MegaKit glow props, realistic fireflies, moonlight *rays*, the
+  auto-transition, night audio. ⚠ amends the bible's "bright only" rule (DESIGN.md).
 - **Loose snow:** ski-trail spray, screen flurries, and a lens splat of
   naturalistic snow-clump particles (director-approved).
 - **Camera:** free zoom, fixed angle, pointer-lock mouse look.
@@ -296,24 +298,21 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       **bloom must be stronger**, **snow sparkle too bright at night**, **tree
       trunks need to glow**. **Session 2 (slope-vis 2026-07-24):** (3) **snow
       sparkle now dims with the night phase** (`sparkleGain` uniform → `NIGHT_SPARKLE_GAIN`
-      floor) — done, awaiting look-pass; (4) **glowing pine trunks — first pass
-      built then SENT BACK:** the emissive lit the whole trunk evenly; director
-      wants it to **fade out up the tree** (bright base → dark canopy) and to
-      **keep the painted bark detail visible** under the glow. **Session 3
-      (slope-vis 2026-07-24) — trunk-glow revision DONE (ref photos):** the glow
-      is now a **vertical gradient in object space** (`primeTrunkGlowGradient` in
-      `skiScene.ts`) — full at the base, faded to 0 by mid-trunk
-      (`TRUNK_GLOW_FADE_LO/HI`), matching the reference photos (light pools low,
-      canopy dark). It's **textured by the same triplanar bark sample** so the
-      painted bark strokes read through the glow rather than the trunk blowing
-      out flat (`TRUNK_GLOW_BARK`). Peak base intensity 0.9->1.5 (glow
-      concentrated low now). `npm run check` green (144 tests); shader compiles
-      clean at full night (no console errors); **awaiting the director's
-      look-pass** — the Browser pane wouldn't composite for a screenshot this
-      session, so the look-pass is on the branch preview URL / Josh's own dev
-      server. Still open, verdict-ordered: **bloom (strong)**, general
-      decor/spray darkening, **real
-      MegaKit glow props**, **realistic fireflies (CC0)**, **moonlight rays**, a
+      floor) — done, awaiting look-pass; (4) glowing pine trunks — first pass
+      (flat wash) built then sent back. **Session 3 (slope-vis 2026-07-24) —
+      trunk glow REVERSED, then REMOVED.** A base-bright vertical gradient
+      textured by the bark was built to the "fade up the tree / keep bark
+      visible" note, but the director rejected the whole idea on sight: *"the tree
+      glow looks tacky; I don't want the trees to glow themselves."* Reading the
+      reference photos again, the trees are **dark silhouettes** and the glow
+      belongs to the **environment around them** (ground mushrooms, mist/haze, a
+      light shaft/rays, floating motes) — not the wood. **All self-glowing-trunk
+      code was removed from `skiScene.ts`** (`npm run check` green, 153 tests).
+      The night look restarts in a **fresh session with the reference photos**;
+      the trunk-glow direction is dead. Still open, verdict-ordered: the
+      **environmental night look** (dark tree silhouettes + glow around them,
+      driven by the photos), **bloom (strong)**, general decor/spray darkening,
+      **real MegaKit glow props**, **realistic fireflies (CC0)**, **moonlight rays**, a
       designed dusk midpoint, night audio/lobby. **The auto-transition trigger is answered** (director,
       2026-07-24): the enchanted forest *is* the branching map's forest segment, so
       the sunset→dark transition rides the **summit→forest descent** — folds into
