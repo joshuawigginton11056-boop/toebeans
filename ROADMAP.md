@@ -101,8 +101,12 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       landing "poof" (needs a small `justLanded`/impact seam field, mechanics→visuals).
 - [ ] **Slope 1 gentle S-curve:** give `slopePath.ts` `BENDS` real amplitudes — a
       joint slope-mech + slope-vis flip, once visuals draw against the centerline.
-- [ ] **"The actual map"** beyond the onboarding run — next slope-mechanics
-      session; scope pinned at that session's start (unscoped on purpose).
+- [ ] **"The actual map"** beyond the onboarding run — **scoped 2026-07-24: a
+      branching single map** with detour worlds that leave and rejoin at the same
+      clock (tree, frozen lake/underwater, yeti's peak/ice castle). Full spec +
+      open reconciliation in [SLOPE_BRANCHING.md](SLOPE_BRANCHING.md). Build note:
+      grayblock and prove the "same clock, same flag" handoff with ONE Type A fork
+      before the rest, reusing the skiing sim + `slopePath.ts` centerline.
 - [ ] **Music:** timed per-slope songs à la Geometry Dash (tense before big jumps)
       — deliberately the **last** M2 item.
 - [ ] **End-of-M2 tuning pass:** the parked picky visual tweaks + carve-hiss volume,

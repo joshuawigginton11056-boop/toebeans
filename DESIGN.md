@@ -36,6 +36,14 @@ interact with your space for more XP → repeat.
   XP — faster pays more, slower pays less. Crashing carries no penalty
   beyond a lost cat life and the time lost restarting at the checkpoint.
 
+> **⚠ New slope direction under review (director, 2026-07-24):** a **branching
+> single map** (detour worlds that leave and rejoin at the same clock — tree,
+> frozen lake/underwater, yeti's peak/ice castle) is proposed as a different
+> structure from the three linear slopes below. Full spec + open reconciliation
+> questions in **[SLOPE_BRANCHING.md](SLOPE_BRANCHING.md)**. The Overlook design
+> below still stands until the director resolves how the two relate (see
+> SLOPE_BRANCHING.md §7).
+
 ### The handcrafted slopes — Slope 1: "The Overlook" (scenic showcase)
 
 The first of the three v1.0 handcrafted slopes. **Identity (director call,
