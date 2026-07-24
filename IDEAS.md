@@ -293,6 +293,22 @@ The cross-session split:
 >    **light shaft / moonlight rays**, and (later, CC0) floating **motes**. The
 >    trunk materials are back to plain painted bark — do not re-add emissive to
 >    them. Judge every pass by the photos: dark trees, lit surroundings.
+>    - **✅ Ground mist BUILT (slope-vis 2026-07-24, awaiting look-pass).** The
+>      *"atmospheric mist/haze catching the glow"* half: `MistField` in
+>      `skiScene.ts` — soft **additive** cool-blue haze banks (a value shift of
+>      snow-shadow #2, so it's atmosphere not the glow ramp; the colored glow at
+>      the light sources comes from the existing additive glow pools shining up
+>      into overlapping mist) drifting along both treelines, with only faint
+>      wisps across the lane so hazards stay readable. Night-gated by a new
+>      `mistFactor` that rolls in at dusk (`MIST_ONSET 0.4`, just ahead of the
+>      glow). Additive → only lifts the near-black floor into glow-haze, never
+>      darkens the crushed ambient (per "don't crush further"). Tuning knobs:
+>      `MIST_CELL`/`MIST_DENSITY`/`MIST_COLOR`/`MIST_ONSET` + per-bank opacities.
+>    - **⏭ NEXT (still #0): the light shaft / moonlight rays** — the other half
+>      of the env look, most prominent in ref photo 2 (the bright misty central
+>      shaft). Faked additive god-ray cone(s) angled from a canopy gap onto the
+>      lane, night-gated the same way. Then bloom (#1) makes both the mist and
+>      the glow props actually bleed halo.
 > 1. **Bloom** — the halo that makes emissive read as *glowing*, tuned STRONG
 >    (verdict #4). A render-seam add: `render()` in `skiRender.ts` (mechanics)
 >    calls `renderer.render(scene, camera)`; route it through an `EffectComposer`

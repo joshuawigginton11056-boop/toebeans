@@ -169,6 +169,7 @@ export interface SlopeEnvironment {
   readonly trail: SnowTrail;
   // Enchanted-night lighting (fades in with the night phase; see GLOW section).
   readonly glow: GlowField; // scattered glowing props + their snow pools
+  readonly mist: MistField; // drifting cool haze banks along the treeline
 }
 
 // What the snow needs from the sim each frame to carve ski trails —
@@ -214,6 +215,9 @@ const NIGHT_SPARKLE_GAIN = 0.12;
 // past dusk — glowing mushrooms at golden hour would look wrong — so glow is a
 // gated remap of timeOfDay, not the phase itself. Read by the GLOW updates.
 let glowFactor = 0;
+// Enchanted ground mist — its own gated remap of timeOfDay (see the MIST
+// section). Rolls in a touch before the glow (dusk fog ahead of the props).
+let mistFactor = 0;
 // The billboard placement direction for the current phase — syncEnvironment
 // reads it each frame to hang the sun/moon. Lerped in applyTimeOfDay.
 const currentDiscDir = SUN_BILLBOARD_DIRECTION.clone();
@@ -269,6 +273,11 @@ function applyTimeOfDay(t: number): void {
   // Enchanted glow ramps in only past dusk (GLOW_ONSET), full by night.
   glowFactor = Math.min(1, Math.max(0, (k - GLOW_ONSET) / (1 - GLOW_ONSET)));
   applyGlowPhase(env, glowFactor);
+
+  // Ground mist leads the glow slightly (dusk fog rolling in before the props
+  // light up), full by night.
+  mistFactor = Math.min(1, Math.max(0, (k - MIST_ONSET) / (1 - MIST_ONSET)));
+  applyMistPhase(env.mist, mistFactor);
 }
 
 /** Jump straight to a time of day (0 = dawn, 1 = full night). */
@@ -394,6 +403,11 @@ export function createEnvironment(
   const glow = createGlowField();
   scene.add(glow.group);
 
+  // Enchanted-night atmosphere: the drifting haze banks. Same story — off by
+  // day, faded in with the night phase (a touch ahead of the glow).
+  const mist = createMistField();
+  scene.add(mist.group);
+
   const environment: SlopeEnvironment = {
     sun,
     ambient,
@@ -403,6 +417,7 @@ export function createEnvironment(
     slope,
     trail,
     glow,
+    mist,
   };
 
   // Day and night endpoints for the time-of-day lerp. Day mirrors exactly
@@ -496,6 +511,9 @@ export function syncEnvironment(
   // along the run. No-ops cheaply when glowFactor is 0 (daytime), so this
   // stays free by day.
   updateGlowField(environment.glow, anchor.z);
+  // The haze banks ride the same window and drift on their own clock. Also a
+  // cheap no-op by day (mistFactor 0, nothing placed).
+  updateMistField(environment.mist, anchor.z);
   environment.skyDome.position.copy(camera.position);
   environment.stars.position.copy(camera.position);
   // The disc direction is the current time-of-day's (lerped in applyTimeOfDay)
@@ -2798,6 +2816,177 @@ function applyGlowPhase(env: SlopeEnvironment, factor: number): void {
   if (!on) return;
   for (const cap of glowCapMaterials) cap.emissiveIntensity = GLOW_EMISSIVE * ease;
   for (const pool of glowPoolMaterials) pool.opacity = POOL_ALPHA * ease;
+}
+
+// ---------------------------------------------------------------------------
+// ENCHANTED NIGHT — ground mist (slope-vis 2026-07-24, ref-photo chunk #0)
+//
+// Josh's reference photos read as dark tree silhouettes standing in luminous
+// haze: cool blue mist pooling between and behind the trunks, catching the
+// glow, with the driving foreground kept relatively clear. This is that
+// near-atmosphere layer — soft additive billboards that hug the snow along the
+// treelines (only faint wisps drift across the lane, so hazards stay
+// readable), fading in with the night phase a touch ahead of the glow props.
+// Nothing emissive touches the wood (director verdict #3: trees stay
+// silhouettes); the existing distance Fog still swallows the far forest, this
+// is the *near* enchanted haze the photos show. Additive, so it only ever
+// lifts the near-black floor into a glow-haze — it never darkens the crushed
+// ambient the director asked to protect.
+
+// Mist leads the glow: it starts rolling in at dusk (before GLOW_ONSET 0.55),
+// full by night.
+const MIST_ONSET = 0.4;
+// Recycle window along the run (same scheme as the decor/glow windows).
+const MIST_CELL = 12;
+const MIST_DENSITY = 0.8;
+// A cool night blue — a value shift of snow-shadow #2 (#D3DFF0) toward night.
+// This is *atmosphere*, so it comes from the night sky family, not the glow
+// ramp; the colored glow the photos show at the light sources comes from the
+// additive glow pools shining up into the overlapping mist.
+const MIST_COLOR = 0x5a6e9c;
+
+// A soft, slightly uneven puff — a base radial plus a few offset lobes so the
+// silhouette doesn't read as a perfect disc. Grayscale; the sprite's color
+// tints it. Generated once, shared by every bank.
+function makeMistSprite(): THREE.CanvasTexture {
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const random = makeRandom(0x515c9);
+  const puff = (x: number, y: number, r: number, a: number): void => {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(255,255,255,${a})`);
+    g.addColorStop(0.55, `rgba(255,255,255,${a * 0.4})`);
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  };
+  const c = size / 2;
+  puff(c, c, c, 0.9);
+  for (let i = 0; i < 5; i++) {
+    const a = random() * Math.PI * 2;
+    const d = random() * c * 0.5;
+    puff(c + Math.cos(a) * d, c + Math.sin(a) * d, c * (0.4 + random() * 0.3), 0.5);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+interface MistField {
+  readonly group: THREE.Group;
+  // Reuses EMPTY_CELL as the "rolled empty" sentinel, like the glow scatter;
+  // live cells hold a Sprite.
+  readonly placed: Map<string, THREE.Object3D>;
+  readonly texture: THREE.CanvasTexture;
+}
+
+function createMistField(): MistField {
+  const group = new THREE.Group();
+  group.visible = false; // off by day; applyMistPhase turns it on at night
+  return { group, placed: new Map(), texture: makeMistSprite() };
+}
+
+// Non-destructive elapsed clock for the drift sway — its own so it doesn't
+// consume the effects clock's delta.
+const mistClock = new THREE.Clock();
+
+function updateMistField(field: MistField, anchorZ: number): void {
+  // Free by day: nothing to place and nothing placed.
+  if (mistFactor <= 0.001 && field.placed.size === 0) return;
+  const { group, placed, texture } = field;
+  const t = mistClock.getElapsedTime();
+  const minZ = anchorZ - DECOR_AHEAD;
+  const maxZ = Math.min(anchorZ + DECOR_BEHIND, -4);
+  const live = new Set<string>();
+  for (const side of [-1, 1]) {
+    const first = Math.floor(-maxZ / MIST_CELL);
+    const last = Math.floor(-minZ / MIST_CELL);
+    for (let cell = first; cell <= last; cell++) {
+      const key = `${side}:${cell}`;
+      live.add(key);
+      if (placed.has(key)) continue;
+      const random = makeRandom(
+        (0x515c ^ Math.imul(cell, 40503)) + side * 97,
+      );
+      if (random() > MIST_DENSITY) {
+        placed.set(key, EMPTY_CELL);
+        continue;
+      }
+      // Most banks sit in the treeline (where the enchantment lives); an
+      // occasional faint wisp crosses the lane at low opacity so the driving
+      // line keeps a breath of haze without hiding hazards.
+      const central = random() < 0.22;
+      const x = central
+        ? (random() - 0.5) * LANE_EDGE * 1.2
+        : side * (LANE_EDGE + 0.5 + random() * 9);
+      const baseY = 0.4 + random() * 1.6;
+      const z = -(cell + 0.1 + random() * 0.8) * MIST_CELL;
+      const scale = 9 + random() * 10;
+      const sprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: texture,
+          color: new THREE.Color(MIST_COLOR),
+          transparent: true,
+          opacity: 0, // set each frame from mistFactor below
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          fog: true,
+        }),
+      );
+      // Wider than tall — a low bank, not a ball.
+      sprite.scale.set(scale, scale * (0.45 + random() * 0.2), 1);
+      sprite.position.set(x, baseY, z);
+      sprite.userData = {
+        baseX: x,
+        baseY,
+        baseOpacity: (central ? 0.05 : 0.14) + random() * (central ? 0.04 : 0.09),
+        swayAmp: 0.6 + random() * 1.4,
+        swaySpeed: 0.05 + random() * 0.09,
+        swayPhase: random() * Math.PI * 2,
+        bobAmp: 0.15 + random() * 0.35,
+      };
+      group.add(sprite);
+      placed.set(key, sprite);
+    }
+  }
+  // Drift + phase the live banks.
+  for (const object of placed.values()) {
+    if (!(object instanceof THREE.Sprite)) continue;
+    const u = object.userData;
+    object.position.x =
+      u.baseX + Math.sin(t * u.swaySpeed * 6.283 + u.swayPhase) * u.swayAmp;
+    object.position.y =
+      u.baseY + Math.sin(t * u.swaySpeed * 4.0 + u.swayPhase) * u.bobAmp;
+    (object.material as THREE.SpriteMaterial).opacity = u.baseOpacity * mistFactor;
+  }
+  // Despawn cells the window has left behind; free each bank's unique material.
+  for (const [key, object] of placed) {
+    if (live.has(key)) continue;
+    if (object !== EMPTY_CELL) {
+      group.remove(object);
+      (object as THREE.Sprite).material.dispose();
+    }
+    placed.delete(key);
+  }
+}
+
+// Bring the haze in/out with the night phase. Turning it off clears the field
+// so day pays nothing and no stale banks linger; per-bank opacity while on is
+// applied each frame in updateMistField from mistFactor.
+function applyMistPhase(field: MistField, factor: number): void {
+  const on = factor > 0.01;
+  field.group.visible = on;
+  if (on) return;
+  for (const [key, object] of field.placed) {
+    if (object !== EMPTY_CELL) {
+      field.group.remove(object);
+      (object as THREE.Sprite).material.dispose();
+    }
+    field.placed.delete(key);
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -141,10 +141,16 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   gradient, both cut. New direction from the reference photos: **trees are dark
   silhouettes; the glow lives in the environment** (ground props, mist/haze, a
   light shaft/rays, motes) — a fresh session rebuilds night from the photos.
-  Still to do (verdict-ordered): the **environmental night look (dark tree
-  silhouettes + glow around them)**, bloom (strong), general decor/spray
-  darkening, real MegaKit glow props, realistic fireflies, moonlight *rays*, the
-  auto-transition, night audio. ⚠ amends the bible's "bright only" rule (DESIGN.md).
+  **Environmental night look, started (slope-vis 2026-07-24):** **enchanted
+  ground mist** — soft additive cool-blue haze banks (`MistField` in
+  `skiScene.ts`) drift along both treelines (faint wisps across the lane so
+  hazards stay readable), night-gated (`mistFactor`, rolls in at dusk just
+  ahead of the glow). Additive, so it lifts the near-black floor into glow-haze
+  without darkening the crushed ambient. Awaiting look-pass. Still to do
+  (verdict-ordered): the **light shaft / moonlight rays** (the other half of
+  the env look), bloom (strong), general decor/spray darkening, real MegaKit
+  glow props, realistic fireflies, the auto-transition, night audio. ⚠ amends
+  the bible's "bright only" rule (DESIGN.md).
 - **Loose snow:** ski-trail spray, screen flurries, and a lens splat of
   naturalistic snow-clump particles (director-approved).
 - **Camera:** free zoom, fixed angle, pointer-lock mouse look.
@@ -320,11 +326,16 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       light shaft/rays, floating motes) — not the wood. **All self-glowing-trunk
       code was removed from `skiScene.ts`** (`npm run check` green, 153 tests).
       The night look restarts in a **fresh session with the reference photos**;
-      the trunk-glow direction is dead. Still open, verdict-ordered: the
-      **environmental night look** (dark tree silhouettes + glow around them,
-      driven by the photos), **bloom (strong)**, general decor/spray darkening,
-      **real MegaKit glow props**, **realistic fireflies (CC0)**, **moonlight rays**, a
-      designed dusk midpoint, night audio/lobby. **The auto-transition trigger is answered** (director,
+      the trunk-glow direction is dead. **Environmental night look — started
+      (slope-vis 2026-07-24, from the photos):** enchanted **ground mist** —
+      soft additive cool-blue haze banks (`MistField`) drifting along the
+      treelines, faint wisps across the lane, night-gated (`mistFactor`, rolls
+      in at dusk ahead of the glow); additive so it never darkens the crushed
+      floor (`npm run check` green, 153 tests). Awaiting look-pass. Still open,
+      verdict-ordered: the **light shaft / moonlight rays** (env look, other
+      half), **bloom (strong)**, general decor/spray darkening, **real MegaKit
+      glow props**, **realistic fireflies (CC0)**, a designed dusk midpoint,
+      night audio/lobby. **The auto-transition trigger is answered** (director,
       2026-07-24): the enchanted forest *is* the branching map's forest segment, so
       the sunset→dark transition rides the **summit→forest descent** — folds into
       the "play the summit → forest ride" slice above.
