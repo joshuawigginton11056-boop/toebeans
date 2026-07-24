@@ -3,51 +3,68 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## (slope-mech / slope-vis) Branching map — parked follow-ups from the de-risk (2026-07-24)
+## (slope-mech / slope-vis / lobby) Branching map — the §4 layout landed; now make it PLAYABLE (2026-07-24)
 
-The branching-fork de-risk landed (see ROADMAP + SLOPE_BRANCHING.md): one Type A
-"tree" fork, grayblock, "same clock, same flag" proven. **Director redirect
-(2026-07-24): the next session lays out the ACTUAL §4 map** (summit → forest →
-lake → yeti's peak, three same-clock routes to the flag) as grayblock on this
-foundation — replacing the placeholder `spine-1/2/3`+tree topology in `route.ts`
-and its placements in `slopePath.ts` — rather than adding toy forks one at a
-time. The §8 "tree, then lake, then yeti, one at a time" order is superseded by
-"lay out the whole real topology first." §7's open reconciliation
-(branching-as-template vs. one branching map; collectibles/achievements vs. XP;
-MP-only friend race) stays the director's but doesn't block the layout. Parked
-from the de-risk:
+The **real §4 map is laid out** (slope-mech, 2026-07-24 — see ROADMAP +
+SLOPE_BRANCHING.md): `route.ts` now chains summit → enchanted forest (Type A) →
+frozen lake (Type A) → yeti's peak (Type B) into the three same-clock routes
+(Cave / Ice / Water, each 640), `slopePath.ts` places the corridors, and 134
+tests pin "same clock, same flag." It's still **dev-only grayblock behind
+`?branch=1`**. **Director redirect (2026-07-24): make it actually playable,
+starting with the summit → forest ride** — drop in at the summit and ride down
+into the forest, dressed for real. This is the run that becomes the game; the
+rest of the map (lake, yeti's peak, detour content) dresses in later. The ride
+*already works mechanically* — what's missing is a real entry and real visuals.
+The cross-session split:
 
-- **(slope-vis) Do NOT dress `?branch=1` yet.** The branching map is dev-only
-  grayblock (a URL flag; normal play is the Overlook, untouched). When the map
-  direction is confirmed, the detour "worlds" (tree/lake/yeti) want real art — but
-  that's a whole scene each and gated on §7. Heads-up only so the flag isn't a
-  surprise. Grayblock lives in `skiRender.ts` (`addBranchGrayblock`), NOT
-  `skiScene.ts` — deliberately, to keep it out of your dressed scene.
-- **(slope-mech) The placeholder topology is throwaway.** `spine-1/2/3` + one
-  hollow tree corridor exist only to prove the handoff — they get replaced by the
-  real §4 layout next session. Detour *content* (the ~8s animal world → tallest
-  tree → bird; the penguin dive; the ice castle) is a later layer still, once the
-  real segments are placed.
-- **(slope-mech) Entry now auto-loads.** `?branch=1` drops straight into the map
-  and no longer lets a saved slope run bypass the grayblock setup (that bypass is
-  why the tree looked missing — a restore rebuilds the Overlook). Fixed in
-  `main.ts`; the real map will want a proper slope-select entry eventually, not a
-  URL flag.
-- **(slope-mech) Per-segment differing hazards are a data change, deferred.** The
-  grayblock keeps the road and detour flat/equal so the *handoff* was on trial,
-  not balancing. §5's design (road tenser, detour a lower-stakes reward run) is
-  just editing each segment's `chasms`/`checkpoints` in `route.ts`.
-- **(slope-mech) Grayblock rough edges to revisit when the map is real:** the
-  `routeDistanceOf` offsets in `route.ts` are hand-authored for this one fork (a
-  general graph would derive them); old-segment chasm/checkpoint meshes linger in
-  the scene after a transition (fine off in a passed corridor, ugly if reused);
-  and the dev debug overlay + grayblock markers are scaffolding to remove.
-- **The Type B route split (Yeti's Peak)** — a fork that does NOT rejoin until the
-  flag — is the one genuinely new routing shape in the §4 layout (two whole
-  alternate segment chains to the finish, both time-balanced to the same clock;
-  the current graph only models rejoining Type A detours). Laying out the actual
-  map means the segment model must handle it — the main new-mechanics piece of the
-  layout work, on top of placing the real segments.
+- **(slope-vis) Dress the summit + forest corridors — this is the main lift, and
+  the hold on dressing the branching map is now LIFTED for these two segments.**
+  (It stays on for the detour worlds — lake/yeti/penguin/ice-castle — those are a
+  whole scene each and dress in later.) The blocker: `skiScene.ts` draws the
+  ground/lighting/decor along the *single* Overlook road (the `SLOPE` centerline),
+  but the branching map is per-segment — so `skiScene` must become
+  **segment-aware**, laying its surface + scatter along each segment's centerline.
+  Everything you need is in `client/src/slopePath.ts` (already in `client/src`,
+  importable): `segmentCenterline(id, distance)` and `segmentToWorld(id, distance,
+  lateral)` give world x/z + tangent for a segment-local point, and
+  `SEGMENT_PLACEMENTS` is each corridor's world anchor. The grayblock boxes live
+  in `skiRender.ts` (`addBranchGrayblock`), NOT your scene — they get gated off
+  once the real surface is under the run. **The forest segment IS the enchanted
+  forest** (see the night section below): summit = open sunset mountain, forest =
+  the dark/glowing enchanted look — and the "sun sets *as you race*"
+  auto-transition's trigger is now answered: **it rides the summit→forest
+  descent.** Wire `setTimeOfDay` off route progress (`routeDistanceOf`, or the
+  segment id: summit → dusk, forest → dark).
+- **(slope-mech) Real entry + grayblock cleanup.** Promote entry off the
+  `?branch=1` dev flag into real play (the exact UX is lobby's — below); gate the
+  debug readout (`branchDebug.ts`) and the grayblock markers (`addBranchGrayblock`)
+  so they only show under the dev flag, not in a real run. Confirm the
+  summit→forest ride feels right — it's deliberately gentle (no hazards until the
+  lake gap two segments down), a clean drop-in intro. Expose whatever
+  segment-placement the visuals seam needs as a small additive change (per
+  PARALLEL.md), and note it in the ROADMAP entry.
+- **(lobby) How you enter it.** A slope-select menu choice, or make the branching
+  map what "Hit the slopes" loads. **Open decision for the kickoff:** does the
+  branching map *replace* the Overlook as the default, or *coexist* (Overlook =
+  onboarding, branching = the real map, selectable)? These docs assume coexist,
+  per the existing framing — confirm with the director.
+- **(slope-mech) Per-segment differing hazards are a data change, deferred (§5).**
+  The layout keeps hazards sparse (one gap each on lake / cliff / valley — enough
+  to prove chasms fire on every route and across handoffs). §5's balancing (road
+  tenser, detours lower-stakes; the wide "signature" cliff jump — kept width-3
+  grayblock for now) is just editing each segment's `chasms`/`checkpoints` in
+  `route.ts`. Not needed for the summit→forest slice (those segments have none).
+- **(slope-mech) Grayblock rough edges, still open:** the `routeDistanceOf`
+  offsets in `route.ts` are hand-authored (a general graph would derive them);
+  old-segment chasm/checkpoint meshes may linger in the scene after a transition
+  (fine off in a passed corridor, worth a look if a segment is ever reused).
+- **Type B (Yeti's Peak) needed no new mechanics — RESOLVED by the layout.** The
+  worry was that a fork which doesn't rejoin until the flag would need a new
+  routing shape. It didn't: the existing `trigger`→`divertTo` + `next` primitive
+  models it directly (yeti's `next` is the cave chain, its trigger diverts to the
+  ledge chain, and both run independently to their own flag at the same clock).
+  Same-clock is guaranteed by the length construction, not by rejoining. So the
+  segment model already handles both branch kinds — nothing to build here.
 
 ## (slope-vis) NIGHT → the enchanted forest — director redirect (2026-07-24)
 
@@ -55,7 +72,18 @@ from the de-risk:
 > **darker-night first pass landed and is merged to master** — the `NIGHT`
 > constants in `skiScene.ts` are crushed toward near-black (open-snow floor
 > `#12182B`, sky zenith `#0B0F1C`, moon-lit lane `#4E608A`), moon kept on as a
-> faint down-lane key. **Two things before building on it:**
+> faint down-lane key.
+>
+> **↳ This work now has a concrete home (director, 2026-07-24):** the enchanted
+> forest *is* the branching map's forest segment, and the new priority is to make
+> the **summit → forest ride playable** (drop in at the summit → ride into the
+> dark enchanted forest). That means the enchanted look gets applied to a real,
+> skiable corridor, and the sunset→dark auto-transition rides the descent. See the
+> branching-map section at the top of this file for the full cross-session slice —
+> the first visuals step there (make `skiScene` segment-aware so it can dress the
+> summit + forest corridors) is the gateway this glow/rays work then fills in.
+>
+> **Two things before building on the night look itself:**
 > 1. **Look-pass still pending** — the darkness value was verified numerically
 >    but never eyeballed (port 5303 was held, pane wouldn't composite). Confirm
 >    with Josh that it's dark enough / not too dark on **N** before treating the
@@ -135,12 +163,17 @@ the `nightAtmosphere` endpoint. What the redirect changes:
 
 **Still open from the first pass (unchanged by the redirect):**
 
-- **The auto-transition — "the sun sets *as you race*."** Only the end-state is
-  built. Wiring is easy on the visuals side (run progress derivable from the
-  anchor — `-anchor.z` while straight, or a tiny additive `distance` seam
-  field), but the **trigger is a director call**: linear distance? tied to
-  *which branch* of the branching map (a branch can be "the night branch")? Pin
-  it, then drive `setTimeOfDay` from `syncEnvironment`.
+- **The auto-transition — "the sun sets *as you race*." TRIGGER NOW ANSWERED
+  (director, 2026-07-24).** The enchanted forest *is* the branching map's forest
+  segment, so the transition rides the **summit → forest descent**: sunset at the
+  summit, dark/enchanted once you're in the forest. This lands as part of the
+  "play the summit → forest ride" slice (see the branching-map section up top and
+  ROADMAP). Drive `setTimeOfDay` off route progress — `routeDistanceOf(segmentId,
+  distance)` (from `@toebeans/shared`), or simply the segment id (summit → ramp to
+  dusk, forest → dark) — from `syncEnvironment`. Only the two endpoint looks are
+  built; the mid-descent ramp is the wiring. (Note: this couples the phase to the
+  branching map — on the plain Overlook, `timeOfDay` stays where it is / the debug
+  **N** still cycles it.)
 - **A designed dusk / golden hour.** The mid-phase is a plain lerp, not a
   designed warm sunset. If the sunset should be its own moment, add a third warm
   endpoint (dawn → sunset → night 3-stop ramp).

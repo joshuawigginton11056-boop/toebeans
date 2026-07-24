@@ -66,8 +66,11 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   three routes + the tree no-op reach the flag on the same step) + a clean
   `?branch=1` bundle. Dev-only behind **`?branch=1`** (auto-loads the map — a save
   doesn't bypass it); the Overlook's single `"main"` segment stays inert, so
-  normal play is unchanged. **Next:** detour *content* (animal world, bird,
-  penguin castle, ice castle) and per-route hazard balancing (§5); §7's open
+  normal play is unchanged. **Next (director, 2026-07-24): make it actually
+  playable, starting with the summit → forest ride** — promote it from the
+  dev-flag grayblock to a real, *dressed* run you enter and ski (see the Open
+  item and the IDEAS handoffs). Detour *content* (animal world, bird, penguin/ice
+  castles) and per-route hazard balancing (§5) come after; §7's open
   reconciliations remain the director's.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
   across all 24 slope models; decor scatter follows the run. (Old birches removed.)
@@ -143,6 +146,31 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       wide "signature" cliff), and §7's reconciliations (branching as the template
       for all slopes vs. one branching map; collectibles/achievements vs. XP;
       friend-race = later-phase MP, not v1.0). Art comes after the layout stands.
+- [ ] **Play the branching map — first slice: the summit → forest ride (director,
+      2026-07-24).** Turn the grayblock map into something you actually *play*,
+      starting with the top: drop in at the summit and ride down into the forest,
+      dressed for real (this is the run that becomes the game). A coordinated
+      cross-session slice — the ride already works mechanically (proven by tests),
+      what's missing is a real entry + real visuals:
+      - **(slope-vis) — the main lift:** dress the summit + forest corridors. The
+        grayblock map renders boxes only (`addBranchGrayblock`, mechanics-owned) and
+        `skiScene.ts` draws along the *single* Overlook road, not per-segment — it
+        must become **segment-aware**, laying snow/lighting/decor along each
+        segment's centerline (`segmentCenterline`/`segmentToWorld` in `slopePath.ts`,
+        importable). **The forest segment *is* the enchanted forest** — this is where
+        the night → enchanted-forest work lands, and the parked "sun sets *as you
+        race*" auto-transition now has its trigger: **the summit→forest descent**
+        (sunset up top → dark/enchanted in the forest). See IDEAS.md.
+      - **(slope-mech) — real entry + cleanup:** promote entry off the `?branch=1`
+        dev flag (gate the debug readout + grayblock so they don't show in real
+        play); confirm the summit→forest ride feels right (it's gentle, no hazards
+        until the lake — a clean intro). Expose whatever segment-placement the
+        visuals seam needs (additive, per PARALLEL.md).
+      - **(lobby) — how you get there:** the entry UX — a slope-select menu choice,
+        or make the branching map what "Hit the slopes" loads. **Open decision for
+        the kickoff:** branching map replaces the Overlook as the default, or
+        coexists (Overlook = onboarding, branching = the real map, selectable)? The
+        docs assume *coexist*, per the existing framing — confirm with the director.
 - [ ] **Night → the enchanted forest (director redirect 2026-07-24).** First
       moonlit night was too bright; new target is an *extremely dark* forest with
       a few moonlight rays, lit by **glowing emissive assets** (mushrooms/crystals/
@@ -150,10 +178,12 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       (slope-vis 2026-07-24): the darker-night first pass** — `NIGHT` ambient/sky
       crushed toward near-black, faint moon key preserved for lane readability.
       Still open: moonlight *rays*, the glowing emissive props + bloom + glow
-      palette (the big piece — needs sourcing + palette director calls), the "sun
-      sets *as you race*" auto-transition (trigger is a director call — distance?
-      which map branch?), a designed dusk midpoint, and night audio/lobby. Full
-      plan in IDEAS.md (slope-vis).
+      palette (the big piece — needs sourcing + palette director calls), a designed
+      dusk midpoint, and night audio/lobby. **The auto-transition trigger is now
+      answered** (director, 2026-07-24): the enchanted forest *is* the branching
+      map's forest segment, so the sunset→dark transition rides the **summit→forest
+      descent** — this folds into the "play the summit → forest ride" slice above.
+      Full plan in IDEAS.md (slope-vis).
 - [ ] **Music:** timed per-slope songs à la Geometry Dash (tense before big jumps)
       — deliberately the **last** M2 item.
 - [ ] **End-of-M2 tuning pass:** the parked picky visual tweaks + carve-hiss volume,
