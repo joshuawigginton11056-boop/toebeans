@@ -465,6 +465,17 @@ props: glowing mushrooms, **glowing tree trunks** (director look-pass 2026-07-24
 — the pines' trunks glow at night), and other luminous plants. Implemented as
 `GLOW` in `client/src/skiScene.ts`.
 
+**Glowing trunks — how they glow (director feedback 2026-07-24):** the trunk
+glow **fades out as it rises up the tree** — bright at the base where the magic
+pools, gone by the canopy — a vertical gradient, never a uniform wash. And it
+must **sit under the painted bark detail**: you still see the tree's bark
+strokes *through* the glow, so the emissive can't blow the trunk out to a flat
+color. (First pass was a flat emissive up the whole trunk — sent back on both
+counts. **Revised 2026-07-24 (slope-vis, ref photos):** an object-space vertical
+gradient textured by the triplanar bark — `primeTrunkGlowGradient` in
+`skiScene.ts` — meeting both requirements; awaiting the director's look-pass.
+See ROADMAP / IDEAS slope-vis night entry.)
+
 *Not* covered by this ramp: **fireflies**. The first code-built additive-mote
 cloud was cut on the director's look (too many colors, glued to the camera);
 real fireflies come from a **CC0 pack** later and read *realistic* — warm-white,

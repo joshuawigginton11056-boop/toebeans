@@ -203,6 +203,13 @@ let activeScene: THREE.Scene | null = null;
 let dayAtmosphere: Atmosphere | null = null;
 let nightAtmosphere: Atmosphere | null = null;
 let timeOfDay = 0; // persists across runs; re-asserted when the env rebuilds
+// The snow shader's glitter gain (slope-vis verdict #2): 1 by day, faded to
+// NIGHT_SPARKLE_GAIN at full night so the twinkle stops fighting the dark.
+// Held here because the uniform lives inside the material's compile closure.
+let snowSparkleGain: { value: number } | null = null;
+// How much of the daytime glitter survives at full night. Not zero — a faint
+// moonlit shimmer keeps the snow from reading as dead matte.
+const NIGHT_SPARKLE_GAIN = 0.12;
 // How "on" the enchanted glow is (0 by day, 1 at full night). Ramps in only
 // past dusk — glowing mushrooms at golden hour would look wrong — so glow is a
 // gated remap of timeOfDay, not the phase itself. Read by the GLOW updates.
@@ -253,6 +260,11 @@ function applyTimeOfDay(t: number): void {
   const starMat = env.stars.material as THREE.PointsMaterial;
   starMat.opacity = d.stars + (n.stars - d.stars) * k;
   env.stars.visible = starMat.opacity > 0.001;
+
+  // Snow glitter dims as the light goes (slope-vis verdict #2) — tracks the
+  // whole dawn→night fade, not the dusk-gated glow, since it's the sun's
+  // specular twinkle that's leaving.
+  if (snowSparkleGain) snowSparkleGain.value = 1 - (1 - NIGHT_SPARKLE_GAIN) * k;
 
   // Enchanted glow ramps in only past dusk (GLOW_ONSET), full by night.
   glowFactor = Math.min(1, Math.max(0, (k - GLOW_ONSET) / (1 - GLOW_ONSET)));
@@ -1077,6 +1089,13 @@ function createSnowMaterial(
     shader.uniforms.grainMap = { value: snow.grain };
     shader.uniforms.carveMap = { value: carveTexture };
     shader.uniforms.sunDir = { value: SUN_DIRECTION.clone() };
+    // slope-vis (verdict #2, 2026-07-24): the glitter below is a light-
+    // independent additive flash, so it stayed just as bright once the scene
+    // went near-black — the director's "snow sparkle too bright at night".
+    // A phase gain fades it out with the night; driven from applyTimeOfDay.
+    const sparkleGain = { value: 1 };
+    shader.uniforms.sparkleGain = sparkleGain;
+    snowSparkleGain = sparkleGain;
     shader.vertexShader =
       SNOW_HEIGHT_GLSL +
       "varying vec3 vSnowWorld;\n" +
@@ -1089,7 +1108,7 @@ vSnowWorld = vec3(snowW.x, snowW.y + snowH, snowW.z);`,
     shader.fragmentShader =
       SNOW_HEIGHT_GLSL +
       SNOW_NORMAL_GLSL +
-      "varying vec3 vSnowWorld;\nuniform vec3 sunDir;\n" +
+      "varying vec3 vSnowWorld;\nuniform vec3 sunDir;\nuniform float sparkleGain;\n" +
       shader.fragmentShader
         .replace(
           "#include <color_fragment>",
@@ -1134,7 +1153,8 @@ normal = normalize((viewMatrix * vec4(snowNormal(vSnowWorld.xz), 0.0)).xyz);`,
   float fade = 1.0 - smoothstep(16.0, 45.0, length(cameraPosition - vSnowWorld));
   float crust = 1.0 - 0.7 * snowCarveCore(snowCarve(vSnowWorld.xz));
   // Sun-glow tinted (#FFF4DA) — the bible's brightest value.
-  reflectedLight.directSpecular += vec3(1.0, 0.957, 0.855) * (flash * gate * fade * crust * 1.6);
+  // sparkleGain fades the twinkle out at night (slope-vis verdict #2).
+  reflectedLight.directSpecular += vec3(1.0, 0.957, 0.855) * (flash * gate * fade * crust * 1.6 * sparkleGain);
 }`,
         );
   };
@@ -2370,6 +2390,7 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
   const loader = new GLTFLoader();
   const names = Object.values(DECOR_MODELS).flat();
   const templates = new Map<string, THREE.Group>();
+  pineTrunkMaterials = []; // re-collected below; reset in case decor reloads
   try {
     await Promise.all(
       names.map(async (name) => {
@@ -2386,6 +2407,12 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
         // patch the template once — every scattered clone() shares the
         // patched materials, so the whole slope pays for one material set.
         applyPaintedDetail(gltf.scene);
+        // slope-vis (verdict #3): grab the pines' trunk materials so the
+        // night phase can light them. Scatter clones share the template's
+        // materials, so ramping these lights every trunk on the slope.
+        if (DECOR_MODELS.pines.includes(name as never)) {
+          collectPineTrunkMaterials(gltf.scene);
+        }
         templates.set(name, gltf.scene);
       }),
     );
@@ -2396,6 +2423,11 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
   }
 
   decorState = { scene, templates, placed: new Map() };
+
+  // Decor loads async — if the phase was already night when it landed (a
+  // persisted phase, or the director hit N before the trees loaded), light the
+  // freshly-collected trunks now instead of waiting for the next phase change.
+  if (activeEnvironment) applyGlowPhase(activeEnvironment, glowFactor);
 }
 
 // The scatter is a recycling window, like the snowfield (found 2026-07-23:
@@ -2574,6 +2606,36 @@ const GLOW_ONSET = 0.55;
 const GLOW_EMISSIVE = 2.2;
 // Peak opacity of a prop's additive snow pool at full night.
 const POOL_ALPHA = 0.55;
+
+// Glowing tree trunks (slope-vis verdict #3, 2026-07-24; the glow ramp already
+// names them, DESIGN.md). The frosted-green pines' bark glows a cool cyan at
+// night — the enchanted magic living in the wood. Emissive on the existing
+// PineBark material, collected at decor load and ramped by applyGlowPhase.
+//
+// REVISION (director reference-photo verdict, 2026-07-24): the first pass was a
+// flat emissive up the whole trunk and was sent back on two counts, both now
+// codified in the bible (DESIGN.md "Glowing trunks — how they glow"):
+//   1. The glow must *fade up the tree* — bright at the base where the magic
+//      pools, gone by the canopy — a vertical gradient, never a uniform wash.
+//      Matches the reference photos (light low, trunks dark up high).
+//   2. It must sit *under* the painted bark: the bark strokes still read
+//      through the glow, so the emissive can't blow the trunk out to a flat
+//      color. We reuse the same triplanar bark sample to texture the emissive.
+// Both live in primeTrunkGlowGradient below, injected into the PineBark shader.
+const TRUNK_GLOW = GLOW.cyan; // G1, the base cool glow
+// Peak base intensity. Higher than the first pass's 0.9 because the glow is now
+// concentrated in the lower trunk (the gradient darkens everything above), so
+// the base has to carry the read on its own — and bloom will bleed it further.
+const TRUNK_EMISSIVE = 1.5;
+// The vertical falloff, in normalized object-space trunk height (0 = base,
+// 1 = top): full glow up to GLOW_FADE_LO, gone by GLOW_FADE_HI. Kept low so the
+// canopy goes properly dark like the references.
+const TRUNK_GLOW_FADE_LO = 0.04;
+const TRUNK_GLOW_FADE_HI = 0.5;
+// How hard the bark strokes modulate the emissive (0 = flat glow, 1 = the glow
+// fully wears the bark value). 0.7 keeps relief legible without going patchy.
+const TRUNK_GLOW_BARK = 0.7;
+let pineTrunkMaterials: THREE.MeshStandardMaterial[] = [];
 
 // A soft round dot (radial white → transparent) — stretched flat, the shape of
 // a glow pool on the snow. Generated once, tinted per use by the material's color.
@@ -2763,8 +2825,13 @@ function updateGlowField(field: GlowField, anchorZ: number): void {
 function applyGlowPhase(env: SlopeEnvironment, factor: number): void {
   const on = factor > 0.01;
   env.glow.group.visible = on;
+  const ease = on ? factor * factor : 0; // slow start so glow blooms late
+  // Glowing pine trunks (verdict #3) ride the same dusk-gated fade. Unlike the
+  // caps/pools (parked in the hidden glow group by day), the trunks live on the
+  // decor scatter and always render — so their emissive MUST fall back to 0
+  // when off, or they'd glow in daylight too.
+  for (const trunk of pineTrunkMaterials) trunk.emissiveIntensity = TRUNK_EMISSIVE * ease;
   if (!on) return;
-  const ease = factor * factor; // slow start so glow blooms late in the fade
   for (const cap of glowCapMaterials) cap.emissiveIntensity = GLOW_EMISSIVE * ease;
   for (const pool of glowPoolMaterials) pool.opacity = POOL_ALPHA * ease;
 }
@@ -2995,4 +3062,95 @@ function applyPaintedDetail(object: THREE.Object3D): void {
     });
     child.material = Array.isArray(child.material) ? patched : patched[0]!;
   });
+}
+
+// slope-vis (verdict #3, 2026-07-24): find the PineBark trunk materials on a
+// painted pine template and prime them to glow. The emissive *color* is set
+// once here (changing it later would recompile); applyGlowPhase only ramps the
+// intensity, which is free. MeshStandardMaterial always carries an emissive
+// term, and painted detail only rewrites diffuseColor, so the two compose.
+//
+// The gradient revision needs each material's object-space Y range so the
+// vertical falloff (bright base → dark canopy) can normalize vObjPos.y. We
+// union that range across every mesh wearing the material — deduped, so a
+// material shared by several meshes is only primed once.
+function collectPineTrunkMaterials(object: THREE.Object3D): void {
+  const glow = new THREE.Color(TRUNK_GLOW);
+  const bounds = new Map<
+    THREE.MeshStandardMaterial,
+    { minY: number; maxY: number }
+  >();
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const materials = Array.isArray(child.material)
+      ? child.material
+      : [child.material];
+    for (const material of materials) {
+      if (!(material instanceof THREE.MeshStandardMaterial)) continue;
+      if (material.name.replace(/\.\d+$/, "") !== "PineBark") continue;
+      const geom = child.geometry;
+      if (!geom.boundingBox) geom.computeBoundingBox();
+      const bb = geom.boundingBox!;
+      const seen = bounds.get(material);
+      if (seen) {
+        seen.minY = Math.min(seen.minY, bb.min.y);
+        seen.maxY = Math.max(seen.maxY, bb.max.y);
+      } else {
+        bounds.set(material, { minY: bb.min.y, maxY: bb.max.y });
+      }
+    }
+  });
+  for (const [material, b] of bounds) {
+    material.emissive.copy(glow);
+    material.emissiveIntensity = 0; // dark by day; applyGlowPhase brings it up
+    primeTrunkGlowGradient(material, b.minY, b.maxY);
+    pineTrunkMaterials.push(material);
+  }
+}
+
+// Inject the vertical trunk-glow gradient into a PineBark material's shader,
+// chained *after* the painted-detail patch so it can reuse that patch's
+// vObjPos/vObjNormal varyings and detailMap uniforms. The emissive uniform
+// already folds in emissiveIntensity (three.js), so applyGlowPhase's ramp still
+// works untouched — this only shapes *where* on the trunk that emissive lands.
+function primeTrunkGlowGradient(
+  material: THREE.MeshStandardMaterial,
+  baseY: number,
+  topY: number,
+): void {
+  const painted = material.onBeforeCompile; // the triplanar painted-detail patch
+  material.onBeforeCompile = (shader, renderer) => {
+    painted(shader, renderer); // adds vObjPos/vObjNormal + detailMap/detailScale
+    shader.uniforms.uTrunkBaseY = { value: baseY };
+    shader.uniforms.uTrunkTopY = { value: topY };
+    shader.fragmentShader =
+      "uniform float uTrunkBaseY;\nuniform float uTrunkTopY;\n" +
+      shader.fragmentShader.replace(
+        "#include <emissivemap_fragment>",
+        `#include <emissivemap_fragment>
+{
+  // The magic pools at the base and fades out by mid-trunk (director ref-photo
+  // verdict 2026-07-24): a vertical gradient in object space, never the flat
+  // wash of the first pass. th = 0 at the trunk's base, 1 at its top.
+  float th = clamp(
+    (vObjPos.y - uTrunkBaseY) / max(0.001, uTrunkTopY - uTrunkBaseY),
+    0.0, 1.0);
+  float vgrad = 1.0 - smoothstep(${TRUNK_GLOW_FADE_LO.toFixed(2)}, ${TRUNK_GLOW_FADE_HI.toFixed(2)}, th);
+  // Texture the glow by the same painted bark strokes (reuse the triplanar
+  // sample) so the bark relief reads *through* the glow instead of blowing out
+  // to a flat color — the bible's second requirement.
+  vec3 bw = pow(abs(normalize(vObjNormal)), vec3(3.0));
+  bw /= (bw.x + bw.y + bw.z);
+  vec3 bp = vObjPos * detailScale;
+  float bark = (texture2D(detailMap, bp.zy).r * bw.x
+              + texture2D(detailMap, bp.xz).r * bw.y
+              + texture2D(detailMap, bp.xy).r * bw.z) * 2.0;
+  totalEmissiveRadiance *= vgrad * mix(1.0, bark, ${TRUNK_GLOW_BARK.toFixed(2)});
+}`,
+      );
+  };
+  // Painted-detail materials share one compiled program ("painted-detail"); the
+  // trunks layer emissive code on top, so they need their own key or three.js
+  // would hand them the plain painted program and the gradient would vanish.
+  material.customProgramCacheKey = () => "painted-detail-trunkglow";
 }
