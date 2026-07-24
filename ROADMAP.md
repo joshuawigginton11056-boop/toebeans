@@ -28,7 +28,7 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 
 ### Foundation
 - TypeScript strict + Three.js + Vite; npm workspaces (`client`/`server`/`shared`);
-  Vitest. `npm run check` = typecheck + tests (~119 tests green).
+  Vitest. `npm run check` = typecheck + tests (~129 tests green).
 - All game logic = pure functions in `/shared` over a serializable `GameState`;
   rendering reads state, never mutates it (multiplayer-proofing).
 - Runs as **parallel git worktrees** — `lobby`, `slope-mechanics`,
@@ -50,6 +50,17 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   a landing grip window, landing lockout + a "tired hop" cue.
 - **Road system** (`client/src/slopePath.ts`): a presentation-only centerline,
   curve-ready but **straight/identity today** (bit-for-bit the old world).
+- **Branching map (the "actual map") — foundation begun.** Per SLOPE_BRANCHING.md
+  (director's new direction: one continuous descent that grabs you into detour
+  worlds, all obeying **"same clock, same flag"**), the §8 de-risk landed: a
+  sim-side **segment graph** (`shared/src/route.ts`) with one grayblock Type A
+  "tree" fork, proving the riskiest system — enter a detour, ski it, rejoin the
+  spine at the same world-point at the same time (a detour built the same length
+  as the road it bypasses ⇒ the law holds by construction, no scripting). Renderer
+  places per-segment (`segmentCenterline`/`addBranchGrayblock`, grayblock boxes,
+  no `skiScene.ts`). Dev-only behind **`?branch=1`** with a live proof readout; the
+  Overlook's single `"main"` segment is inert, so normal play is unchanged. Not
+  yet: detour content, the lake/yeti forks, art.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
   across all 24 slope models; decor scatter follows the run. (Old birches removed.)
 - **Realism snow:** procedural displaced surface + GPU-carved ski trails.
@@ -108,8 +119,14 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       landing "poof" (needs a small `justLanded`/impact seam field, mechanics→visuals).
 - [ ] **Slope 1 gentle S-curve:** give `slopePath.ts` `BENDS` real amplitudes — a
       joint slope-mech + slope-vis flip, once visuals draw against the centerline.
-- [ ] **"The actual map"** beyond the onboarding run — next slope-mechanics
-      session; scope pinned at that session's start (unscoped on purpose).
+- [ ] **"The actual map"** (SLOPE_BRANCHING.md — a branching summit-to-flag map
+      with detour worlds). The Type A fork **handoff is de-risked** (grayblock,
+      `?branch=1`; see Ski slope). Next: §7 director calls (branching as the
+      template for all slopes vs. one branching map; how collectibles/achievements
+      relate to XP; friend-race = later-phase MP, not v1.0), then real detour
+      content + the lake (2nd Type A) and Yeti's Peak (the Type B route split).
+      *(SLOPE_BRANCHING.md is untracked in the main checkout — director's call
+      whether it goes in git.)*
 - [ ] **Night → the enchanted forest (director redirect 2026-07-24).** First
       moonlit night was too bright; new target is an *extremely dark* forest with
       a few moonlight rays, lit by **glowing emissive assets** (mushrooms/crystals/

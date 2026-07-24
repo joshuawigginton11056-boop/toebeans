@@ -1,3 +1,5 @@
+import { BRANCH_SEGMENTS, BRANCH_START, type Segment } from "./route";
+
 export interface SkiInput {
   readonly left: boolean;
   readonly right: boolean;
@@ -110,10 +112,31 @@ export interface SkiState {
   readonly lastCheckpoint: number;
   readonly checkpoints: readonly number[];
   readonly chasms: readonly Chasm[];
-  // Where the slope ends. Crossing it (distance >= finishDistance) wins the
-  // run — status flips to "finished". Static layout, like chasms/checkpoints:
-  // it comes fresh from createInitialSkiState and is deliberately not saved,
-  // so retuning the slope length never leaves an old finish trapped in a save.
+  // Which segment of the route the run is on (the branching map — see
+  // route.ts). "main" is the un-branched single-segment run (Slope 1, the
+  // Overlook): one segment, `next` null, so it never transitions and behaves
+  // exactly as before segments existed. On the branching map this names the
+  // spine or detour segment you're skiing, and `distance` is measured from
+  // THIS segment's entrance. Deliberately not saved: the branching map is
+  // dev-only for now, and a restore rebuilds from createInitialSkiState (the
+  // Overlook), which is "main".
+  readonly segmentId: string;
+  // A pending Type A fork (branching map): set to a detour segment's id while
+  // the run is inside that segment's trigger volume (the great tree grabbing
+  // you), consumed at the next segment boundary to route into the detour
+  // instead of the road, then cleared. null when no fork is pending. Transient
+  // routing intent, not saved — same spirit as flightHeading; a restore starts
+  // with no fork pending.
+  readonly divertTo: string | null;
+  // Where the CURRENT segment ends. Crossing it (distance >= finishDistance)
+  // either transitions to the next segment (branching map) or, when the segment
+  // is terminal (`next` null — always the case for the Overlook's single
+  // "main" segment), wins the run: status flips to "finished". The name is
+  // historical (it was the whole slope's finish before segments); for a
+  // one-segment run it still is exactly that. Static layout, like
+  // chasms/checkpoints: it comes fresh from the initial-state builders and is
+  // deliberately not saved, so retuning a segment's length never leaves an old
+  // value trapped in a save.
   readonly finishDistance: number;
   // Seconds left in the post-finish coast-out before the client auto-returns
   // to the lobby (see FINISH_LINGER). Set on the finish frame, ticks down
@@ -377,6 +400,12 @@ export function createInitialSkiState(): SkiState {
     // the rock gate (cp 620). The stretch after cp 620 is a clean glide to
     // the finish at 800 — no hazard, so no checkpoint needed there.
     checkpoints: [0, 150, 285, 420, 620],
+    // The Overlook is one segment ("main") that ends at the finish — `next`
+    // is implicitly null (no registry entry for "main"), so it never
+    // transitions and the finish logic below reduces to the pre-segment
+    // behavior exactly.
+    segmentId: "main",
+    divertTo: null,
     chasms: [
       // Beat 2 — the warm-up: one easy chasm to learn the jump.
       { id: "chasm-1", start: 120, width: 3 },
@@ -393,6 +422,27 @@ export function createInitialSkiState(): SkiState {
     ],
     finishDistance: FINISH_DISTANCE,
     finishTimer: 0,
+  };
+}
+
+// A fresh run on the branching map (SLOPE_BRANCHING.md — "the actual map"),
+// starting at the summit segment. Reuses every transient/physics default from
+// the Overlook's initial state (a run is a run — same body, same feel) and only
+// swaps in the route skeleton: which segment you're on, that segment's end and
+// hazards, and no pending fork. Dev-only for now (see main.ts's entry flag);
+// the grayblock de-risk of the fork handoff, not a shipped slope.
+export function createBranchingSkiState(): SkiState {
+  const seg = BRANCH_SEGMENTS[BRANCH_START]!;
+  return {
+    ...createInitialSkiState(),
+    distance: 0,
+    lateral: 0,
+    lastCheckpoint: 0,
+    checkpoints: seg.checkpoints,
+    chasms: seg.chasms,
+    segmentId: seg.id,
+    divertTo: null,
+    finishDistance: seg.length,
   };
 }
 
@@ -429,6 +479,11 @@ function respawnAtCheckpoint(state: SkiState): SkiState {
     // Start the key "up" — a jump held through the crash shouldn't count as a
     // fresh press on the respawn frame (same edge logic as the tired hop).
     prevJumpHeld: false,
+    // Respawn stays in the current segment (a crash inside a detour restarts at
+    // that detour's entrance — SLOPE_BRANCHING.md §6), but any fork you'd
+    // triggered on the fatal approach is cleared: you get to choose again.
+    // segmentId is preserved by the spread above.
+    divertTo: null,
     status: "skiing",
     respawnTimer: 0,
   };
@@ -731,15 +786,66 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     }
   }
 
-  // Chasms are the game's only crash now (turning round 3).
+  // Chasms are the game's only crash now (turning round 3). Read against the
+  // CURRENT segment's chasms (state.chasms), so a run only ever crashes into
+  // the hazards of the segment it's actually skiing.
   const crashed = fellIntoAChasm(state.chasms, distance, height);
-  // Crossing the finish wins the run (a crash on the final frame takes
-  // precedence — but the last chasm ends well before the finish, so the two
-  // never overlap). Next frame the "finished" branch above coasts you out.
-  const finished = !crashed && distance >= state.finishDistance;
+
+  // The branching map's routing (SLOPE_BRANCHING.md — see route.ts). All of
+  // this is inert for the Overlook: its "main" segment has no registry entry
+  // (`seg` undefined) and no `next`, so nothing below fires except the finish,
+  // which reduces to the old `distance >= finishDistance` check exactly.
+  const seg: Segment | undefined = BRANCH_SEGMENTS[state.segmentId];
+
+  // Type A trigger: while inside a segment's trigger volume (down-distance
+  // window AND lateral window — you skied into the great tree), arm the fork.
+  // Set once and it sticks to the segment boundary; a crash/respawn clears it.
+  let divertTo = state.divertTo;
+  if (seg?.trigger && divertTo === null && !crashed) {
+    const t = seg.trigger;
+    if (
+      distance >= t.at - t.halfWidth &&
+      distance <= t.at + t.halfWidth &&
+      lateral >= t.lateralMin &&
+      lateral <= t.lateralMax
+    ) {
+      divertTo = t.into;
+    }
+  }
+
+  // Reaching the current segment's end: either flow into the next segment
+  // (branching map) or, when this segment is terminal, win the run. The armed
+  // fork (divertTo) overrides the road (`seg.next`); the leftover overflow
+  // distance carries into the new segment so no travel is lost at the seam.
+  let segmentId = state.segmentId;
+  let distanceOut = distance;
+  let chasms = state.chasms;
+  let checkpoints = state.checkpoints;
+  let finishDistance = state.finishDistance;
+  let finished = false;
+  if (!crashed && distance >= finishDistance) {
+    const nextId = divertTo ?? seg?.next ?? null;
+    const nextSeg = nextId ? BRANCH_SEGMENTS[nextId] : undefined;
+    if (nextSeg) {
+      segmentId = nextSeg.id;
+      distanceOut = distance - finishDistance;
+      finishDistance = nextSeg.length;
+      chasms = nextSeg.chasms;
+      checkpoints = nextSeg.checkpoints;
+      // The new segment's entrance is its own respawn point (§6): a crash in
+      // the fresh segment restarts here, never back up the previous one.
+      lastCheckpoint = 0;
+      divertTo = null;
+    } else {
+      // No successor — this is the flag. Crossing it wins the run (a crash on
+      // the final frame takes precedence). Next frame the "finished" branch at
+      // the top coasts you out.
+      finished = true;
+    }
+  }
 
   return {
-    distance,
+    distance: distanceOut,
     lateral,
     heading,
     flightHeading,
@@ -760,9 +866,13 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     lives: crashed ? state.lives - 1 : state.lives,
     respawnTimer: crashed ? RESPAWN_DELAY : 0,
     lastCheckpoint,
-    checkpoints: state.checkpoints,
-    chasms: state.chasms,
-    finishDistance: state.finishDistance,
+    checkpoints,
+    chasms,
+    segmentId,
+    // A crash keeps whatever fork was armed only long enough for the respawn to
+    // clear it; otherwise carry the (possibly just-consumed → null) fork.
+    divertTo: crashed ? state.divertTo : divertTo,
+    finishDistance,
     // The coast-out clock starts the frame the line is crossed.
     finishTimer: finished ? FINISH_LINGER : 0,
   };

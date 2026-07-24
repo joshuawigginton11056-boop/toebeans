@@ -1,4 +1,5 @@
 export * from "./skiing";
+export * from "./route";
 export * from "./save";
 export * from "./appearance";
 
