@@ -51,6 +51,25 @@ from the de-risk:
 
 ## (slope-vis) NIGHT → the enchanted forest — director redirect (2026-07-24)
 
+> **⏭ START HERE NEXT SESSION (slope-vis, handoff 2026-07-24):** the
+> **darker-night first pass landed and is merged to master** — the `NIGHT`
+> constants in `skiScene.ts` are crushed toward near-black (open-snow floor
+> `#12182B`, sky zenith `#0B0F1C`, moon-lit lane `#4E608A`), moon kept on as a
+> faint down-lane key. **Two things before building on it:**
+> 1. **Look-pass still pending** — the darkness value was verified numerically
+>    but never eyeballed (port 5303 was held, pane wouldn't composite). Confirm
+>    with Josh that it's dark enough / not too dark on **N** before treating the
+>    values as final; they may still get tuned.
+> 2. **The big piece is next: glowing emissive props + bloom + a glow palette**
+>    (the "enchanted" lighting model). This is blocked on **two director calls**
+>    — (a) sourcing preference: CC0 pack (Quaternius/Kenney mushrooms/crystals/
+>    plants) vs. re-lighting existing props; (b) sign-off on a small glow palette
+>    (cool bioluminescent teals/greens/violets ± a warm lantern amber), carved
+>    out separately from the 13 like the character ramps. **Ask these first.**
+>    Then: moonlight *rays*, phase-aware decor/spray/audio, the auto-transition.
+> **Do NOT crush the ambient further until glow-pool lighting exists** — past
+> the current values the lane stops being readable (see the ✅ bullet below).
+
 **Redirect after the first night look-pass (director, 2026-07-24):** the
 moonlit night I built is **too bright and too evenly lit**. The new target:
 
@@ -60,8 +79,9 @@ moonlit night I built is **too bright and too evenly lit**. The new target:
 
 So night stops being "the same scene, dimmed and cooled" and becomes its own
 mood: a near-black enchanted forest where **the light sources are objects in
-the world** — glowing props — not a moon fill. This is the plan for the **next
-slope-vis session**; the current build is the starting baseline to darken.
+the world** — glowing props — not a moon fill. The **darker-night first pass is
+done** (the ✅ bullet below); the rest of this plan — glow props, bloom, rays —
+is the remaining work.
 
 **What's already there to build on** (this session, see ROADMAP): a `timeOfDay`
 phase in `skiScene.ts` lerps dawn → night across every atmosphere param
