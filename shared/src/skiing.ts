@@ -2,6 +2,7 @@ import {
   BRANCH_SEGMENTS,
   BRANCH_START,
   gradeSpeedFactor,
+  singleTrailNext,
   type Segment,
 } from "./route";
 
@@ -126,6 +127,15 @@ export interface SkiState {
   // dev-only for now, and a restore rebuilds from createInitialSkiState (the
   // Overlook), which is "main".
   readonly segmentId: string;
+  // Whether this run is the single played trail (slope-mech, 2026-07-24 redirect —
+  // IDEAS.md START HERE). The §4 branching graph is PARKED: when this is true the
+  // sim walks route.ts's SINGLE_TRAIL (summit → the back of the forest) instead of
+  // the fork graph — the forks never arm, and the trail's end opens into the runout
+  // rather than flowing on to the lake. The Overlook and the (test-only) full
+  // branching run leave it false, so they route exactly as before. Static run
+  // shape, deliberately not saved: a restore rebuilds the Overlook (branching/trail
+  // state isn't saved), which is false — same spirit as segmentId below.
+  readonly singleTrail: boolean;
   // A pending Type A fork (branching map): set to a detour segment's id while
   // the run is inside that segment's trigger volume (the great tree grabbing
   // you), consumed at the next segment boundary to route into the detour
@@ -424,6 +434,9 @@ export function createInitialSkiState(): SkiState {
     // transitions and the finish logic below reduces to the pre-segment
     // behavior exactly.
     segmentId: "main",
+    // The Overlook is not the single played trail (that's createSingleTrailSkiState);
+    // it routes as the un-branched "main" run exactly as it always has.
+    singleTrail: false,
     divertTo: null,
     chasms: [
       // Beat 2 — the warm-up: one easy chasm to learn the jump.
@@ -463,6 +476,16 @@ export function createBranchingSkiState(): SkiState {
     divertTo: null,
     finishDistance: seg.length,
   };
+}
+
+// A fresh run on the single played trail (IDEAS.md START HERE — the redirect's
+// active run, what "Hit the slopes" loads). Same body, feel, and summit skeleton as
+// the branching run (it reuses createBranchingSkiState) — only flagged single-trail,
+// so the sim walks route.ts's SINGLE_TRAIL and the forks stay parked. The full
+// branching run (createBranchingSkiState) is kept for the same-clock tests that
+// still exercise the parked §4 graph end to end.
+export function createSingleTrailSkiState(): SkiState {
+  return { ...createBranchingSkiState(), singleTrail: true };
 }
 
 function fellIntoAChasm(
@@ -839,7 +862,11 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   // window AND lateral window — you skied into the great tree), arm the fork.
   // Set once and it sticks to the segment boundary; a crash/respawn clears it.
   let divertTo = state.divertTo;
-  if (seg?.trigger && divertTo === null && !crashed) {
+  // Forks are PARKED on the single played trail (the redirect): a run flagged
+  // singleTrail never arms a divert, so steering into the great tree / hole / ledge
+  // does nothing and the run stays on the one trail. The full branching run (tests)
+  // and any future re-opened map still arm normally.
+  if (!state.singleTrail && seg?.trigger && divertTo === null && !crashed) {
     const t = seg.trigger;
     if (
       distance >= t.at - t.halfWidth &&
@@ -862,7 +889,14 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   let finishDistance = state.finishDistance;
   let finished = false;
   if (!crashed && distance >= finishDistance) {
-    const nextId = divertTo ?? seg?.next ?? null;
+    // The single played trail walks route.ts's SINGLE_TRAIL (summit → forest-road),
+    // not the fork graph: at forest-road's end singleTrailNext returns null, so the
+    // run drops through to the runout below (the back of the forest opens onto the
+    // flat coast-out — no finish line yet) instead of flowing on to the lake. The
+    // full branching run keeps resolving next via the armed fork or the road.
+    const nextId = state.singleTrail
+      ? singleTrailNext(state.segmentId)
+      : (divertTo ?? seg?.next ?? null);
     const nextSeg = nextId ? BRANCH_SEGMENTS[nextId] : undefined;
     if (nextSeg) {
       segmentId = nextSeg.id;
@@ -916,6 +950,9 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     checkpoints,
     chasms,
     segmentId,
+    // Carries through untouched — a run is single-trail (or not) for its whole life;
+    // respawnAtCheckpoint spreads it too, so a crash restarts on the same trail.
+    singleTrail: state.singleTrail,
     // A crash keeps whatever fork was armed only long enough for the respawn to
     // clear it; otherwise carry the (possibly just-consumed → null) fork.
     divertTo: crashed ? state.divertTo : divertTo,

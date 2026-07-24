@@ -60,6 +60,26 @@ export interface Segment {
 // Where a fresh branching run starts — the shared summit descent.
 export const BRANCH_START = "summit";
 
+// The single played trail (slope-mech, 2026-07-24 redirect — see IDEAS.md START
+// HERE). The §4 branching graph below is PARKED for the played path: it stays
+// here, still proven by the same-clock tests, but the active run no longer forks
+// through it. Instead it rides ONE non-branching trail — summit → the back of the
+// enchanted forest — and ends there, coasting off into the flat runout (there is
+// no finish line yet). Kept as its own tiny ordered list so BRANCH_SEGMENTS'
+// tested topology is untouched: the sim walks THIS (via singleTrailNext) instead
+// of `next` when a run is flagged single-trail, and the forks never arm. Extend
+// the list (and its terrain in skiRender) when Josh opens the map back up.
+export const SINGLE_TRAIL: readonly string[] = ["summit", "forest-road"];
+
+/** The next segment along the single played trail, or null at the back of the
+ * forest — the trail's terminal, where the run opens into the runout. Off the
+ * trail (an unlisted id) returns null too, so a single-trail run never wanders
+ * onto the parked graph. */
+export function singleTrailNext(segmentId: string): string | null {
+  const i = SINGLE_TRAIL.indexOf(segmentId);
+  return i >= 0 && i + 1 < SINGLE_TRAIL.length ? SINGLE_TRAIL[i + 1]! : null;
+}
+
 // The §4 map, as grayblock topology. Read as a resort trail map (sunset at the
 // summit, flag in the valley):
 //

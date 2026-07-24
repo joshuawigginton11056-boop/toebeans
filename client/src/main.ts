@@ -1,7 +1,7 @@
 import {
-  createBranchingSkiState,
   createDefaultAppearance,
   createInitialSkiState,
+  createSingleTrailSkiState,
   createSave,
   cycleCharacter,
   cycleRegion,
@@ -34,14 +34,16 @@ import {
 } from "./skiRender";
 import { cycleTimeOfDay } from "./skiScene";
 
-// The branching map (SLOPE_BRANCHING.md — "the actual map") is the DEFAULT slope
-// now (director, 2026-07-24: the graded "real mountain" run must be what the live
-// build shows — no more hiding it behind a dev flag; the old flat Overlook felt
-// unchanged because the grade only ever lived on the branching map). Every trip to
-// the slope loads the graded grayblock branching route (createBranchingSkiState).
-// `?overlook=1` still loads the old flat Overlook for comparison. It's grayblock
-// today (boxes + descending corridors, no dressing) — the real snow/forest is the
-// slope-visuals session's parallel job; the mechanics (the 3D drop) are here now.
+// The mountain is the DEFAULT slope now (director, 2026-07-24: the graded "real
+// mountain" run must be what the live build shows — no more hiding it behind a dev
+// flag; the old flat Overlook felt unchanged because the grade only ever lived on
+// the mountain). Per the 2026-07-24 redirect (IDEAS.md START HERE) the forks are
+// PARKED: every trip loads the SINGLE played trail — summit → the back of the
+// enchanted forest, one smooth continuous line, ending in a runout
+// (createSingleTrailSkiState). `?overlook=1` still loads the old flat Overlook for
+// comparison. Terrain is a plain-shaded placeholder — the real snow/forest dressing
+// is the slope-visuals session's parallel job; the mechanics (the 3D drop, the
+// smooth trail) are here.
 const params = new URLSearchParams(location.search);
 const BRANCH_MAP = !params.has("overlook");
 // The live proof readout stays a dev-only overlay (?branch or ?debug) so the
@@ -174,7 +176,7 @@ function goSkiing(): void {
   // Every trip to the slope is a fresh run — full lives, back to the top.
   // This is also how you retry after a forfeit.
   if (BRANCH_MAP) {
-    skiState = createBranchingSkiState();
+    skiState = createSingleTrailSkiState();
     // The mountain terrain lives in the scene for good once dropped in — only
     // the run state resets per trip.
     if (!branchTerrainAdded) {

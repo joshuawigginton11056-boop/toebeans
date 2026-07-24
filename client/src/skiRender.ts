@@ -7,15 +7,16 @@ import {
   LATERAL_LIMIT,
   MIN_SPEED,
   RESPAWN_DELAY,
+  SINGLE_TRAIL,
   TIRED_HOP_DURATION,
   downhillHeading,
   roadSegmentIds,
+  singleTrailNext,
   type SkiState,
 } from "@toebeans/shared";
 import { createCatRig, type CatRig } from "./catModel";
 import { createSkierRig, type SkierRig } from "./skierModel";
 import {
-  SEGMENT_PLACEMENTS,
   segmentCenterline,
   segmentPitch,
   segmentToWorld,
@@ -684,10 +685,17 @@ export function syncSkiSceneToState(
 // with the sim's ground, flanked by snowbanks that rise into rolling mountainside
 // so you ski down a real hill, not a chute of stacked boxes. Follows the curved
 // centerlines (segmentToWorld) AND the varying grade (segmentCenterline.y /
-// segmentPitch) so the ground descends + bends exactly under the run. Terminal
-// segments (cliff, ice-castle) extend a flat RUNOUT past the flag — there is no
-// finish line yet (director), so the run coasts off the mountain onto the valley
-// floor. Built once when a branching run starts (main.ts).
+// segmentPitch) so the ground descends + bends exactly under the run.
+//
+// SINGLE TRAIL (slope-mech, 2026-07-24 redirect — IDEAS.md START HERE): the forks
+// are parked, so this builds ONLY the played trail's segments (route.ts's
+// SINGLE_TRAIL — summit → the back of the forest), riding the smooth continuous
+// TRAIL_LINE centerline. No detour corridors, no fork-marker rocks. The trail's
+// terminal (the back of the forest, singleTrailNext → null) extends a flat RUNOUT —
+// there is no finish line yet (director), so the run coasts off onto the valley
+// floor. Built once when a run starts (main.ts). Reopening the map = iterate more
+// of the graph here again. (Still one mesh PER segment for now; merging the trail
+// into a single seamless surface is the next chunk — Josh split it off.)
 //
 // SEAM NOTE (slope-mech → slope-vis): this is a PLAIN-SHADED placeholder surface —
 // real geometry, no dressing. skiScene.ts (slope-vis) owns the final look (snow
@@ -730,10 +738,12 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
     return centerY + (BERM_HEIGHT + flankRelief(wx, wz)) * smooth;
   };
 
-  for (const id of Object.keys(SEGMENT_PLACEMENTS)) {
+  for (const id of SINGLE_TRAIL) {
     const seg = BRANCH_SEGMENTS[id];
     if (!seg) continue;
-    const isTerminal = seg.next === null;
+    // Terminal on the PLAYED TRAIL (not the parked graph): the back of the forest
+    // is where singleTrailNext runs out, and there the surface extends the runout.
+    const isTerminal = singleTrailNext(id) === null;
     const spanEnd = seg.length + (isTerminal ? RUNOUT : 0);
     const rows = Math.max(2, Math.ceil(spanEnd / STEP_LONG) + 1);
     const cols = COLS.length;
@@ -779,25 +789,9 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
     mesh.receiveShadow = true;
     handle.scene.add(mesh);
   }
-
-  // The "world reaches out and grabs you" landmark at each fork trigger (the great
-  // tree, the yeti's hole, the ledge shove) — a boulder marking the spot on the
-  // side the lateral window sits, so the fork is findable. A rock, not a gray box.
-  const rockMat = new THREE.MeshStandardMaterial({ color: 0x6b6f76, roughness: 1 });
-  for (const id of Object.keys(SEGMENT_PLACEMENTS)) {
-    const seg = BRANCH_SEGMENTS[id];
-    if (!seg?.trigger) continue;
-    const t = seg.trigger;
-    const c = segmentCenterline(id, t.at);
-    const w = segmentToWorld(id, t.at, (t.lateralMin + t.lateralMax) / 2);
-    const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(3, 0), rockMat);
-    rock.position.set(w.x, c.y + 1.6, w.z);
-    rock.scale.set(1.1, 0.75, 1.1);
-    rock.rotation.set(0.3, w.x * 0.5, 0.2);
-    rock.castShadow = true;
-    rock.receiveShadow = true;
-    handle.scene.add(rock);
-  }
+  // Fork-marker boulders are parked with the forks (the "world grabs you" landmarks
+  // at each trigger). They return when the map reopens — iterate the trigger
+  // segments again then. Nothing to place on the single trail.
 }
 
 export function render(handle: SkiSceneHandle): void {

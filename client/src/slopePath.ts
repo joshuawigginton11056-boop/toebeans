@@ -32,6 +32,7 @@ import {
   routeDistanceOf,
   routeGradeAt,
   routeHeightAt,
+  SINGLE_TRAIL,
   type Segment,
 } from "@toebeans/shared";
 
@@ -420,11 +421,65 @@ export const SEGMENT_PLACEMENTS: Readonly<Record<string, SegmentPlacement>> = ((
   return out;
 })();
 
+// The single played trail's smooth centerline (slope-mech, 2026-07-24 redirect —
+// IDEAS.md START HERE). The branching corridors above are per-segment CONSTANT-
+// curvature arcs whose curvature sign FLIPS at each seam (summit −0.24 then
+// forest-road +0.24 …) — the "jerky" path. The active run instead rides ONE
+// continuous-curvature line summit → the back of the forest: a gentle S whose
+// heading is a full sine period over the trail's route length, so the curvature is
+// smooth EVERYWHERE (no seam kink) and BOTH the heading and the lateral return to
+// ~0 at the forest (∫ heading over a full period is 0) — the run tracks the fall
+// line with no net drift, killing the old forest drift-right. Keyed to ROUTE
+// distance (summit 0..120, forest-road 120..240) so the two trail segments sample
+// one shared line; y still comes from the shared grade profile (segmentGroundY).
+const TRAIL_ROUTE_LEN = 240; // summit (120) + forest-road (120) → back of the forest
+// Peak heading off the fall line, radians (~8°). Negative leans the S LEFT first
+// then eases back (matching the old spine's left lobe through the summit). A gentle
+// LOOK-PASS KNOB — raise for a bolder curve, drop toward 0 for near-straight.
+const TRAIL_AMPLITUDE = -0.14;
+const TRAIL_LINE: Centerline = (() => {
+  const step = STEP;
+  const n = Math.ceil(TRAIL_ROUTE_LEN / step) + 1;
+  const xs = new Float64Array(n);
+  const zs = new Float64Array(n);
+  const headings = new Float64Array(n);
+  const headingAt = (s: number): number =>
+    TRAIL_AMPLITUDE *
+    Math.sin((2 * Math.PI * Math.min(s, TRAIL_ROUTE_LEN)) / TRAIL_ROUTE_LEN);
+  let x = 0;
+  let z = 0;
+  headings[0] = headingAt(0);
+  for (let i = 1; i < n; i++) {
+    const h0 = headingAt((i - 1) * step);
+    const h1 = headingAt(i * step);
+    // Tangent (downhill) = (sin H, −cos H); trapezoid it into position, same as
+    // buildCenterline — arc-length parameterized, so travel ≈ route distance.
+    x += 0.5 * (Math.sin(h0) + Math.sin(h1)) * step;
+    z += 0.5 * (-Math.cos(h0) - Math.cos(h1)) * step;
+    xs[i] = x;
+    zs[i] = z;
+    headings[i] = h1;
+  }
+  return { step, xs, zs, headings };
+})();
+
 /** The centerline point (world x/z + tangent) at a distance down a segment.
- * Unknown segment ("main") → the Overlook's global road, so it's unchanged. */
+ * Unknown segment ("main") → the Overlook's global road, so it's unchanged. The
+ * single played trail (summit, forest-road) rides the one smooth TRAIL_LINE above
+ * instead of its per-segment arc — killing the seam kink and the drift; the parked
+ * branching segments keep their constant-curvature arc placement. */
 export function segmentCenterline(segmentId: string, distance: number): SlopePoint {
   const p = SEGMENT_PLACEMENTS[segmentId];
   if (!p) return slopeCenterline(distance);
+  if (SINGLE_TRAIL.includes(segmentId)) {
+    const c = centerlineAt(TRAIL_LINE, routeDistanceOf(segmentId, distance));
+    return {
+      x: c.x,
+      z: c.z,
+      y: segmentGroundY(segmentId, distance),
+      heading: c.heading,
+    };
+  }
   const arc = advanceArc(p.originX, p.originZ, p.entryHeading, p.curvature, distance);
   return {
     x: arc.x,

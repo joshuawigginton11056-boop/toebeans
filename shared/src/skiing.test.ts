@@ -4,6 +4,7 @@ import {
   BOOST_SPEED,
   createBranchingSkiState,
   createInitialSkiState,
+  createSingleTrailSkiState,
   downhillHeading,
   FINISH_DISTANCE,
   FINISH_LINGER,
@@ -27,6 +28,8 @@ import {
   BRANCH_START,
   roadSegmentIds,
   routeDistanceOf,
+  SINGLE_TRAIL,
+  singleTrailNext,
   TOTAL_ROUTE_LENGTH,
 } from "./route";
 
@@ -64,6 +67,7 @@ const nearChasm: SkiState = {
   // successor, so the segment routing is inert and these fixtures behave
   // exactly as they did before segments existed.
   segmentId: "main",
+  singleTrail: false,
   divertTo: null,
   // Far past anything these low-distance fixtures reach, so a test never
   // finishes by accident. Finish-specific tests set their own.
@@ -1664,6 +1668,99 @@ describe("The branching map: same clock, same flag", () => {
     expect(state.segmentId).toBe("cliff");
     expect(state.distance).toBe(cliff.checkpoints[0]);
     expect(state.divertTo).toBeNull();
+  });
+});
+
+// The single played trail (slope-mech, 2026-07-24 redirect — IDEAS.md START HERE).
+// The §4 branching graph above is PARKED for the played path: the active run rides
+// ONE non-branching trail (route.ts SINGLE_TRAIL — summit → the back of the forest)
+// and ends there, coasting off into the runout. These pin that the flag reroutes
+// the sim correctly and the forks stay off, WITHOUT touching the tested graph.
+describe("The single played trail: summit → back of the forest, forks parked", () => {
+  const dt = 0.02;
+
+  it("SINGLE_TRAIL / singleTrailNext describe summit → forest-road → (end)", () => {
+    expect(SINGLE_TRAIL).toEqual(["summit", "forest-road"]);
+    expect(singleTrailNext("summit")).toBe("forest-road");
+    expect(singleTrailNext("forest-road")).toBeNull(); // the back of the forest
+    expect(singleTrailNext("lake")).toBeNull(); // off the trail → never wanders on
+  });
+
+  it("a fresh single-trail run is a summit run, flagged single-trail", () => {
+    const s = createSingleTrailSkiState();
+    expect(s.segmentId).toBe("summit");
+    expect(s.singleTrail).toBe(true);
+    // Same summit skeleton as the branching run — a run is a run.
+    expect(s.chasms).toEqual(BRANCH_SEGMENTS.summit!.chasms);
+    expect(s.finishDistance).toBe(BRANCH_SEGMENTS.summit!.length);
+    // The Overlook and the full branching run are NOT single-trail.
+    expect(createInitialSkiState().singleTrail).toBe(false);
+    expect(createBranchingSkiState().singleTrail).toBe(false);
+  });
+
+  it("flows summit → forest-road, then coasts off the back of the forest into the runout (never the lake)", () => {
+    let state = createSingleTrailSkiState();
+    const segments = [state.segmentId];
+    // The trail's total route length (summit 120 + forest-road 120 = 240); coast a
+    // good way past it to prove the run keeps going down the flat runout, not onto
+    // a new segment.
+    const trailLen = SINGLE_TRAIL.reduce((s, id) => s + BRANCH_SEGMENTS[id]!.length, 0);
+    for (
+      let i = 0;
+      i < 6000 &&
+      routeDistanceOf(state.segmentId, state.distance) < trailLen + 120;
+      i++
+    ) {
+      state = stepSkiing(state, noInput, dt);
+      if (segments[segments.length - 1] !== state.segmentId) segments.push(state.segmentId);
+    }
+    // Only ever the two trail segments — the lake/yeti/detours are never entered.
+    expect(segments).toEqual(["summit", "forest-road"]);
+    expect(state.segmentId).toBe("forest-road");
+    // Still skiing (no finish line — the back of the forest opens into the runout),
+    // and the terminal pushed the finish out of reach so the coast-out continues.
+    expect(state.status).toBe("skiing");
+    expect(state.finishDistance).toBe(Number.POSITIVE_INFINITY);
+    expect(routeDistanceOf(state.segmentId, state.distance)).toBeGreaterThan(trailLen + 100);
+    expect(state.divertTo).toBeNull();
+  });
+
+  it("parks the forks: steering into the summit's great-tree trigger never diverts", () => {
+    // On the branching run this lateral+distance window arms the forest-tree fork;
+    // on the single trail it must do nothing. Hug the +x edge (inside the trigger's
+    // lateral 4..12) straight through the summit and check we stay on the road trail.
+    let state = createSingleTrailSkiState();
+    const trigger = BRANCH_SEGMENTS.summit!.trigger!;
+    for (let i = 0; i < 6000 && state.segmentId === "summit"; i++) {
+      // Hold right to sit in the trigger's lateral window as we pass its distance.
+      state = stepSkiing(state, { ...noInput, right: true }, dt);
+      expect(state.divertTo).toBeNull(); // never arms, at any point down the summit
+    }
+    // Left the summit onto the ROAD (forest-road), not the tree detour.
+    expect(state.segmentId).toBe("forest-road");
+    expect(state.segmentId).not.toBe(trigger.into);
+  });
+
+  it("a crash on the single trail respawns still single-trail (the flag carries through)", () => {
+    // Summit has no chasm; drop a synthetic one in and crash into it to prove the
+    // flag survives a respawn (respawnAtCheckpoint spreads it; stepSkiing carries it).
+    let state: SkiState = {
+      ...createSingleTrailSkiState(),
+      distance: 18,
+      speed: 8,
+      chasms: [{ id: "t", start: 20, width: 3 }],
+      checkpoints: [0],
+    };
+    for (let i = 0; i < 20 && state.status === "skiing"; i++) {
+      state = stepSkiing(state, noInput, dt);
+    }
+    expect(state.status).toBe("crashed");
+    expect(state.singleTrail).toBe(true);
+    for (let i = 0; i < 200 && state.status !== "skiing"; i++) {
+      state = stepSkiing(state, noInput, dt);
+    }
+    expect(state.status).toBe("skiing");
+    expect(state.singleTrail).toBe(true);
   });
 });
 
