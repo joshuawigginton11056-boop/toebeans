@@ -59,6 +59,19 @@ parked triggers), `client/src/slopePath.ts` (`TRAIL_LINE` + `segmentCenterline`)
 (loads the single trail). The branching architecture below stays PARKED for the played
 path — kept and still tested, not the active run until Josh reopens the map.
 
+## (slope-vis) The music bed is a placeholder — pick the real direction (2026-07-24)
+
+The lobby session's settings menu needed a **music on/off toggle** to be worth
+building, so `audio.ts` grew a minimal ambient bed (an additive seam change,
+marked in-file): a soft detuned pad + a slow A-minor-pentatonic bell on a
+lookahead scheduler, routed through master so volume/mute cover it. It's
+deliberately tiny and defaults **off** — a stand-in, not the music direction.
+This is your call to make (the "timed per-slope songs à la Geometry Dash" M2
+item): when you take it, replace `buildMusic()` with the real thing and keep
+the `setMusicEnabled` seam the settings toggle already drives. Volume also got
+a `setVolume` setter (the settings slider) — leave that; it's just the master
+gain the old hardcoded `0.9` used to be.
+
 ## (multiplayer) Ghost racing — fast-follows past the first slice (2026-07-24)
 
 The first slice landed (see ROADMAP): two players in a room by code, each
@@ -321,11 +334,23 @@ The cross-session split:
 >      shaft). Faked additive god-ray cone(s) angled from a canopy gap onto the
 >      lane, night-gated the same way. Then bloom (#1) makes both the mist and
 >      the glow props actually bleed halo.
-> 1. **Bloom** — the halo that makes emissive read as *glowing*, tuned STRONG
->    (verdict #4). A render-seam add: `render()` in `skiRender.ts` (mechanics)
->    calls `renderer.render(scene, camera)`; route it through an `EffectComposer`
->    (`three/addons/postprocessing/…`, present in r185) with an `UnrealBloomPass`
->    owned by `skiScene.ts`. Smallest additive seam change, mark `// slope-vis`.
+> 1. **✅ Bloom BUILT (slope-vis 2026-07-24, awaiting look-pass)** — the halo
+>    that makes emissive read as *glowing*, tuned STRONG (verdict #4). Done as
+>    planned: `skiScene.ts` owns an `EffectComposer` (RenderPass →
+>    `UnrealBloomPass` → OutputPass) and exports `renderSlope(...)`; the seam add
+>    is `render()` in `skiRender.ts` (mechanics) now calling it instead of
+>    `renderer.render` (+ `createEnvironment` takes the camera for the RenderPass)
+>    — both marked `// slope-vis`. Night-gated on `glowFactor`: strength 0 by day
+>    so `renderSlope` **bypasses the composer** (daylight byte-identical, zero
+>    cost), rising to `BLOOM_STRENGTH 1.5` at full night. No per-object bloom
+>    layer needed — the night scene is crushed near-black, so at threshold
+>    `BLOOM_THRESHOLD 0.55` only the emissive caps (`GLOW_EMISSIVE 2.2`) clear it;
+>    the darker mist (`0x5a6e9c`, lum ~0.15) and additive pools sit under it and
+>    don't smear. Tuning knobs: `BLOOM_STRENGTH`/`BLOOM_RADIUS`/`BLOOM_THRESHOLD`
+>    (top of `skiScene.ts`). Possible follow-ups if the look-pass wants them:
+>    MSAA on the composer target (night edges are aliased vs the antialiased
+>    direct path), and a *subtle* daytime sun-bloom (bible allows it — out of
+>    scope here to protect the crisp daylight).
 > 2. **Phase-aware darkening:** snow sparkle (verdict #2, ✅ built), driven off
 >    `timeOfDay`/`glowFactor`. (Trunk glow is gone — verdict #3 — so nothing to
 >    darken there. Also the general decor/spray darkening flagged earlier —

@@ -459,8 +459,9 @@ props/motes use these; nothing in the daylight landscape may.** Signal red
 Mostly cool (G1/G2); G4 is a deliberate minority so the forest reads cold-
 enchanted, not fairy-lights. These are *emissive* (read "lit" regardless of
 the near-black scene light) and pair with a faked additive pool on the snow
-(and, once it lands, **bloom** — emissive without bloom won't feel glowing; the
-director wants the bloom pushed *strong* on the plants). Used by night emissive
+and **bloom** (built slope-vis 2026-07-24 — a night-gated full-scene
+`UnrealBloomPass`; emissive without bloom won't feel glowing, and the director
+wanted it pushed *strong* on the plants). Used by night emissive
 props: glowing mushrooms and other luminous plants (see the trunk note below —
 tree trunks do **not** self-glow). Implemented as `GLOW` in
 `client/src/skiScene.ts`.

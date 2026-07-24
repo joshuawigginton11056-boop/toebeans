@@ -147,6 +147,8 @@ export interface LobbyUiCallbacks {
   onPlay(): void;
   onCycle(kind: LobbyCycle): void;
   onToggleMute(): void;
+  /** Open the settings menu (volume, music, controls). */
+  onOpenSettings(): void;
   /** Create a new room; returns the code to show. */
   onCreateRoom(): string;
   /** Join an existing room by code (already normalized/uppercased). */
@@ -217,7 +219,8 @@ export function createLobbyUi(callbacks: LobbyUiCallbacks): LobbyUiHandle {
   const skin = button("", "Skin", "K", () => callbacks.onCycle("skin"));
   const hair = button("", "Hair", "H", () => callbacks.onCycle("hair"));
   const mute = button("", "Sound", "M", callbacks.onToggleMute);
-  row.append(character.el, skin.el, hair.el, mute.el);
+  const settings = button("", "Settings", "", callbacks.onOpenSettings);
+  row.append(character.el, skin.el, hair.el, mute.el, settings.el);
 
   // --- Play with a friend (ghost racing) ---------------------------------
   // A toggle button that opens a card: create a room to get a code, or join a
