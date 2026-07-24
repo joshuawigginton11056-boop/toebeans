@@ -17,6 +17,10 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { Appearance } from "@toebeans/shared";
+import {
+  SUPABASE_ANON_KEY as BAKED_ANON_KEY,
+  SUPABASE_URL as BAKED_URL,
+} from "./supabaseConfig";
 
 /**
  * One player's live pose on the wire — small and JSON-serializable, which is
@@ -60,12 +64,16 @@ export interface RoomHandlers {
   onStatus(status: NetStatus): void;
 }
 
-// One anon Supabase client for the whole session, created lazily. Absent env
-// → null, and rooms fall back to same-device BroadcastChannel only.
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as
-  | string
-  | undefined;
+// One anon Supabase client for the whole session, created lazily. Values come
+// from env vars if set (a local override — see client/.env.example), otherwise
+// the baked-in project defaults in supabaseConfig.ts, so the live site works
+// out of the box. If both ended up blank, rooms fall back to same-device
+// BroadcastChannel only.
+const SUPABASE_URL =
+  (import.meta.env.VITE_SUPABASE_URL as string | undefined) || BAKED_URL;
+const SUPABASE_ANON_KEY =
+  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
+  BAKED_ANON_KEY;
 
 /** Whether cross-network play is wired up (both Supabase values present). */
 export function isRemoteConfigured(): boolean {
