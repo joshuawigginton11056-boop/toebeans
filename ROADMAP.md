@@ -4828,6 +4828,52 @@ replace-vs-mix and cap-headroom decisions) is the lens-splat item in
 [IDEAS.md](IDEAS.md). Supersedes the *size* half of the make-it-read tuning;
 opacity / frequency / edge-frost from that pass stand as the starting point.
 
+## (slope-vis) 2026-07-24 — Splat goes smaller, detailed, and sticky (build)
+
+Cashed in the director's 2026-07-24 course-correct on the make-it-read pass:
+*away* from big soft smears, *toward* smaller, higher-detail individual flakes
+that cling to the lens longer before melting. All in `skiScene.ts`'s lens block
+— no seam crossed, no bible change (still the one cool `LENS_TINT` snow-white;
+the detail is *shape*, not a new colour). Three levers, per the IDEAS spec:
+
+- **Smaller.** Base radius `(0.028+.06)` → `(0.013+.026)·minDim` and the big
+  multiplier 2.4 → 2.2. On a 1080-tall view a small flake is now **~14–42 px**
+  radius (was ~46) and a big "direct hit" **~31–93 px** (was 111) — each reads
+  as a flake, not a screen-covering blob. The "reads at speed" now comes from
+  detail + count + persistence, not size.
+- **Higher detail — a pre-rendered crystal sprite.** New `makeFlakeSprite()`
+  paints one six-arm snow-crystal (two side-branch pairs per arm over a soft
+  melty core) to a 64px offscreen canvas *once* at setup. Each small splat now
+  `drawImage`s that sprite scaled to its radius and rotated to a fixed random
+  birth angle — real flake shape for the price of a blit, no per-frame pathing.
+  A `big` splat stays the soft round gradient smear: the mix (many small
+  detailed stickers + a few soft direct hits) is the recommended read.
+  `LENS_BIG_CHANCE` 0.24 → 0.16 so small flakes dominate.
+- **Stick longer.** `LENS_LIFE` 0.5 → 1.1 s, `LENS_LIFE_VAR` 0.5 → 0.7 (a flake
+  now clings **~0.75–1.45 s**, a soft hit ~1.2–1.9 s — was 0.5/0.8). Fade
+  softened from `min(1,t·3.5)·t` to `min(1, age·12)·√t`: a gentle appear as it
+  hits, then a slow melt that holds near-full for most of the (longer) life and
+  eases off at the end — the "sticks then melts slowly" read. Drip/spread cut
+  to match a clinging flake: `LENS_SLIDE` 55 → 26, `LENS_MELT` 70 → 22, and a
+  flake barely spreads (`grow` = `LENS_MELT·0.25`) while soft hits still smear.
+  `LENS_SPLAT_MAX` 110 → 130 for headroom, though at ~28/s × ~1.1 s only ~31 are
+  typically alive at full carve — well under the cap, and sprite blits are
+  *cheaper* per-frame than the old all-gradient path.
+
+Edge-frost vignette and the idle-skip zero-fill are untouched (both stay, per
+the IDEAS decision). Opacity/frequency/frost from the make-it-read pass stand as
+the starting point; only the *size* half was superseded.
+
+`npm run check` passes (typecheck + 113 tests). **Live look-pass is the
+director's** — same wall as every prior entry in this thread: this session's dev
+port 5303 was held by another chat's server (strict ports — not stealing a
+config, per PARALLEL.md), and the Browser pane pauses the render loop when
+hidden, so the moving splats can't be captured here regardless. Verified
+deterministically by replaying the new draw math (radii/alpha/life numbers
+above). **Still open — the fling-more half** (plume + lens carve-boost on hard
+turns, and the landing "poof" that needs the `justLanded`/impact seam field) is
+a separate next chunk; see IDEAS.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

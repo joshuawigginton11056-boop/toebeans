@@ -1201,13 +1201,16 @@ const FLURRY_WIND_X = 0.5;
 // off the same speed/carve signals as the spray, so no seam crosses. The
 // overlay is pointer-events:none (camera clicks pass through) and mirrors the
 // ski canvas's visibility so nothing lingers over the lobby.
-const LENS_SPLAT_MAX = 110; // hard cap on live splats (bounds fill cost)
+const LENS_SPLAT_MAX = 130; // hard cap on live splats (bounds fill cost)
 const LENS_SPLAT_RATE = 28; // splats/sec at full carve, before the closeness gate
-const LENS_BIG_CHANCE = 0.24; // fraction that are bigger, longer "direct hits"
-const LENS_LIFE = 0.5; // seconds a splat lingers before it's gone
-const LENS_LIFE_VAR = 0.5;
-const LENS_SLIDE = 55; // px/sec a splat drips down the lens
-const LENS_MELT = 70; // px/sec a splat spreads as it melts
+// Most splats are now small detailed *flake* stickers; a `big` one is instead a
+// soft round "direct hit" smear. The mix (many small flakes + a few soft hits)
+// is the director's 2026-07-24 course-correct — smaller, detailed, sticky.
+const LENS_BIG_CHANCE = 0.16; // fraction that are the bigger soft "direct hits"
+const LENS_LIFE = 1.1; // seconds a splat clings before it's fully melted off
+const LENS_LIFE_VAR = 0.7;
+const LENS_SLIDE = 26; // px/sec a splat drips down the lens (low — it sticks)
+const LENS_MELT = 22; // px/sec a splat spreads as it melts
 // Cool-white, same snow-shadow family as the plume — a splat is that powder
 // hitting glass. Kept subtly translucent so it never blocks the play read.
 const LENS_TINT = "233, 240, 250";
@@ -1342,8 +1345,9 @@ interface FlurrySystem {
   readonly material: THREE.ShaderMaterial;
 }
 
-// One soft splat stuck to the lens: screen position (CSS px), current radius,
-// how far through its melt it is, and its drip velocity.
+// One splat stuck to the lens: screen position (CSS px), current radius, how far
+// through its melt it is, its drip velocity, and — for flakes — a fixed birth
+// rotation so the crystal sits at a natural random angle on the glass.
 interface LensSplat {
   x: number;
   y: number;
@@ -1353,12 +1357,15 @@ interface LensSplat {
   life: number;
   maxLife: number;
   alpha0: number;
+  rot: number; // birth rotation, radians (flakes only; blobs ignore it)
+  flake: boolean; // true = detailed crystal sprite, false = soft round direct hit
 }
 
 interface LensSplashSystem {
   readonly canvas: HTMLCanvasElement;
   readonly ctx: CanvasRenderingContext2D;
   readonly splats: LensSplat[];
+  readonly flakeSprite: HTMLCanvasElement; // pre-rendered crystal, drawn scaled+rotated
   emitAccum: number;
   frost: number; // 0..1 smoothed edge-cake level (eases with carve intensity)
   wasDrawn: boolean; // last frame left ink on the canvas (so we clear once)
@@ -1749,7 +1756,15 @@ function createLensSplash(renderer: THREE.WebGLRenderer): void {
     parent.removeChild(canvas);
     return;
   }
-  lensSplash = { canvas, ctx, splats: [], emitAccum: 0, frost: 0, wasDrawn: false };
+  lensSplash = {
+    canvas,
+    ctx,
+    splats: [],
+    flakeSprite: makeFlakeSprite(),
+    emitAccum: 0,
+    frost: 0,
+    wasDrawn: false,
+  };
 
   // Follow the ski canvas in and out (main.ts sets display:none in the lobby).
   // Clear on hide so no splat is frozen on-screen behind the lobby.
@@ -1768,6 +1783,58 @@ function createLensSplash(renderer: THREE.WebGLRenderer): void {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
   });
+}
+
+// Pre-render one snow-crystal sprite to an offscreen canvas (done once at
+// setup). Each small flake splat then `drawImage`s this scaled + rotated, so the
+// "higher detail" the director asked for (2026-07-24) costs no per-frame pathing
+// — just a blit. Six-arm crystal with short side-branches over a soft melty core,
+// painted in the cool LENS_TINT snow-white so it stays bible-legal (detail is
+// shape, not a new colour). Alpha lives in the sprite; per-splat fade rides
+// globalAlpha at draw time.
+function makeFlakeSprite(): HTMLCanvasElement {
+  const S = 64;
+  const c = document.createElement("canvas");
+  c.width = S;
+  c.height = S;
+  const g = c.getContext("2d")!;
+  const cx = S / 2;
+  const cy = S / 2;
+  // Soft wet core so the crystal reads as snow-on-glass, not a hard vector star.
+  const core = g.createRadialGradient(cx, cy, 0, cx, cy, S * 0.5);
+  core.addColorStop(0, `rgba(${LENS_TINT}, 0.5)`);
+  core.addColorStop(0.5, `rgba(${LENS_TINT}, 0.12)`);
+  core.addColorStop(1, `rgba(${LENS_TINT}, 0)`);
+  g.fillStyle = core;
+  g.fillRect(0, 0, S, S);
+  // Six radial arms with two pairs of side-branches each.
+  g.translate(cx, cy);
+  g.strokeStyle = `rgb(${LENS_TINT})`;
+  g.lineCap = "round";
+  const arm = S * 0.4;
+  for (let i = 0; i < 6; i++) {
+    g.save();
+    g.rotate((Math.PI / 3) * i);
+    g.globalAlpha = 0.8;
+    g.lineWidth = S * 0.05;
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.lineTo(0, -arm);
+    g.stroke();
+    g.lineWidth = S * 0.035;
+    for (const f of [0.5, 0.74]) {
+      const by = -arm * f;
+      const bl = arm * 0.24;
+      g.beginPath();
+      g.moveTo(0, by);
+      g.lineTo(bl * 0.7, by - bl * 0.7);
+      g.moveTo(0, by);
+      g.lineTo(-bl * 0.7, by - bl * 0.7);
+      g.stroke();
+    }
+    g.restore();
+  }
+  return c;
 }
 
 // Drive the lens splash. `intensity` is 0..1 (how hard snow is flying at the
@@ -1797,6 +1864,8 @@ function updateLensSplash(
     let n = Math.floor(ls.emitAccum);
     ls.emitAccum -= n;
     while (n-- > 0 && splats.length < LENS_SPLAT_MAX) {
+      // A `big` splat is a soft round "direct hit"; the rest are small detailed
+      // flake stickers (the 2026-07-24 smaller/detailed/sticky direction).
       const big = Math.random() < LENS_BIG_CHANCE;
       // Triangular spread, center-weighted, nudged toward the carve side —
       // that's where the plume is thrown across the fall line.
@@ -1805,18 +1874,24 @@ function updateLensSplash(
       // Spray erupts low and rises into frame: land splats across the lower
       // band, then let them drip further down as they melt.
       const y = h * (0.4 + Math.random() * 0.55);
-      const base = (0.028 + Math.random() * 0.06) * minDim;
+      // Smaller than the make-it-read pass: each flake should read as a *flake*,
+      // not a screen-covering blob — the "reads at speed" now comes from detail,
+      // count, and how long they cling, not from size.
+      const base = (0.013 + Math.random() * 0.026) * minDim;
       splats.push({
         x,
         y,
-        r: big ? base * 2.4 : base,
-        vy: LENS_SLIDE * (0.5 + Math.random()),
-        grow: LENS_MELT * (0.5 + Math.random()) * (big ? 1.4 : 1),
-        life: (big ? LENS_LIFE * 1.6 : LENS_LIFE) +
+        r: big ? base * 2.2 : base,
+        vy: LENS_SLIDE * (0.5 + Math.random()) * (big ? 1 : 0.7),
+        // Flakes barely spread (they cling and melt in place); soft hits smear.
+        grow: big ? LENS_MELT * (0.6 + Math.random()) * 1.4 : LENS_MELT * 0.25,
+        life: (big ? LENS_LIFE * 1.4 : LENS_LIFE) +
           (Math.random() - 0.5) * LENS_LIFE_VAR,
         maxLife: 0, // set below
-        alpha0: (big ? LENS_PEAK_ALPHA : LENS_PEAK_ALPHA * 0.7) *
+        alpha0: (big ? LENS_PEAK_ALPHA : LENS_PEAK_ALPHA * 0.9) *
           (0.6 + Math.random() * 0.4),
+        rot: Math.random() * Math.PI,
+        flake: !big,
       });
       const s = splats[splats.length - 1]!;
       s.maxLife = s.life;
@@ -1865,10 +1940,26 @@ function updateLensSplash(
 
   for (const s of splats) {
     const t = s.life / s.maxLife; // 1 at birth → 0 at death
-    // Quick appear, long fade — a splat hits then melts off.
-    const alpha = s.alpha0 * Math.min(1, t * 3.5) * t;
+    const age = 1 - t; // 0 at birth → 1 at death
+    // Gentle appear as it hits, then a slow melt — `pow(t, 0.5)` holds the flake
+    // near-full for most of its (now longer) life and eases it off at the end,
+    // the "sticks to the glass then melts slowly" read the director asked for.
+    const alpha = s.alpha0 * Math.min(1, age * 12) * Math.sqrt(t);
     if (alpha <= 0.003) continue;
-    // Slight vertical squash so a melting splat drips rather than stays a disc.
+    if (s.flake) {
+      // Detailed crystal: blit the pre-rendered sprite, rotated to its birth
+      // angle and scaled to the current radius. Cheap (no per-frame pathing) and
+      // it clings without drip-squash — a flake sits, it doesn't run.
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(s.x, s.y);
+      ctx.rotate(s.rot);
+      ctx.drawImage(ls.flakeSprite, -s.r, -s.r, s.r * 2, s.r * 2);
+      ctx.restore();
+      continue;
+    }
+    // Soft round "direct hit": a melty smear. Slight vertical squash so it drips
+    // rather than stays a clean disc.
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.scale(1, 1.25);

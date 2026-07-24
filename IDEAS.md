@@ -175,36 +175,24 @@ them, all `skiScene.ts`:
   (the render loop pauses when the Browser pane is hidden, so no in-session
   capture): whether the new opacity/size/frequency/frost read right — the knobs
   above are all named constants at the top of the lens block.
-- **Lens splat: smaller, higher-detail flakes that stick longer — OPEN (director
-  ask 2026-07-24, right after the make-it-read look-pass).** A partial
-  course-correct on that pass: the direction now is *away* from big soft smears
-  and *toward* **smaller, more detailed individual flakes that cling to the lens
-  for a longer duration** before melting off. Three levers, all in the lens block
-  of `skiScene.ts`:
-  - **Smaller.** Pull `base` radius and the big multiplier (2.4) back down — the
-    make-it-read pass raised them; this wants each flake to read as a *flake*,
-    not a screen-covering blob. (The overall "reads at speed" then has to come
-    from detail + count + persistence, not size.)
-  - **Higher detail.** A splat is a soft radial-gradient disc today
-    (`createRadialGradient` in `updateLensSplash`). Give it real flake shape —
-    candidates: a small crystalline / six-arm snowflake, a clustered speckle of
-    finer grains, or at least a noise-roughened irregular edge instead of a clean
-    circle. This is a **draw change**, not just a constant. Keep fill cost sane:
-    pre-render one (or a few) flake sprite(s) to an offscreen canvas once, then
-    `drawImage` them scaled + rotated per splat, rather than re-pathing detail
-    every frame. Palette stays the cool `LENS_TINT` snow-white — detail is
-    shape/edge, not new color (bible-legal).
-  - **Stick longer.** Raise `LENS_LIFE` / `LENS_LIFE_VAR` and soften the fade
-    curve (`alpha = alpha0 * min(1, t*3.5) * t`) so a flake lingers on the glass
-    and melts slowly — the "sticks to the screen" read. Because more flakes are
-    then alive at once, give `LENS_SPLAT_MAX` (110) headroom and/or trim
-    `LENS_SPLAT_RATE` to compensate; watch per-frame fill.
-  - **Decide at build time:** do detailed flakes *replace* the soft blobs or mix
-    (a few big soft "direct hits" + many small detailed stickers reads well); the
-    edge-frost vignette is a separate rim effect and almost certainly stays; keep
-    the idle-skip zero-fill. Supersedes the *size* half of the make-it-read
-    tuning (radius goes back down); opacity/frequency/frost tuning still stands as
-    a starting point.
+- **Lens splat: smaller, higher-detail flakes that stick longer — BUILT
+  2026-07-24, open only as a director look-pass.** The 2026-07-24 course-correct
+  (away from big soft smears, toward smaller detailed flakes that cling longer)
+  was cashed in. All three levers landed in `skiScene.ts`'s lens block (see the
+  ROADMAP build entry for numbers): **smaller** (base radius `(0.028+.06)` →
+  `(0.013+.026)·minDim`, big mult 2.4 → 2.2); **higher detail** (new
+  `makeFlakeSprite()` pre-renders a six-arm snow-crystal to a 64px offscreen
+  canvas once; small splats `drawImage` it scaled + rotated — big ones stay soft
+  gradient smears, `LENS_BIG_CHANCE` 0.24 → 0.16 so flakes dominate); **stick
+  longer** (`LENS_LIFE` 0.5 → 1.1, `LENS_LIFE_VAR` 0.5 → 0.7, fade softened to
+  `min(1, age·12)·√t`, drip/spread cut `LENS_SLIDE` 55 → 26 / `LENS_MELT` 70 →
+  22, flakes barely spread). Edge-frost vignette + idle-skip zero-fill kept.
+  *Now open only as a look-pass on a moving composited frame* — the render loop
+  pauses when the Browser pane is hidden and port 5303 was held by another chat's
+  server, so no in-session capture (same wall as the make-it-read pass). Knobs to
+  tune on the director's eye: flake size (`base`), count vs persistence
+  (`LENS_SPLAT_RATE` / `LENS_LIFE`), the small/soft mix (`LENS_BIG_CHANCE`), and
+  the sprite's own crystal detail inside `makeFlakeSprite()`.
 - **Fling MORE on hard turns and jump landings — OPEN (director ask 2026-07-24:
   "want it to fling more when turning or landing a jump").** Both the plume and
   the lens splash should surge on a hard carve and burst on touchdown. Two parts:
