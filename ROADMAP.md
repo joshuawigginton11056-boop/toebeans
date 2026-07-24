@@ -63,8 +63,13 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   way it's reached. The renderer places each segment in its own grayblock world
   corridor (`SEGMENT_PLACEMENTS`/`addBranchGrayblock`, now fully data-driven off
   the registry — boxes only, no `skiScene.ts`); `roadSegmentIds()` is the single
-  source of truth for spine-vs-detour. 139 tests (incl. a behavioral proof all
-  three routes + the tree no-op reach the flag on the same step, and the grade).
+  source of truth for spine-vs-detour. **The corridors CURVE now (2026-07-24):**
+  each segment is a constant-curvature arc (`SEGMENT_SHAPES` in `slopePath.ts`),
+  the spine weaving a gentle S down the middle and the detours peeling off to
+  their sides — chained smoothly on continuous runs (no kink), cut at fork
+  handoffs; the grayblock floor/walls facet along the arc to follow it. 144 tests
+  (incl. a behavioral proof all three routes + the tree no-op reach the flag on
+  the same step, the grade, and the arcs' length/continuity).
   **It is now the DEFAULT slope (2026-07-24)** — "Hit the slopes" loads it at the
   live URL; **`?overlook=1`** keeps the old flat Overlook; the proof readout is
   gated dev-only (`?branch`/`?debug`).

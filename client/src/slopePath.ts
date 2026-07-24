@@ -26,7 +26,12 @@
 // rewrite. slopePath.test.ts pins both the straight identity and a sample
 // curved centerline (arc-length ≈ distance, heading matches the bends).
 
-import { routeDistanceOf, TOTAL_ROUTE_LENGTH } from "@toebeans/shared";
+import {
+  BRANCH_SEGMENTS,
+  routeDistanceOf,
+  type Segment,
+  TOTAL_ROUTE_LENGTH,
+} from "@toebeans/shared";
 
 /** A point on the centerline, in the same world axes the renderer uses. */
 export interface SlopePoint {
@@ -217,31 +222,47 @@ export function slopeToWorld(
 // The branching map's segment placement (slope-mech, 2026-07-24 — the §4 map of
 // SLOPE_BRANCHING.md, grayblock). Presentation-only, the same as the road above:
 // the sim (route.ts) knows a run as (segmentId, segment-local distance); this
-// maps that to a world point + facing. Each segment is a straight grayblock
-// corridor with its own world origin — the spine chained straight down −z (x≈0),
-// the detour worlds offset to the sides so they read as separate "places." A run
-// that forks jumps between corridors at the handoff (the tree swallows you / the
-// penguin surfaces you back on the trail): a deliberate, diegetic cut, exactly
-// the enter→detour→rejoin the map is built on.
+// maps that to a world point + facing.
 //
-// The layout mirrors route.ts's lengths and reconvergences: the spine runs down
-// the middle (summit → forest-road → lake → yeti → cave → cliff), forest-tree
-// bulges right of the forest and rejoins the lake, water swings far left and
-// rejoins the shared cliff at z=−540 (same world-point cave arrives at), and the
-// Ice tail (ledge → valley → ice-castle) branches right off the peak to its own
-// flag. Both terminal ends (cliff, ice-castle) sit at z=−640, the same clock.
+// SHAPED CORRIDORS (slope-mech, 2026-07-24 — "make the map bend through the
+// world"). Each segment is a constant-curvature ARC now, not a straight box: it
+// begins at a world origin + entry heading and turns a fixed amount (SEGMENT_SHAPES
+// below) across its length, so the run carves down a mountain instead of a chute.
+// Because the arc is arc-length parameterized, a hazard at segment-distance D still
+// sits D units of travel down the corridor — the sim's spacing is untouched, and
+// the grade (world-Y, keyed to ROUTE distance) rides the same as before.
+//
+// Continuity is by construction: segments you reach by staying on the road
+// (walked via route.ts `next`) INHERIT their origin + heading from the previous
+// segment's exit, so the spine and each detour tail flow smoothly with no kink at
+// the seams. Only a fork HANDOFF jumps corridors — the tree yanks you off the
+// road, the penguin surfaces you back on the trail — and that jump is a deliberate,
+// diegetic cut, so a detour's entry is placed freely near where the fork fires and
+// need not meet the world point it left (the "same clock, same flag" that must hold
+// is route distance + height, both unaffected by where the corridor sits in x/z).
+//
+// The layout, read as a trail map: the spine (summit → forest-road → lake → yeti →
+// cave → cliff) eases through a gentle S down the middle; forest-tree curls off to
+// the right and cuts back to the lake; water swings far left and cuts back to the
+// shared cliff; the Ice tail (ledge → valley → ice-castle) peels right off the peak
+// to its own flag. Two flags (cliff, ice-castle) at the same clock/height, wherever
+// they land in x/z.
 //
 // "main" (the Overlook's single segment) has NO placement here, so the segment
 // functions fall straight through to the road above — the un-branched run is
-// bit-for-bit unchanged. Grayblock straight; the real map's shaped corridors
-// (and the visuals session's dressing) come later.
+// bit-for-bit unchanged.
 
-/** A segment's world anchor: where its entrance sits and which way it heads. */
+/** A segment's world placement: where its entrance sits, which way it faces, and
+ * its constant curvature (turn per unit length, + toward world +x). Derived by
+ * walking the route graph from the chain-starts in SEGMENT_SHAPES — see below. */
 export interface SegmentPlacement {
   readonly originX: number;
   readonly originZ: number;
-  /** Tangent yaw; 0 = straight downhill (−z), like the road's heading 0. */
-  readonly heading: number;
+  /** Entry tangent yaw; 0 = straight downhill (−z). The heading grows by
+   * `curvature × distance` along the arc. */
+  readonly entryHeading: number;
+  /** Turn per unit length. 0 = a straight corridor (a plain line). */
+  readonly curvature: number;
 }
 
 // The branching map's grade (slope-mech, 2026-07-24 — "ride down a REAL mountain
@@ -294,34 +315,125 @@ function segmentGroundY(segmentId: string, distance: number): number {
   return SEGMENT_GRADE * (TOTAL_ROUTE_LENGTH - routeDistanceOf(segmentId, distance));
 }
 
-export const SEGMENT_PLACEMENTS: Readonly<Record<string, SegmentPlacement>> = {
-  // The spine, straight down −z at x=0 (each origin = the previous end):
-  summit: { originX: 0, originZ: 0, heading: 0 }, // [0, −120]
-  "forest-road": { originX: 0, originZ: -120, heading: 0 }, // [−120, −240]
-  lake: { originX: 0, originZ: -240, heading: 0 }, // [−240, −340]
-  yeti: { originX: 0, originZ: -340, heading: 0 }, // [−340, −420]
-  cave: { originX: 0, originZ: -420, heading: 0 }, // [−420, −540]
-  cliff: { originX: 0, originZ: -540, heading: 0 }, // [−540, −640] → FLAG
-  // The forest tree world: right of the road, rejoins the lake entrance (0,−240).
-  "forest-tree": { originX: 50, originZ: -120, heading: 0 }, // [−120, −240]
-  // The penguin/underwater world: far left, rejoins the shared cliff at (0,−540).
-  water: { originX: -70, originZ: -340, heading: 0 }, // [−340, −540]
-  // The Ice Line's own tail: right of the peak, down to its own flag at (60,−640).
-  ledge: { originX: 60, originZ: -420, heading: 0 }, // [−420, −480]
-  valley: { originX: 60, originZ: -480, heading: 0 }, // [−480, −560]
-  "ice-castle": { originX: 60, originZ: -560, heading: 0 }, // [−560, −640] → FLAG
+/** A segment's intrinsic shape. `turn` is the total heading change across its
+ * whole length (radians, + toward world +x). `entry` is present only on the
+ * segments that BEGIN a continuous run of corridor — the summit (spine root) and
+ * each detour a fork cuts you into — and fixes where that run starts and faces;
+ * every other segment inherits its start from the previous segment's exit. */
+interface SegmentShape {
+  readonly turn: number;
+  readonly entry?: {
+    readonly originX: number;
+    readonly originZ: number;
+    readonly heading: number;
+  };
+}
+
+const SEGMENT_SHAPES: Readonly<Record<string, SegmentShape>> = {
+  // The spine — a gentle S down the MIDDLE. Only the summit is anchored (it drops
+  // in straight downhill from the top); forest-road…cliff chain off its exit. The
+  // turns are balanced so the heading returns to ~0 at the flag and the line stays
+  // near x≈0 the whole way — a readable left-then-right weave that never wanders
+  // out into the detour corridors on either side (water far left, the ice tail
+  // right). A left lobe (summit→forest) and a right lobe (lake→yeti) roughly
+  // cancel the lateral drift; cave/cliff settle it straight for the finish.
+  summit: { turn: -0.24, entry: { originX: 0, originZ: 0, heading: 0 } },
+  "forest-road": { turn: 0.24 },
+  lake: { turn: 0.34 },
+  yeti: { turn: -0.28 },
+  cave: { turn: -0.18 },
+  cliff: { turn: 0.12 },
+  // The forest tree world: the great tree yanks you off to the right, the corridor
+  // bulges out and curls back. Cut in/out (next = lake), so its entry just reads as
+  // its own loop near the fork — no world-space rejoin needed.
+  "forest-tree": { turn: -0.55, entry: { originX: 52, originZ: -118, heading: 0.5 } },
+  // The penguin/underwater line: the hole drops you far left, then a long swing
+  // back toward the shared cliff. Cut in/out (next = cliff).
+  water: { turn: 0.5, entry: { originX: -74, originZ: -344, heading: -0.35 } },
+  // The Ice line's tail: the yeti's son shoves you right off the peak; ledge starts
+  // the chain (cut in from yeti) peeling right, then valley → ice-castle curl back
+  // so the tail settles facing downhill again at its own flag (not spiralling out).
+  ledge: { turn: 0.2, entry: { originX: 58, originZ: -424, heading: 0.4 } },
+  valley: { turn: -0.3 },
+  "ice-castle": { turn: -0.3 },
 };
+
+/** Advance a constant-curvature arc: the world point + heading `length` units
+ * along from (`x`, `z`) facing `heading`, turning at `curvature` rad/unit. The
+ * closed form is exact and arc-length parameterized (unit tangent). Straight
+ * (curvature ≈ 0) falls back to a plain line so there's no 0/0. */
+function advanceArc(
+  x: number,
+  z: number,
+  heading: number,
+  curvature: number,
+  length: number,
+): { x: number; z: number; heading: number } {
+  if (Math.abs(curvature) < 1e-9) {
+    return {
+      x: x + Math.sin(heading) * length,
+      z: z - Math.cos(heading) * length,
+      heading,
+    };
+  }
+  const h1 = heading + curvature * length;
+  // ∫ (sin h, −cos h) with h = heading + curvature·s over [0, length].
+  return {
+    x: x + (Math.cos(heading) - Math.cos(h1)) / curvature,
+    z: z + (Math.sin(heading) - Math.sin(h1)) / curvature,
+    heading: h1,
+  };
+}
+
+// Derive every segment's world placement by walking the route graph from the
+// chain-starts. A chain-start (has `entry`) is placed at its anchor; then we
+// follow route.ts `next` — each successor inheriting the previous segment's exit
+// point + heading — until the run ends (`next` null), rejoins an already-placed
+// segment (back onto the spine), or hands off into another chain-start (a fork
+// cut, which we DON'T chain across). Summit is walked first so the spine is down
+// before the detours that rejoin it check "already placed."
+export const SEGMENT_PLACEMENTS: Readonly<Record<string, SegmentPlacement>> = (() => {
+  const out: Record<string, SegmentPlacement> = {};
+  const chainStarts = Object.keys(SEGMENT_SHAPES).filter(
+    (id) => SEGMENT_SHAPES[id]!.entry,
+  );
+  const order = ["summit", ...chainStarts.filter((id) => id !== "summit")];
+  for (const startId of order) {
+    const entry = SEGMENT_SHAPES[startId]!.entry!;
+    let x = entry.originX;
+    let z = entry.originZ;
+    let heading = entry.heading;
+    let id: string | null = startId;
+    while (id && !out[id]) {
+      const shape = SEGMENT_SHAPES[id];
+      const seg: Segment | undefined = BRANCH_SEGMENTS[id];
+      if (!shape || !seg) break;
+      const curvature = shape.turn / seg.length;
+      out[id] = { originX: x, originZ: z, entryHeading: heading, curvature };
+      const exit = advanceArc(x, z, heading, curvature, seg.length);
+      const nextId: string | null = seg.next;
+      // A handoff into a chain-start is a cut; stop and let that chain place it.
+      if (!nextId || SEGMENT_SHAPES[nextId]?.entry) break;
+      x = exit.x;
+      z = exit.z;
+      heading = exit.heading;
+      id = nextId;
+    }
+  }
+  return out;
+})();
 
 /** The centerline point (world x/z + tangent) at a distance down a segment.
  * Unknown segment ("main") → the Overlook's global road, so it's unchanged. */
 export function segmentCenterline(segmentId: string, distance: number): SlopePoint {
   const p = SEGMENT_PLACEMENTS[segmentId];
   if (!p) return slopeCenterline(distance);
+  const arc = advanceArc(p.originX, p.originZ, p.entryHeading, p.curvature, distance);
   return {
-    x: p.originX + Math.sin(p.heading) * distance,
-    z: p.originZ - Math.cos(p.heading) * distance,
+    x: arc.x,
+    z: arc.z,
     y: segmentGroundY(segmentId, distance),
-    heading: p.heading,
+    heading: arc.heading,
   };
 }
 

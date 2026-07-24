@@ -689,10 +689,12 @@ export function syncSkiSceneToState(
 // skiRender (slope-mech) and NOT skiScene (slope-vis): grayblock placeholders,
 // not the visuals session's dressed scene.
 export function addBranchGrayblock(handle: SkiSceneHandle): void {
-  // `pitch` tilts the box around world-x so a corridor floor/wall lies along the
-  // real grade (see slopePath.ts); 0 leaves it axis-aligned for the upright
-  // gates and trigger landmarks. All placements are heading 0 today, so the box
-  // needs no yaw.
+  // `pitch` tilts a box around world-x onto the grade; `yaw` turns it about
+  // world-Y onto the corridor's local heading (the corridors CURVE now — see
+  // slopePath.ts — so a straight box per segment no longer covers the arc). The
+  // rotation order matches the skier rig and hazards: YXZ, yaw then pitch. `cast`
+  // is off for the many ramp/wall facets (flat grayblock ground) and on for the
+  // few tall landmarks.
   const addBox = (
     x: number,
     y: number,
@@ -702,14 +704,16 @@ export function addBranchGrayblock(handle: SkiSceneHandle): void {
     d: number,
     color: number,
     pitch = 0,
+    yaw = 0,
+    cast = true,
   ): void => {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(w, h, d),
       new THREE.MeshStandardMaterial({ color }),
     );
     mesh.position.set(x, y, z);
-    mesh.rotation.x = pitch;
-    mesh.castShadow = true;
+    mesh.rotation.set(pitch, yaw, 0, "YXZ");
+    mesh.castShadow = cast;
     mesh.receiveShadow = true;
     handle.scene.add(mesh);
   };
@@ -719,52 +723,65 @@ export function addBranchGrayblock(handle: SkiSceneHandle): void {
   // from the topology.
   const road = roadSegmentIds();
 
+  // Facet length along a corridor: the curved floor/walls are laid as a strip of
+  // short boxes sampled every FACET units of travel, each turned onto the local
+  // tangent. The gentle map curves read smooth at this step; each facet's depth
+  // is stretched by 1/cos(grade) to cover its pitched span, with a hair of
+  // overlap so no seam gaps open between tilted boxes.
+  const FACET = 12;
+  const pitchDepth = 1 / Math.cos(slopeGradePitch);
+
   for (const id of Object.keys(SEGMENT_PLACEMENTS)) {
     const seg = BRANCH_SEGMENTS[id];
     if (!seg) continue;
     const onRoad = road.has(id);
-    // The real grade (slope-mech, 2026-07-24): the corridor descends in world-Y,
-    // so its floor and walls are ramps, not level boxes. Endpoints carry the
-    // grade's y (0 at the flag, highest at the summit); the box tilts by the
-    // slope pitch (nose-down along −z, like the skier rig) and its length is
-    // stretched by 1/cos(pitch) to cover the pitched span.
+    // The corridor descends in world-Y (the real grade) AND curves in x/z, so its
+    // floor and walls are a ramped, bending strip. Each facet sits at its arc
+    // midpoint, tilted by the grade pitch and turned onto the local heading.
     const pitch = -segmentPitch(id);
-    const y0 = segmentCenterline(id, 0).y;
-    const y1 = segmentCenterline(id, seg.length).y;
-    const midY = (y0 + y1) / 2;
-    const rampLength = seg.length / Math.cos(slopeGradePitch);
-    const entrance = segmentCenterline(id, 0);
-    const midZ = entrance.z - seg.length / 2; // heading 0 → straight down −z
-    // The corridor FLOOR — a descending ramp so there's real ground under the
-    // skier (the dressed snow is flat until the visuals seam lands). Road reads
-    // cool/gray, detour worlds read green.
-    addBox(
-      entrance.x,
-      midY - 0.05,
-      midZ,
-      LATERAL_LIMIT * 2,
-      0.1,
-      rampLength,
-      onRoad ? 0x3c4654 : 0x365a3e,
-      pitch,
-    );
-    // Lane-edge walls down both sides, tilted onto the same ramp. Road corridors
-    // read cool/gray; detour worlds read green, a different place.
-    for (const side of [-1, 1]) {
-      const a = segmentToWorld(id, 0, side * LATERAL_LIMIT);
+    const facets = Math.max(1, Math.ceil(seg.length / FACET));
+    for (let i = 0; i < facets; i++) {
+      const s0 = (i * seg.length) / facets;
+      const s1 = ((i + 1) * seg.length) / facets;
+      const mid = (s0 + s1) / 2;
+      const depth = (s1 - s0) * pitchDepth + 0.1;
+      const c = segmentCenterline(id, mid);
+      const yaw = -c.heading;
+      // FLOOR facet — a descending ramp so there's real ground under the skier
+      // (the dressed snow is flat until the visuals seam lands). Road reads
+      // cool/gray, detour worlds read green.
       addBox(
-        a.x,
-        midY + 0.6,
-        midZ,
-        0.4,
-        1.2,
-        rampLength,
-        onRoad ? 0x5a6a7a : 0x4a7a52,
+        c.x,
+        c.y - 0.05,
+        c.z,
+        LATERAL_LIMIT * 2,
+        0.1,
+        depth,
+        onRoad ? 0x3c4654 : 0x365a3e,
         pitch,
+        yaw,
+        false,
       );
+      // Lane-edge walls down both sides, riding the same ramp and curve.
+      for (const side of [-1, 1]) {
+        const w = segmentToWorld(id, mid, side * LATERAL_LIMIT);
+        addBox(
+          w.x,
+          c.y + 0.6,
+          w.z,
+          0.4,
+          1.2,
+          depth,
+          onRoad ? 0x5a6a7a : 0x4a7a52,
+          pitch,
+          yaw,
+          false,
+        );
+      }
     }
     // A colored entrance stripe — on the road these mark the reconvergence
     // points (where a detour cuts back and both routes are the same clock).
+    const entrance = segmentCenterline(id, 0);
     addBox(
       entrance.x,
       entrance.y + 0.05,
@@ -774,6 +791,8 @@ export function addBranchGrayblock(handle: SkiSceneHandle): void {
       1,
       onRoad ? 0x44506a : 0x6a9a72,
       pitch,
+      -entrance.heading,
+      false,
     );
     // The "world reaches out and grabs you" marker at each trigger volume: the
     // great tree, the yeti's hole, the ledge shove — one tall box (kept upright)
@@ -787,10 +806,21 @@ export function addBranchGrayblock(handle: SkiSceneHandle): void {
   }
 
   // Start gate (the summit, up high) and a finish gate at every terminal segment
-  // (the routes reconverge at the flag, ~same clock and — since the grade — the
-  // same height: both cliff and ice-castle end at z=−640, y=0). Kept upright.
+  // (the routes reconverge at the flag — same clock and, since the grade, the
+  // same height y = 0, wherever the curved corridors land them in x/z). Turned
+  // onto each gate's local heading.
   const start = segmentCenterline(BRANCH_START, 0);
-  addBox(start.x, start.y + 1.5, start.z, LATERAL_LIMIT * 2 + 2, 3, 0.5, 0x888888);
+  addBox(
+    start.x,
+    start.y + 1.5,
+    start.z,
+    LATERAL_LIMIT * 2 + 2,
+    3,
+    0.5,
+    0x888888,
+    0,
+    -start.heading,
+  );
   for (const id of Object.keys(SEGMENT_PLACEMENTS)) {
     const seg = BRANCH_SEGMENTS[id];
     if (!seg || seg.next !== null) continue;
@@ -803,6 +833,8 @@ export function addBranchGrayblock(handle: SkiSceneHandle): void {
       3,
       0.5,
       0xffffff,
+      0,
+      -finish.heading,
     );
   }
 }

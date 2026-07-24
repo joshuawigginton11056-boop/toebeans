@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { routeDistanceOf, TOTAL_ROUTE_LENGTH } from "@toebeans/shared";
+import {
+  BRANCH_SEGMENTS,
+  routeDistanceOf,
+  TOTAL_ROUTE_LENGTH,
+} from "@toebeans/shared";
 import {
   buildCenterline,
   centerlineAt,
   centerlineToWorld,
   segmentCenterline,
+  segmentToWorld,
   slopeCenterline,
   slopeToWorld,
   type Bend,
@@ -148,6 +153,66 @@ describe("slopePath — the branching map's real grade (world-Y descent)", () =>
       const top = segmentCenterline(id, 0).y;
       const bottom = segmentCenterline(id, 40).y;
       expect(bottom).toBeLessThan(top);
+    }
+  });
+});
+
+describe("slopePath — the branching map's shaped (curved) corridors", () => {
+  const lengthOf = (id: string): number => BRANCH_SEGMENTS[id]!.length;
+
+  it("stays arc-length parameterized down each segment (travel ≈ distance)", () => {
+    // The corridors curve now, but each is a circular arc parameterized by arc
+    // length — so a hazard at segment-distance D still sits D units of travel
+    // down it, keeping the sim's spacing honest (same guarantee as the road).
+    for (const id of ["summit", "lake", "water", "valley", "forest-tree"]) {
+      const len = lengthOf(id);
+      let travel = 0;
+      let prev = segmentCenterline(id, 0);
+      for (let d = 1; d <= len; d++) {
+        const p = segmentCenterline(id, d);
+        travel += Math.hypot(p.x - prev.x, p.z - prev.z);
+        prev = p;
+      }
+      expect(travel).toBeCloseTo(len, 0);
+    }
+  });
+
+  it("actually turns — the heading changes across a curved segment", () => {
+    const h0 = segmentCenterline("lake", 0).heading;
+    const h1 = segmentCenterline("lake", lengthOf("lake")).heading;
+    expect(Math.abs(h1 - h0)).toBeGreaterThan(0.1);
+  });
+
+  it("flows smoothly along the spine — no kink or gap at the seams", () => {
+    // Each road segment inherits its start from the previous segment's exit, so
+    // both the heading AND the world point are continuous across every spine
+    // seam (the S reads as one carved line, not doglegged boxes).
+    const spine = ["summit", "forest-road", "lake", "yeti", "cave", "cliff"];
+    for (let i = 1; i < spine.length; i++) {
+      const exitPrev = segmentCenterline(spine[i - 1]!, lengthOf(spine[i - 1]!));
+      const entryCur = segmentCenterline(spine[i]!, 0);
+      expect(entryCur.heading).toBeCloseTo(exitPrev.heading, 6);
+      expect(entryCur.x).toBeCloseTo(exitPrev.x, 6);
+      expect(entryCur.z).toBeCloseTo(exitPrev.z, 6);
+    }
+  });
+
+  it("maps lateral onto the corridor normal, perpendicular to the tangent", () => {
+    const mid = 40;
+    const c = segmentCenterline("lake", mid);
+    const off = segmentToWorld("lake", mid, 5);
+    // The offset point sits exactly |lateral| from the centerline...
+    expect(Math.hypot(off.x - c.x, off.z - c.z)).toBeCloseTo(5, 6);
+    // ...and perpendicular to the tangent (dot of the offset with the tangent ≈ 0).
+    const tangent = { x: Math.sin(c.heading), z: -Math.cos(c.heading) };
+    const dot = (off.x - c.x) * tangent.x + (off.z - c.z) * tangent.z;
+    expect(dot).toBeCloseTo(0, 6);
+  });
+
+  it("leaves 'main' straight (identity road) — the unbranched run is unchanged", () => {
+    for (const d of [0, 50, 300]) {
+      expect(segmentCenterline("main", d).heading).toBeCloseTo(0, 9);
+      expect(segmentToWorld("main", d, 4)).toMatchObject({ x: 4 });
     }
   });
 });

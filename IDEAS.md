@@ -35,7 +35,33 @@ testing/fun layer at Josh's request. Parked next steps, roughly ordered:
   interpolate) across a segment boundary — fine for the Overlook (single
   segment), revisit when detour worlds are playable.
 
-## (slope-mech / slope-vis / lobby) Branching map — the §4 layout landed; now make it PLAYABLE (2026-07-24)
+## (slope-mech) Steepness → speed — the steeper the terrain, the faster the run (director, 2026-07-24)
+
+Director directive (kicking off the map-layout continuation): **"steepness
+increases speed. the steeper the area, the faster the skiing."** Today the grade
+is a single constant (`SEGMENT_GRADE` 0.35, ~19° everywhere on the branching map)
+and the sim (`shared/src/skiing.ts`) is grade-blind — speed targets come from
+`BASE_SPEED`/lean/boost with no terrain term. So this directive has **two halves,
+and they're a pair**: (1) **per-segment (or per-distance) grade variation** — a
+steep plunge off the summit, mellow into the forest, a steep drop in the ice
+valley — because a constant grade gives "steeper = faster" nothing to vary
+against; and (2) **couple the sim's downhill pull to the local grade** so steeper
+pitch pulls the run to a higher natural cruise. The seam: the grade lives in
+`slopePath.ts` (presentation) today; to let the pure sim read it, pass the local
+pitch into `stepSkiing` as segment/route data (a small additive field on the sim
+side), keeping `skiing.ts` pure. This is **the next slope-mech chunk** after the
+curves below.
+
+## (slope-mech ✅ curves landed 2026-07-24 / rest still open) Branching map — the §4 layout landed; now make it PLAYABLE (2026-07-24)
+
+**Shaped corridors landed (slope-mech, 2026-07-24):** the branching map's segments
+CURVE now — each a constant-curvature arc (`SEGMENT_SHAPES` in `slopePath.ts`), the
+spine a gentle centered S and the detours peeling to their sides, chained smoothly
+on continuous runs and cut at fork handoffs; the grayblock floor/walls facet along
+the arc. The straight parallel-box layout is gone. (Amplitudes are a grayblock
+tuning knob — adjust `SEGMENT_SHAPES` turns; verified at runtime, look-pass on the
+live build still welcome.) The rest of this section (real entry, visuals dressing,
+hazard balancing) is unchanged below.
 
 The **real §4 map is laid out** (slope-mech, 2026-07-24 — see ROADMAP +
 SLOPE_BRANCHING.md): `route.ts` now chains summit → enchanted forest (Type A) →
