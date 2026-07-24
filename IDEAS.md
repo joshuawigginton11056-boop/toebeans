@@ -231,15 +231,17 @@ The cross-session split:
 
 ## (slope-vis) NIGHT → the enchanted forest — director redirect (2026-07-24)
 
-> **⏭ START HERE NEXT SESSION (slope-vis, handoff 2026-07-24):** the darker
-> night **and** the glowing-forest *first layer* are merged, and the director has
-> now **look-passed** the first layer (verdict below). Settled: darkness values
-> are the base (Josh: "feels right"); the **glow ramp is signed off** — G1
-> `#5FE9D0` cyan, G2 `#8CF08A` moss, G3 `#B98CF0` violet, G4 `#F0C06A` warm
-> lantern (DESIGN.md, `GLOW` in `skiScene.ts`); **sourcing = MegaKit mushrooms/
-> plants** (CC0). Live tuning knobs are named constants at the top of the
-> ENCHANTED NIGHT section (`GLOW_EMISSIVE`, `POOL_ALPHA`, `GLOW_ONSET`,
-> `GLOW_CELL`/`GLOW_DENSITY`).
+> **⏭ START HERE NEXT SESSION (slope-vis, handoff 2026-07-24):** the environmental
+> night look is underway from Josh's reference photos. **Ground mist is BUILT and
+> DIRECTOR-APPROVED** ("looks great") — `MistField` in `skiScene.ts`, see chunk #0
+> below. **Next up: the light shaft / moonlight rays** (the other half of #0 — the
+> bright misty central shaft from ref photo 2), then **bloom** (#1). Also already
+> settled: darkness values are the base (Josh: "feels right"); the **glow ramp is
+> signed off** — G1 `#5FE9D0` cyan, G2 `#8CF08A` moss, G3 `#B98CF0` violet, G4
+> `#F0C06A` warm lantern (DESIGN.md, `GLOW` in `skiScene.ts`); **sourcing = MegaKit
+> mushrooms/plants** (CC0). Live tuning knobs are named constants at the top of the
+> ENCHANTED NIGHT section — glow: `GLOW_EMISSIVE`, `POOL_ALPHA`, `GLOW_ONSET`,
+> `GLOW_CELL`/`GLOW_DENSITY`; mist: `MIST_CELL`/`MIST_DENSITY`/`MIST_COLOR`/`MIST_ONSET`.
 >
 > **★ Director look-pass verdict on the first layer (2026-07-24) — the punch
 > list for next session:**
@@ -294,8 +296,8 @@ The cross-session split:
 >    **light shaft / moonlight rays**, and (later, CC0) floating **motes**. The
 >    trunk materials are back to plain painted bark — do not re-add emissive to
 >    them. Judge every pass by the photos: dark trees, lit surroundings.
->    - **✅ Ground mist BUILT (slope-vis 2026-07-24, awaiting look-pass).** The
->      *"atmospheric mist/haze catching the glow"* half: `MistField` in
+>    - **✅ Ground mist BUILT + DIRECTOR-APPROVED (slope-vis 2026-07-24, "looks
+>      great").** The *"atmospheric mist/haze catching the glow"* half: `MistField` in
 >      `skiScene.ts` — soft **additive** cool-blue haze banks (a value shift of
 >      snow-shadow #2, so it's atmosphere not the glow ramp; the colored glow at
 >      the light sources comes from the existing additive glow pools shining up

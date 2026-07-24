@@ -158,8 +158,9 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   `skiScene.ts`) drift along both treelines (faint wisps across the lane so
   hazards stay readable), night-gated (`mistFactor`, rolls in at dusk just
   ahead of the glow). Additive, so it lifts the near-black floor into glow-haze
-  without darkening the crushed ambient. Awaiting look-pass. Still to do
-  (verdict-ordered): the **light shaft / moonlight rays** (the other half of
+  without darkening the crushed ambient. **Director-approved (2026-07-24, "looks
+  great").** Still to do (verdict-ordered): the **light shaft / moonlight rays**
+  (the other half of
   the env look), bloom (strong), general decor/spray darkening, real MegaKit
   glow props, realistic fireflies, the auto-transition, night audio. ⚠ amends
   the bible's "bright only" rule (DESIGN.md).
@@ -343,7 +344,7 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       soft additive cool-blue haze banks (`MistField`) drifting along the
       treelines, faint wisps across the lane, night-gated (`mistFactor`, rolls
       in at dusk ahead of the glow); additive so it never darkens the crushed
-      floor (`npm run check` green, 153 tests). Awaiting look-pass. Still open,
+      floor. **Director-approved (2026-07-24, "looks great").** Still open,
       verdict-ordered: the **light shaft / moonlight rays** (env look, other
       half), **bloom (strong)**, general decor/spray darkening, **real MegaKit
       glow props**, **realistic fireflies (CC0)**, a designed dusk midpoint,
