@@ -236,6 +236,103 @@ export function routeDistanceOf(segmentId: string, distance: number): number {
   return (SEGMENT_OFFSETS[segmentId] ?? 0) + distance;
 }
 
+// ── The descent's grade profile ─────────────────────────────────────────────
+// (slope-mech, 2026-07-24 — "steepness increases speed. the steeper the area, the
+// faster the skiing," director.) The branching map no longer drops at ONE pitch:
+// the grade VARIES down the route — a steep summit plunge, a mellow forest/lake, a
+// steep lower pitch into the flag — and the sim reads the local grade to drive
+// speed (steeper ⇒ faster cruise; see skiing.ts's targetMagnitude).
+//
+// Kept a function of ROUTE distance (routeDistanceOf), so — exactly like the old
+// constant grade — every route sits at the same height at the same clock and drops
+// the same total to the flag ("same clock, same flag" in elevation, for free). A
+// per-route "steep valley" flavor is therefore a per-DEPTH profile shared by all
+// routes at that depth, NOT a per-segment override (which would break the
+// equal-drop invariant). Presentation (slopePath.ts) reads routeHeightAt for the
+// world-Y; the sim reads gradeSpeedFactor for the coupling. It lives HERE (shared,
+// pure) so both sides read one source of truth and skiing.ts stays pure.
+//
+// REFERENCE_GRADE is the director-locked "invigorating" ~19° (tan 0.35): the speed
+// coupling is a NO-OP at this grade, so average-pitch terrain feels exactly as it
+// did and only the steep/mellow zones push speed up/down. The steep zones are held
+// just under the camera's framing elevation (~27°, tan ≈ 0.51) so the view still
+// looks down onto the slope — steeper than that would want a camera change too.
+export const REFERENCE_GRADE = 0.35;
+
+// Control points [routeDistance, grade], linearly interpolated → a continuous grade
+// (no pitch crease) that integrates to a smooth height. Averages ~0.35 over the 640
+// route (≈ the old ~224-unit total drop). Tunable knobs — widen the spread for more
+// punch, flatten for less.
+const GRADE_PROFILE: readonly (readonly [number, number])[] = [
+  [0, 0.5], // steep summit plunge (~26.6°, just under the camera's ~27°)
+  [120, 0.26], // mellow into the enchanted forest (~14.6°)
+  [340, 0.26], // …stays gentle across the forest + frozen lake
+  [460, 0.34], // building back up through the mid detours
+  [560, 0.5], // the steep lower pitch (ice valley / cliff run-in)
+  [640, 0.38], // ease a touch for the flag
+];
+
+function gradeProfileAt(routeDistance: number): number {
+  const d = Math.max(0, Math.min(TOTAL_ROUTE_LENGTH, routeDistance));
+  const pts = GRADE_PROFILE;
+  for (let i = 1; i < pts.length; i++) {
+    const [d0, g0] = pts[i - 1]!;
+    const [d1, g1] = pts[i]!;
+    if (d <= d1) {
+      const t = d1 === d0 ? 0 : (d - d0) / (d1 - d0);
+      return g0 + (g1 - g0) * t;
+    }
+  }
+  return pts[pts.length - 1]![1];
+}
+
+// Precomputed cumulative HEIGHT above the flag: H(D) = ∫_D^TOTAL grade ds, so the
+// flag (D = TOTAL) is exactly 0 and the summit (D = 0) is the full drop. Sampled
+// every unit and trapezoid-summed once at load; routeHeightAt lerps it. Keyed to
+// route distance like everything else, so H is the same height whichever route
+// reached depth D.
+const HEIGHT_STEP = 1;
+const HEIGHT_TABLE: Float64Array = (() => {
+  const n = Math.floor(TOTAL_ROUTE_LENGTH / HEIGHT_STEP) + 1;
+  const h = new Float64Array(n);
+  // Accumulate from the flag upward so the flag stays exactly 0.
+  for (let i = n - 2; i >= 0; i--) {
+    const d0 = i * HEIGHT_STEP;
+    const d1 = (i + 1) * HEIGHT_STEP;
+    const avg = (gradeProfileAt(d0) + gradeProfileAt(d1)) / 2;
+    h[i] = h[i + 1]! + avg * (d1 - d0);
+  }
+  return h;
+})();
+
+/** The local grade (tan of the downhill pitch) at a route distance — steep near
+ * the summit and the lower pitch, mellow through the forest/lake. */
+export function routeGradeAt(routeDistance: number): number {
+  return gradeProfileAt(routeDistance);
+}
+
+/** Height above the flag at a route distance (the world-Y the slope sits at). The
+ * same value whichever route reached this depth — "same clock, same flag." */
+export function routeHeightAt(routeDistance: number): number {
+  const d = Math.max(0, Math.min(TOTAL_ROUTE_LENGTH, routeDistance));
+  const fi = d / HEIGHT_STEP;
+  const i = Math.floor(fi);
+  const last = HEIGHT_TABLE.length - 1;
+  if (i >= last) return HEIGHT_TABLE[last]!;
+  const t = fi - i;
+  return HEIGHT_TABLE[i]! + (HEIGHT_TABLE[i + 1]! - HEIGHT_TABLE[i]!) * t;
+}
+
+/** The speed multiplier from local steepness (slope-mech, 2026-07-24): the local
+ * grade relative to the reference, so it's 1.0 (a no-op) on the locked ~19° pitch,
+ * >1 on the steeps (faster) and <1 on the flats (slower). Exactly 1.0 off the
+ * branching map — the flat Overlook's "main" segment has no grade, so it plays as
+ * it always did. */
+export function gradeSpeedFactor(segmentId: string, distance: number): number {
+  if (!BRANCH_SEGMENTS[segmentId]) return 1;
+  return routeGradeAt(routeDistanceOf(segmentId, distance)) / REFERENCE_GRADE;
+}
+
 /**
  * The segment ids on the default road — the ones you reach by never taking a
  * fork, walked from BRANCH_START along each `next`. Everything else is a detour

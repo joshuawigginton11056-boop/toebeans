@@ -73,18 +73,27 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   **It is now the DEFAULT slope (2026-07-24)** — "Hit the slopes" loads it at the
   live URL; **`?overlook=1`** keeps the old flat Overlook; the proof readout is
   gated dev-only (`?branch`/`?debug`).
-- **Real 3D grade on the branching map (2026-07-24) — director-approved.** The run
-  drops for real in world-Y: an elevated summit falling ~224 units to y=0 at the
-  flag, a constant **~19° pitch** (`SEGMENT_GRADE` 0.35) keyed to route distance so
-  every route drops the same total height ("same clock, same flag" in elevation
-  too). Director rode it and called the angle **"invigorating" — locked in, not a
-  pending tune.** `slopePath.ts` `segmentCenterline` carries the `y`; the skier,
-  camera, hazards, and grayblock (descending floor ramps + tilted walls) all ride
-  it; the Overlook stays flat (no placement). **Still grayblock, and the dressed
-  snow is still FLAT under it** — tilting the snow surface to the grade is the
-  slope-vis half (the urgent next visual piece; see IDEAS.md). Detour *content*
-  (animal world, bird, penguin/ice castles) and per-route hazard balancing (§5)
-  come after; §7's open reconciliations remain the director's.
+- **Real 3D grade on the branching map (2026-07-24) — director-approved, now VARYING.**
+  The run drops for real in world-Y: an elevated summit falling ~216 units to y=0 at
+  the flag. The pitch is **no longer one constant — it varies down the route** (a
+  steep ~27° summit plunge, a mellow ~15° forest/lake, a steep lower pitch into the
+  flag), a shared height/grade profile in `shared/src/route.ts` (`routeGradeAt` /
+  `routeHeightAt`) keyed to route distance so every route still drops the same total
+  ("same clock, same flag" in elevation). The reference ~19° is the director's
+  locked-"invigorating" baseline. `slopePath.ts` embeds the profile (world-Y +
+  per-point `segmentPitch(id, distance)`); the skier, camera, hazards, and grayblock
+  all ride it; the Overlook stays flat (no placement). **The corridors also curve now
+  (see the branching-map bullet).** **Still grayblock, and the dressed snow is still
+  FLAT under it** — tilting the snow surface to the grade is the slope-vis half (now
+  it must follow the VARYING per-point pitch; see IDEAS.md).
+- **Steepness → speed (2026-07-24, director "the steeper the area, the faster the
+  skiing").** The sim (`shared/src/skiing.ts`) reads the local grade and scales the
+  target cruise (and boost) by it — `gradeSpeedFactor` in route.ts, 1.0 (a no-op) at
+  the reference ~19° and on the flat Overlook, so the locked feel is untouched and
+  only the graded map gains terrain-driven pace: steep pitches genuinely fast, mellow
+  flats slower, capped at `GRADE_TOP_SPEED`. Detour *content* (animal world, bird,
+  penguin/ice castles) and per-route hazard balancing (§5) come after; §7's open
+  reconciliations remain the director's.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
   across all 24 slope models; decor scatter follows the run. (Old birches removed.)
 - **Realism snow:** procedural displaced surface + GPU-carved ski trails.

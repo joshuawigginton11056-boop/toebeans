@@ -1,4 +1,9 @@
-import { BRANCH_SEGMENTS, BRANCH_START, type Segment } from "./route";
+import {
+  BRANCH_SEGMENTS,
+  BRANCH_START,
+  gradeSpeedFactor,
+  type Segment,
+} from "./route";
 
 export interface SkiInput {
   readonly left: boolean;
@@ -156,6 +161,13 @@ export const MIN_SPEED = 4;
 export const MAX_SPEED = 12;
 const LEAN_SHIFT = 6;
 export const BOOST_SPEED = 16;
+// The absolute speed ceiling once the grade multiplier is applied (M2 steepness →
+// speed, director 2026-07-24). A steep pitch multiplies the target — cruise OR
+// boost — by up to ~1.4× (grade 0.5 / REFERENCE_GRADE 0.35), so a steep boost aims
+// for ~22; this caps the very fastest target so the steepest boosted run is
+// thrilling rather than uncontrollable. On the reference grade the factor is 1 and
+// nothing here binds (BOOST_SPEED 16 < this), so the locked feel is untouched.
+const GRADE_TOP_SPEED = 22;
 // Momentum (M2): speed is inertial. The lean/boost inputs set a *target*
 // and the actual speed eases toward it — runs start from a standstill with
 // a pole push-off instead of teleporting to cruise speed. Growing the speed
@@ -545,7 +557,15 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   // The inputs pick a target *magnitude*; the heading decides how much of
   // it the hill actually gives you (below); momentum decides how fast you
   // get there.
-  const targetMagnitude = input.boost
+  // Steepness → speed (M2, director 2026-07-24: "the steeper the area, the faster
+  // the skiing"). The inputs pick a base target exactly as before; then the LOCAL
+  // grade scales it — >1 on the steeps, <1 on the flats, and exactly 1.0 (a no-op)
+  // on the reference ~19° pitch and everywhere on the flat Overlook, so the locked
+  // feel is untouched and only the graded branching map gains the terrain-driven
+  // pace. Boost scales too, so a steep boost really screams; GRADE_TOP_SPEED caps
+  // the fastest steep+boost. See route.ts's grade profile (gradeSpeedFactor).
+  const gradeFactor = gradeSpeedFactor(state.segmentId, state.distance);
+  const baseTarget = input.boost
     ? BOOST_SPEED
     : Math.max(
         MIN_SPEED,
@@ -554,6 +574,10 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
           BASE_SPEED + (input.up ? LEAN_SHIFT : 0) - (input.down ? LEAN_SHIFT : 0),
         ),
       );
+  const targetMagnitude = Math.max(
+    MIN_SPEED,
+    Math.min(GRADE_TOP_SPEED, baseTarget * gradeFactor),
+  );
 
   // Steering rotates the skis and the heading stays where you put it —
   // steering back is on you. One turn rate everywhere (turning round 3);

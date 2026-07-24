@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BRANCH_SEGMENTS,
   routeDistanceOf,
-  TOTAL_ROUTE_LENGTH,
+  routeHeightAt,
 } from "@toebeans/shared";
 import {
   buildCenterline,
@@ -86,15 +86,12 @@ describe("slopePath — the curve mechanism (proven before it ships)", () => {
 });
 
 describe("slopePath — the branching map's real grade (world-Y descent)", () => {
-  // Height is derived from the constant grade × the route's remaining distance
-  // (see SEGMENT_GRADE / segmentGroundY). We don't hardcode the grade constant:
-  // the summit-entrance height IS grade × TOTAL, so every other height is that
-  // scaled by (TOTAL − routeDistance)/TOTAL — which pins the whole formula from
-  // one measured value and stays honest if the grade is retuned.
+  // The world-Y now delegates to route.ts's shared height profile (routeHeightAt),
+  // which VARIES the grade down the route. The invariants that must survive that:
+  // the Overlook stays flat, the embed matches the shared profile exactly, the flag
+  // sits at 0, every fork reconvergence is at one height, and the descent is
+  // monotone. (The grade profile's own shape is pinned in shared/route.test.ts.)
   const summitY = segmentCenterline("summit", 0).y;
-  const expectedY = (segmentId: string, distance: number): number =>
-    (summitY * (TOTAL_ROUTE_LENGTH - routeDistanceOf(segmentId, distance))) /
-    TOTAL_ROUTE_LENGTH;
 
   it("leaves the Overlook (and the flat road) dead flat at y = 0", () => {
     // "main" has no placement → falls through to the flat road, so the shipped
@@ -115,7 +112,11 @@ describe("slopePath — the branching map's real grade (world-Y descent)", () =>
     expect(summitY - segmentCenterline("cliff", 100).y).toBeCloseTo(summitY, 6);
   });
 
-  it("matches the height formula on every segment (same clock → same height)", () => {
+  it("embeds the shared route height profile as the ground Y", () => {
+    // segmentCenterline's y is exactly routeHeightAt(routeDistanceOf(...)) — so a
+    // point's height depends only on its ROUTE distance, which is what keeps every
+    // route the same height at the same clock (the "matches on every segment" check
+    // below is the same identity read across forks).
     for (const [id, distance] of [
       ["summit", 60],
       ["forest-road", 0],
@@ -127,7 +128,10 @@ describe("slopePath — the branching map's real grade (world-Y descent)", () =>
       ["ledge", 30],
       ["valley", 40],
     ] as const) {
-      expect(segmentCenterline(id, distance).y).toBeCloseTo(expectedY(id, distance), 6);
+      expect(segmentCenterline(id, distance).y).toBeCloseTo(
+        routeHeightAt(routeDistanceOf(id, distance)),
+        6,
+      );
     }
   });
 

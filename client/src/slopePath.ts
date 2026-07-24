@@ -28,9 +28,11 @@
 
 import {
   BRANCH_SEGMENTS,
+  REFERENCE_GRADE,
   routeDistanceOf,
+  routeGradeAt,
+  routeHeightAt,
   type Segment,
-  TOTAL_ROUTE_LENGTH,
 } from "@toebeans/shared";
 
 /** A point on the centerline, in the same world axes the renderer uses. */
@@ -267,52 +269,47 @@ export interface SegmentPlacement {
 
 // The branching map's grade (slope-mech, 2026-07-24 — "ride down a REAL mountain
 // into the forest", director call). The §4 map descends for real in world-Y: the
-// summit sits up high and the hill falls away beneath you all the way to the
-// flag. This is grade only for the BRANCHING map — the Overlook stays faked-flat
-// (its "main" segment has no placement, so segmentCenterline falls through to the
-// flat road above and nothing there moves).
+// summit sits up high and the hill falls away beneath you all the way to the flag.
+// Grade only for the BRANCHING map — the Overlook stays faked-flat (its "main"
+// segment has no placement, so segmentCenterline falls through to the flat road
+// above and nothing there moves).
 //
-// Height is keyed to ROUTE distance (route.ts's same-clock offset), not world z:
-//   y = SEGMENT_GRADE * (TOTAL_ROUTE_LENGTH − routeDistanceOf(segment, distance))
-// so the drop-per-unit-travelled is identical on every route and every fork
-// reconvergence sits at one height whichever way you reached it — "same clock,
-// same flag" extended to elevation (every route drops the SAME total height to
-// the flag), for free from the construction. The flag (routeDistance =
-// TOTAL_ROUTE_LENGTH) lands at y = 0; the summit (routeDistance 0) is highest, so
-// the whole run rides ABOVE the flat y = 0 snow plane — no sinking under it while
-// the visuals seam is still flat (see the seam note below).
+// VARYING grade now (slope-mech, 2026-07-24 — "steepness increases speed"): the
+// height + local pitch are no longer one constant but the shared route profile in
+// route.ts (routeHeightAt / routeGradeAt), keyed to ROUTE distance — a steep summit
+// plunge, a mellow forest/lake, a steep lower pitch into the flag. Because it's a
+// function of route distance, every fork reconvergence still sits at one height and
+// every route drops the SAME total ("same clock, same flag" in elevation, for free).
+// This module just embeds that profile into the world: y = routeHeightAt(routeDist),
+// pitch = atan(routeGradeAt(routeDist)). The sim reads the SAME profile for the
+// speed coupling (route.ts's gradeSpeedFactor) — one source of truth.
 //
 // SEAM NOTE (slope-mech → slope-vis): the grayblock corridors this drives live in
 // skiRender.ts (mine) and ride the grade today. The DRESSED snow surface lives in
 // skiScene.ts (slope-vis) and is still a flat plane at y = 0 — it only follows the
-// anchor's z, ignoring anchor.y. The renderer now passes the real ground y as
+// anchor's z, ignoring anchor.y. The renderer passes the real ground y as
 // `anchor.y`; slope-vis makes the snow surface sit + tilt to it (and the treeline/
-// trails/decor along with it) to dress the descent. Parked in IDEAS.md (slope-vis).
-//
-// Constant grade for now (one pitch the whole way) — a tuning knob. atan(0.35) ≈
-// 19°, dropping ~224 units over the 640-unit route (steepened from the first
-// pass's 0.18/10°, director call 2026-07-24: "steeper" — read it more as a real
-// mountain). Kept under the camera's fixed framing elevation (atan(4/8) ≈ 27°) so
-// the view still looks down onto the slope. Per-segment grade (steeper up top,
-// leveling into the forest) can come later by making this a placement field.
-const SEGMENT_GRADE = 0.35;
+// trails/decor along with it). NOTE the pitch VARIES now, so the tilt must follow
+// segmentPitch(id, distance) per-point, not one constant. Parked in IDEAS.md.
 
-/** The slope's downhill pitch in radians (atan of the grade) — the renderer tilts
- * the grayblock corridors and the skier rig to lie along it. */
-export const slopeGradePitch = Math.atan(SEGMENT_GRADE);
+/** A representative downhill pitch (atan of the REFERENCE grade) — the locked ~19°.
+ * The real pitch varies down the route (see segmentPitch); this is the baseline any
+ * consumer that wants one number can use. */
+export const slopeGradePitch = Math.atan(REFERENCE_GRADE);
 
-/** The local downhill pitch on a segment: the grade pitch on a placed (branching)
- * segment, 0 on the flat road / Overlook — so pitching the rig/scenery to the
- * slope never tilts the un-graded Overlook. */
-export function segmentPitch(segmentId: string): number {
-  return SEGMENT_PLACEMENTS[segmentId] ? slopeGradePitch : 0;
+/** The local downhill pitch (radians) on a placed (branching) segment at a
+ * segment-local distance — atan of the varying route grade; 0 on the flat road /
+ * Overlook, so pitching the rig/scenery never tilts the un-graded Overlook. */
+export function segmentPitch(segmentId: string, distance: number): number {
+  if (!SEGMENT_PLACEMENTS[segmentId]) return 0;
+  return Math.atan(routeGradeAt(routeDistanceOf(segmentId, distance)));
 }
 
 /** The ground height of a placed (branching) segment at a segment-local distance;
  * 0 for the flat road / Overlook ("main" has no placement). */
 function segmentGroundY(segmentId: string, distance: number): number {
   if (!SEGMENT_PLACEMENTS[segmentId]) return 0;
-  return SEGMENT_GRADE * (TOTAL_ROUTE_LENGTH - routeDistanceOf(segmentId, distance));
+  return routeHeightAt(routeDistanceOf(segmentId, distance));
 }
 
 /** A segment's intrinsic shape. `turn` is the total heading change across its
