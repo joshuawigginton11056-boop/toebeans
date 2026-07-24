@@ -132,3 +132,26 @@ passes, live-verified in your own dev server). Then:
    their next step 1.
 
 Every commit gets pushed (standing rule from Josh).
+
+## How the game gets online
+
+The repo is wired to **Vercel** (`vercel.json` at the root). Vercel watches
+GitHub and rebuilds the hosted game automatically — **the trigger is a push,
+not a file save.** So:
+
+- **Pushing to `master` updates the main public link** (the one Josh shares).
+  In practice that means step 3 of the merge protocol above — merging your
+  chunk up to master and pushing it — is *also* what publishes it live.
+  Master is the production branch.
+- **Pushing to a session branch** (`lobby`, `slope-mechanics`,
+  `slope-visuals`) builds *that branch* at its own **preview URL**, so
+  work-in-progress is viewable before it reaches master. Find these on
+  Vercel's Deployments tab.
+- **A build that fails `npm run build` does NOT go live** — Vercel keeps the
+  last good version up and flags the bad deploy. This is why the merge
+  protocol requires `npm run check` green before you push: a broken push
+  doesn't white-screen the site, but it does mean "pushed" ≠ "live" until
+  the build passes. Confirm a green checkmark on the Deployments tab.
+
+Nothing here changes the workflow — it just means the live site is a
+downstream consequence of the pushes you're already doing.
