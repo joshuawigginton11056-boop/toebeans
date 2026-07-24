@@ -268,10 +268,13 @@ export interface SegmentPlacement {
 // `anchor.y`; slope-vis makes the snow surface sit + tilt to it (and the treeline/
 // trails/decor along with it) to dress the descent. Parked in IDEAS.md (slope-vis).
 //
-// Constant grade for now (one pitch the whole way) — a tuning knob; atan(0.18) ≈
-// 10°, dropping ~115 units over the 640-unit route. Per-segment grade (steeper up
-// top, leveling into the forest) can come later by making this a placement field.
-const SEGMENT_GRADE = 0.18;
+// Constant grade for now (one pitch the whole way) — a tuning knob. atan(0.35) ≈
+// 19°, dropping ~224 units over the 640-unit route (steepened from the first
+// pass's 0.18/10°, director call 2026-07-24: "steeper" — read it more as a real
+// mountain). Kept under the camera's fixed framing elevation (atan(4/8) ≈ 27°) so
+// the view still looks down onto the slope. Per-segment grade (steeper up top,
+// leveling into the forest) can come later by making this a placement field.
+const SEGMENT_GRADE = 0.35;
 
 /** The slope's downhill pitch in radians (atan of the grade) — the renderer tilts
  * the grayblock corridors and the skier rig to lie along it. */
