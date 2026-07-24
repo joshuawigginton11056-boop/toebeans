@@ -26,6 +26,7 @@ import {
   createCheckpointMarker,
   createEnvironment,
   loadSlopeDecor,
+  renderSlope,
   syncEnvironment,
   type SlopeEnvironment,
 } from "./skiScene";
@@ -199,7 +200,7 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
   // Weather, lights, sky, and the snowfield — the look is skiScene's.
   // (slope-visuals seam addition, 2026-07-23) the renderer rides along so
   // the snow can carve ski-trail depth into its GPU height map each frame.
-  const environment = createEnvironment(scene, renderer);
+  const environment = createEnvironment(scene, renderer, camera);
 
   const player = new THREE.Group();
   // Yaw-then-pitch: the road's curve yaws the whole rig to the centerline
@@ -801,5 +802,8 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
 }
 
 export function render(handle: SkiSceneHandle): void {
-  handle.renderer.render(handle.scene, handle.camera);
+  // (slope-vis seam add, 2026-07-24) the draw goes through skiScene so the
+  // night-bloom composer can composite the enchanted glow; by day this is a
+  // straight renderer.render. skiScene owns the look, this file owns the tick.
+  renderSlope(handle.renderer, handle.scene, handle.camera);
 }

@@ -159,11 +159,17 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   hazards stay readable), night-gated (`mistFactor`, rolls in at dusk just
   ahead of the glow). Additive, so it lifts the near-black floor into glow-haze
   without darkening the crushed ambient. **Director-approved (2026-07-24, "looks
-  great").** Still to do (verdict-ordered): the **light shaft / moonlight rays**
-  (the other half of
-  the env look), bloom (strong), general decor/spray darkening, real MegaKit
-  glow props, realistic fireflies, the auto-transition, night audio. ⚠ amends
-  the bible's "bright only" rule (DESIGN.md).
+  great").** **Bloom BUILT (slope-vis 2026-07-24, awaiting look-pass):** a
+  full-scene `UnrealBloomPass` (EffectComposer in `skiScene.ts`, drawn via
+  `renderSlope`) night-gated on `glowFactor` — strength 0 by day (composer
+  bypassed, daylight untouched), pushed strong (1.5) at full night. The night
+  scene is crushed near-black so only the emissive glow caps clear the luminance
+  threshold (0.55) — the full-scene bloom is naturally selective to the glowing
+  plants; mist/pools sit below it and don't smear. Still to do (verdict-ordered):
+  the **light shaft / moonlight rays** (the other half of the env look), general
+  decor/spray darkening, real MegaKit glow props, realistic fireflies, the
+  auto-transition, night audio. ⚠ amends the bible's "bright only" rule
+  (DESIGN.md).
 - **Loose snow:** ski-trail spray, screen flurries, and a lens splat of
   naturalistic snow-clump particles (director-approved).
 - **Camera:** free zoom, fixed angle, pointer-lock mouse look.
@@ -344,9 +350,17 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       soft additive cool-blue haze banks (`MistField`) drifting along the
       treelines, faint wisps across the lane, night-gated (`mistFactor`, rolls
       in at dusk ahead of the glow); additive so it never darkens the crushed
-      floor. **Director-approved (2026-07-24, "looks great").** Still open,
+      floor. **Director-approved (2026-07-24, "looks great").** **Bloom BUILT
+      (slope-vis 2026-07-24, awaiting look-pass):** full-scene `UnrealBloomPass`
+      (EffectComposer, drawn via `renderSlope`; a small render-seam add in
+      `skiRender.ts`), night-gated on `glowFactor` — strength 0 by day so the
+      composer is bypassed and daylight is byte-identical, pushed strong (1.5) at
+      full night. Because night is crushed near-black, only the emissive glow
+      caps clear the luminance threshold (0.55), so the whole-frame bloom is
+      *naturally* selective to the glowing plants — no per-object bloom layer;
+      the darker mist/pools stay under threshold and don't smear. Still open,
       verdict-ordered: the **light shaft / moonlight rays** (env look, other
-      half), **bloom (strong)**, general decor/spray darkening, **real MegaKit
+      half), general decor/spray darkening, **real MegaKit
       glow props**, **realistic fireflies (CC0)**, a designed dusk midpoint,
       night audio/lobby. **The auto-transition trigger is answered** (director,
       2026-07-24): the enchanted forest *is* the branching map's forest segment, so

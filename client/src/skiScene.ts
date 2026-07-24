@@ -1,5 +1,9 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { LATERAL_LIMIT } from "@toebeans/shared";
 import { SKI_STANCE } from "./skierModel";
 
@@ -222,6 +226,28 @@ let mistFactor = 0;
 // reads it each frame to hang the sun/moon. Lerped in applyTimeOfDay.
 const currentDiscDir = SUN_BILLBOARD_DIRECTION.clone();
 
+// --- Enchanted-night bloom (slope-vis 2026-07-24) --------------------------
+// The emissive glow props read "lit" but not *glowing* without a halo bleeding
+// off them — and the director wants that bloom pushed STRONG on the plants.
+// Technique: a full-scene UnrealBloomPass with a luminance threshold. It looks
+// like it would blow out the daytime snow, but it never runs by day — bloom
+// strength rides glowFactor (0 until dusk), and renderSlope bypasses the
+// composer entirely while strength is ~0, so the crisp high-key daylight is
+// byte-identical to before. At night the scene is crushed near-black, so the
+// only pixels above threshold are the emissive caps and their additive pools:
+// the full-scene bloom is *naturally* selective to the glow, no per-object
+// bloom layer needed. Held at module scope like the glow/mist singletons —
+// there is only ever one slope environment.
+let bloomComposer: EffectComposer | null = null;
+let bloomPass: UnrealBloomPass | null = null;
+// Peak strength at full night — deliberately strong per the director's call.
+const BLOOM_STRENGTH = 1.5;
+// Halo spread. Wide enough to feel like a glow, not a sharp ring.
+const BLOOM_RADIUS = 0.7;
+// Only clearly-bright (emissive > 1 in linear) pixels bloom; the near-black
+// night snow/mist sit far below this, so they never smear.
+const BLOOM_THRESHOLD = 0.55;
+
 const lerpColor = (() => {
   const out = new THREE.Color();
   return (a: THREE.Color, b: THREE.Color, t: number) =>
@@ -305,6 +331,10 @@ export function cycleTimeOfDay(): number {
 export function createEnvironment(
   scene: THREE.Scene,
   renderer: THREE.WebGLRenderer,
+  // (slope-vis seam addition, 2026-07-24) the camera comes along so the
+  // night-bloom composer can build its RenderPass. renderSlope composites
+  // through it at night; by day it's bypassed. See the bloom NOTE above.
+  camera: THREE.Camera,
 ): SlopeEnvironment {
   scene.background = new THREE.Color(PALETTE.skyBlue);
 
@@ -455,9 +485,51 @@ export function createEnvironment(
   };
   activeEnvironment = environment;
   activeScene = scene;
+
+  // Night-bloom composer (see the bloom NOTE up top). RenderPass draws the
+  // scene, UnrealBloomPass bleeds the emissive glow, OutputPass does the
+  // tone-map + sRGB convert so the composited image matches a straight render.
+  // Strength starts at 0 (day) and is driven each phase change by
+  // applyGlowPhase; the composer is only ever used once strength climbs.
+  bloomComposer = new EffectComposer(renderer);
+  bloomComposer.addPass(new RenderPass(scene, camera));
+  bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0,
+    BLOOM_RADIUS,
+    BLOOM_THRESHOLD,
+  );
+  bloomComposer.addPass(bloomPass);
+  bloomComposer.addPass(new OutputPass());
+  // Keep the composer's render targets matched to the canvas. main.ts resizes
+  // the renderer; this rides the same event for the composer's own buffers.
+  window.addEventListener("resize", () => {
+    bloomComposer?.setSize(window.innerWidth, window.innerHeight);
+  });
+
   applyTimeOfDay(timeOfDay); // re-assert whatever phase persisted across runs
 
   return environment;
+}
+
+/**
+ * Draw the slope. At night the enchanted glow needs a bloom halo (director:
+ * push it strong), so we composite through the bloom pass; by day bloom
+ * strength is 0 and we render straight — the crisp high-key daylight is
+ * untouched, and the extra passes cost nothing until dusk. (slope-vis
+ * render-seam add — see PARALLEL.md; the sole call site is skiRender.ts's
+ * render(), which owns the per-frame draw.)
+ */
+export function renderSlope(
+  renderer: THREE.WebGLRenderer,
+  scene: THREE.Scene,
+  camera: THREE.Camera,
+): void {
+  if (bloomComposer && bloomPass && bloomPass.strength > 0.001) {
+    bloomComposer.render();
+  } else {
+    renderer.render(scene, camera);
+  }
 }
 
 // Atmosphere follows the run downhill. The sun light (and its shadow
@@ -2591,7 +2663,8 @@ const EMPTY_CELL = new THREE.Object3D();
 // faked additive snow pools. It fades in with the night phase (glowFactor, set
 // in applyTimeOfDay) and renders as pure emissive, so it reads "lit" regardless
 // of the near-black scene light. Bloom — the halo that makes emissive actually
-// *glow* — is the next chunk (a small render-seam add in skiRender.ts).
+// *glow* — is now built (slope-vis 2026-07-24): see the bloom NOTE near the top
+// of this file and renderSlope; it's night-gated and pushed strong on these caps.
 // (A code-built firefly cloud was here too but was cut on the director's look —
 // realistic fireflies come from a CC0 pack later; see the IDEAS.md night entry.)
 //
@@ -2813,6 +2886,9 @@ function applyGlowPhase(env: SlopeEnvironment, factor: number): void {
   const on = factor > 0.01;
   env.glow.group.visible = on;
   const ease = on ? factor * factor : 0; // slow start so glow blooms late
+  // Bloom rides the same ease so the halo grows in lockstep with the props;
+  // 0 by day, which is what lets renderSlope bypass the composer (bloom NOTE).
+  if (bloomPass) bloomPass.strength = BLOOM_STRENGTH * ease;
   if (!on) return;
   for (const cap of glowCapMaterials) cap.emissiveIntensity = GLOW_EMISSIVE * ease;
   for (const pool of glowPoolMaterials) pool.opacity = POOL_ALPHA * ease;
