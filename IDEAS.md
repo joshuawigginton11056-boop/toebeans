@@ -54,13 +54,15 @@ phase in `skiScene.ts` lerps dawn → night across every atmosphere param
 cycled by the debug key **N**. The knobs to push are the `NIGHT` constants +
 the `nightAtmosphere` endpoint. What the redirect changes:
 
-- **Crush the ambient + moon fill toward black.** The night snow targets
-  (#8FA0BE lit / #3F4D70 shadow) are far too luminous — the *whole point* is
-  that the open snow reads dark and you only see clearly where a glow pool
-  falls. Drop the ambient hard; the ground away from a light source should be
-  deep, near-black cool blue. (Watch the floor: too dark and the run is
-  unreadable — the glowing assets have to carry lane readability, so their
-  placement is a gameplay concern, not just decor. Call this out at build.)
+- **Crush the ambient + moon fill toward black. ✅ DONE (slope-vis 2026-07-24).**
+  The night snow targets (#8FA0BE lit / #3F4D70 shadow) were far too luminous.
+  Dropped to `#4E608A` lit / `#12182B` shadow, sky zenith `#1A2138`→`#0B0F1C`:
+  the open snow floor now reads near-black cool blue and you only see form
+  where the moon rakes. Kept the moon on as a *faint down-lane key* (the lane
+  it rakes still resolves to the lit `#4E608A`) so the run stays readable
+  *until* the glow assets exist to carry lane light — at that point the ambient
+  can drop further and the moon key can go fainter still. **Readability is a
+  gameplay concern: don't crush past this without glow-pool lighting in place.**
 - **Moonlight = a few *rays*, not a wash.** "A few rays breaking through" is
   discrete light shafts through the canopy — god-ray cones / volumetric-ish
   beams hitting the snow in bright patches, dark everywhere between — not the

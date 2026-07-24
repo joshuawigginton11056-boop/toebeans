@@ -29,23 +29,37 @@ export const PALETTE = {
 // director amendment, flagged for a look-pass and a bible note (see the
 // ROADMAP entry). It stays inside the palette in spirit: every night color
 // below is a cool, dark *value shift* of an existing palette entry (snow
-// shadow #2, glacial ice #10, the chasm navy). The night is moonlit and
-// serene — readable, never black — so the cat's signal-red scarf stays the
-// one warm thing in frame, exactly the bible's "warmth comes from the
-// characters, not the landscape."
+// shadow #2, glacial ice #10, the chasm navy).
+//
+// DARKER NIGHT (director redirect, 2026-07-24 — first pass of the enchanted
+// forest; see IDEAS.md). The first moonlit night was "too bright and too
+// evenly lit." The new mood is an *extremely dark* forest lit by glowing
+// assets, not a moon wash. Those glow props are their own (bigger) chunk
+// still to land, so this pass does only the redirect's first bullet: crush
+// the ambient/fill toward near-black so the open snow reads deep and dark,
+// and you only really see form where the moon rakes. Until the glow assets
+// arrive to carry lane readability, the directional moon stays on as a faint
+// key so silhouettes and the lane don't vanish entirely — hence `snowLit`
+// stays moderate while `snowShadow` (the ambient-only floor) drops hard.
 const NIGHT = {
   // The two snow targets that drive the lighting solve at full night — same
-  // trick as day (createEnvironment), just cooler and darker: moonlit facing
-  // snow reads as a soft silver-blue, ambient-only snow sinks to a deep cool
-  // slate. Both are value shifts of snow-shadow #D3DFF0 / the chasm navy.
-  snowLit: 0x8fa0be,
-  snowShadow: 0x3f4d70,
-  // Sky: a dim blue at the horizon melting up to a deep navy overhead. The
-  // fog rides the horizon color so distance still fades into the sky.
-  skyHorizon: 0x3a4a6e,
-  skyZenith: 0x1a2138,
+  // trick as day (createEnvironment). `snowShadow` is the ambient-only floor:
+  // crushed to a deep near-black cool blue (a dark value shift of the chasm
+  // navy) so open snow away from the moon key sinks toward black. `snowLit`
+  // is the moon-facing snow — kept as a dim silver-blue key (still a value
+  // shift of snow-shadow #D3DFF0) so the lane the moon rakes stays readable
+  // until the glow assets take over lane lighting.
+  snowLit: 0x4e608a,
+  snowShadow: 0x12182b,
+  // Sky: a dim, deep navy at the horizon melting up to near-black overhead —
+  // much darker than the first night. The fog rides the horizon color so
+  // distance still fades into the sky.
+  skyHorizon: 0x1e2740,
+  skyZenith: 0x0b0f1c,
   // The moon: a pale cool disc, smaller and crisper than the hazy dawn sun,
-  // hung a touch higher in the sky.
+  // hung a touch higher in the sky. In the darker sky it's the one bright
+  // thing — the closest we have to a glow source until the enchanted props
+  // land.
   moon: 0xdfe8f5,
 } as const;
 
