@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { type Appearance } from "@toebeans/shared";
 import { createCatRig, type CatRig } from "./catModel";
 import { createSkierRig, type SkierRig } from "./skierModel";
 
@@ -35,6 +36,17 @@ const CHARACTER_POS = new THREE.Vector3(-0.35, 0, 0);
 const CAT_SEAT = new THREE.Vector3(0.35, 0, 0.25);
 const CAT_SEAT_FACING = 0.35;
 
+// Connected friends (multiplayer session added ghost racing; showing the
+// friend *in the lobby* is the lobby half of it, 2026-07-24). When someone's
+// in your room, their character stands in the vignette beside you — the menu
+// stops being a solo shot the moment a friend connects. They line up to the
+// player's camera-left, each a step further out and back so nobody hides
+// behind anyone, leaving the cat's camera-right side clear. Slot 0 is nearest
+// the player.
+const FRIEND_SLOT_0 = new THREE.Vector3(-1.3, 0, -0.1);
+const FRIEND_SLOT_STEP = new THREE.Vector3(-0.95, 0, -0.15);
+const FRIEND_FACING = 0.1; // near-camera-on, echoing the player's three-quarter
+
 // The cat's little life cycle: mostly sitting beside the character, but
 // every so often it gets up and pads a slow half-circle behind them to
 // resettle on the same spot — a menu screen shouldn't be a wax museum.
@@ -69,12 +81,106 @@ const TREES: ReadonlyArray<{
   { file: "Bush_Snow_1.glb", x: 2.2, z: -2.2, height: 0.45, turn: 2.3 },
 ];
 
+/**
+ * The friends standing in the lobby with you — driven from the same pose
+ * packets net.ts relays for ghost racing, so a friend who's connected is
+ * *visible* here, not just named in the status line. Purely presentation:
+ * like ghosts.ts, there's no game state, no collisions.
+ */
+export interface LobbyFriendsHandle {
+  /** A packet arrived from this friend: stand their character up the first
+   * time, then keep its look and whether they're on the slope in sync. */
+  set(id: string, appearance: Appearance, onSlope: boolean): void;
+  /** Forget a friend who left the room or went quiet (main.ts's timeout). */
+  remove(id: string): void;
+  /** Drop every friend at once (leaving / switching rooms). */
+  clear(): void;
+  /** Advance the standing friends' idle animation each frame. */
+  update(dt: number): void;
+}
+
+interface LobbyFriend {
+  readonly rig: SkierRig;
+  slot: number;
+  appearanceKey: string;
+}
+
+function friendAppearanceKey(a: Appearance): string {
+  return `${a.character}-${a.skin}-${a.hair}`;
+}
+
+function friendSlotPosition(slot: number): THREE.Vector3 {
+  return FRIEND_SLOT_0.clone().addScaledVector(FRIEND_SLOT_STEP, slot);
+}
+
+function createLobbyFriends(scene: THREE.Scene): LobbyFriendsHandle {
+  const friends = new Map<string, LobbyFriend>();
+  // Which line-up slots are taken, so a friend who leaves frees their spot
+  // for the next arrival instead of everyone stacking on slot 0.
+  const usedSlots = new Set<number>();
+
+  function claimSlot(): number {
+    let slot = 0;
+    while (usedSlots.has(slot)) slot++;
+    usedSlots.add(slot);
+    return slot;
+  }
+
+  function spawn(appearance: Appearance): LobbyFriend {
+    const rig = createSkierRig();
+    rig.setPose("idle");
+    rig.setFacing(FRIEND_FACING);
+    rig.setAppearance(appearance);
+    const slot = claimSlot();
+    rig.group.position.copy(friendSlotPosition(slot));
+    scene.add(rig.group);
+    return { rig, slot, appearanceKey: friendAppearanceKey(appearance) };
+  }
+
+  function remove(id: string): void {
+    const friend = friends.get(id);
+    if (!friend) return;
+    scene.remove(friend.rig.group);
+    usedSlots.delete(friend.slot);
+    friends.delete(id);
+  }
+
+  return {
+    set(id, appearance, onSlope): void {
+      let friend = friends.get(id);
+      if (!friend) {
+        friend = spawn(appearance);
+        friends.set(id, friend);
+      }
+      // Appearance is baked into the rig meshes — only re-apply when the
+      // friend actually changes character/skin/hair (same as ghosts.ts).
+      const key = friendAppearanceKey(appearance);
+      if (key !== friend.appearanceKey) {
+        friend.rig.setAppearance(appearance);
+        friend.appearanceKey = key;
+      }
+      // A friend out on the slope is drawn as a ghost over there (ghosts.ts),
+      // so hide their lobby stand-in — one racer, one place at a time.
+      friend.rig.group.visible = !onSlope;
+    },
+    remove,
+    clear(): void {
+      for (const id of [...friends.keys()]) remove(id);
+    },
+    update(dt): void {
+      for (const friend of friends.values()) friend.rig.update(dt);
+    },
+  };
+}
+
 export interface LobbySceneHandle {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
   readonly player: SkierRig;
   readonly cat: CatRig;
+  /** Connected friends standing in the vignette (multiplayer). */
+  readonly friends: LobbyFriendsHandle;
   /** Presentation clocks — the camera sway and the cat's stroll cycle. */
   readonly idle: { time: number };
 }
@@ -162,7 +268,10 @@ export function createLobbyScene(container: HTMLElement): LobbySceneHandle {
   cat.group.rotation.y = CAT_SEAT_FACING;
   scene.add(cat.group);
 
-  return { renderer, scene, camera, player, cat, idle: { time: 0 } };
+  // Empty until someone joins your room; main.ts feeds it the friend packets.
+  const friends = createLobbyFriends(scene);
+
+  return { renderer, scene, camera, player, cat, friends, idle: { time: 0 } };
 }
 
 /** The dawn horizon behind everything: a big vertex-colored gradient plane
@@ -318,6 +427,7 @@ export function syncLobbyScene(handle: LobbySceneHandle, dt: number): void {
 
   handle.player.update(dt);
   handle.cat.update(dt);
+  handle.friends.update(dt);
 }
 
 export function renderLobby(handle: LobbySceneHandle): void {

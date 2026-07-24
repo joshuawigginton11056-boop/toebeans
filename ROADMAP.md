@@ -142,9 +142,17 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   `VITE_SUPABASE_ANON_KEY`, see `client/.env.example`) and a **BroadcastChannel**
   mirror (same-machine tabs, zero setup — the local-test path). Without the
   Supabase vars the room still works same-device and says so.
+- **(lobby) Friends show in the lobby, not just on the slope** — a connected
+  friend's character now stands in the lobby vignette beside you (lined up to
+  your camera-left, the cat's side left clear), driven from the same pose
+  packets. It hides while they're out on the slope (they're a ghost over there)
+  and reappears when they're back in the lobby — mirroring ghost on-slope
+  semantics, so one racer is only ever in one place. Managed in
+  `lobbyRender.ts` (`createLobbyFriends`), fed by the loop in `main.ts`.
 - Files: `client/src/net.ts` (transport/room), `client/src/ghosts.ts` (remote
-  skiers in the scene), friend panel in `lobbyUi.ts`, loop wiring in `main.ts`.
-  Verified: typecheck + 134 tests + prod build green; UI flow, the net send +
+  skiers on the slope), `client/src/lobbyRender.ts` (friends standing in the
+  lobby), friend panel in `lobbyUi.ts`, loop wiring in `main.ts`.
+  Verified: typecheck + 139 tests + prod build green; UI flow, the net send +
   receive paths, and ghost spawn all exercised live (the on-slope *visual* of two
   racers is Josh's playtest — and needs the Supabase vars for the cross-network
   case). Fast-follows (name tags, a real synced race, lazy-loading Supabase) in
