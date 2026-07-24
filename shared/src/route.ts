@@ -1,16 +1,16 @@
 // The branching map's route graph — the sim-side skeleton of "the actual map"
-// (SLOPE_BRANCHING.md). A run is no longer one straight distance axis: it's a
-// small graph of SEGMENTS chained summit → flag, where a fork can route you
-// down a detour instead of the road.
+// (SLOPE_BRANCHING.md §4). A run is no longer one straight distance axis: it's a
+// small graph of SEGMENTS chained summit → flag, where forks route you down
+// detour worlds or split the whole line to the flag.
 //
-// THE ONE LAW (SLOPE_BRANCHING.md §3, "same clock, same flag"): every full
-// route from summit to flag is the SAME total length, so no line is a
-// shortcut. This module makes that a *construction constraint*, not a scripting
-// problem: a Type A detour segment is built the SAME length as the road stretch
-// it bypasses, so — skied at the identical physics — it takes the same time and
-// rejoins the spine at the same point automatically. Prove the length equality
-// and the law holds for free. That is exactly the handoff §8 calls the riskiest
-// system, de-risked here first, grayblock only, on the existing skiing sim.
+// THE ONE LAW (SLOPE_BRANCHING.md §3, "same clock, same flag"): every full route
+// from summit to flag is the SAME total length, so no line is a shortcut. This
+// module makes that a *construction constraint*, not a scripting problem: the
+// segment lengths are chosen so the three routes (Ice / Cave / Water) each sum
+// to TOTAL_ROUTE_LENGTH, and every shared reconvergence point sits at the same
+// cumulative offset whichever way you reached it (see SEGMENT_OFFSETS). Prove
+// the length equality and the law holds for free — the riskiest system in the
+// concept (§8), de-risked as grayblock on the existing skiing sim.
 //
 // PURE DATA + PURE HELPERS. Where each segment sits in the *world* (its origin
 // and facing) is presentation and lives in client/src/slopePath.ts, keyed by
@@ -22,11 +22,15 @@
 import type { Chasm } from "./skiing";
 
 /**
- * A Type A trigger volume on a segment: "the world reaches out and grabs you"
+ * A trigger volume on a segment: "the world reaches out and grabs you"
  * (SLOPE_BRANCHING.md §1). While the run is within [`at` ± `halfWidth`] down
  * this segment AND its lateral is inside [`lateralMin`, `lateralMax`], the run
  * is diverted into segment `into` at the next segment boundary (you ski into
- * the great tree and it swallows you). Discoverable by line, per the design.
+ * the great tree / over the yeti's hole / onto the ledge and it takes you).
+ * Discoverable by line, per the design. Used for both Type A detours (the tree,
+ * the lake) and the Type B split (yeti's peak) — the sim primitive is identical;
+ * the only difference is topological (a Type A detour's `next` rejoins the spine
+ * quickly, a Type B branch stays separate to the flag).
  */
 export interface SegmentTrigger {
   readonly at: number;
@@ -42,7 +46,7 @@ export interface SegmentTrigger {
  * end of the segment (staying on the road), or null when this segment ends at
  * the flag. `chasms`/`checkpoints` are that segment's own hazards/respawns, in
  * segment-local distance (0 = the segment's entrance). `trigger`, if present,
- * is the Type A fork that can override `next`.
+ * is the fork that can override `next`.
  */
 export interface Segment {
   readonly id: string;
@@ -53,75 +57,199 @@ export interface Segment {
   readonly trigger?: SegmentTrigger;
 }
 
-// Where a fresh branching run starts.
-export const BRANCH_START = "spine-1";
+// Where a fresh branching run starts — the shared summit descent.
+export const BRANCH_START = "summit";
 
-// The grayblock topology — one Type A "tree" fork, the §8 de-risk shape:
+// The §4 map, as grayblock topology. Read as a resort trail map (sunset at the
+// summit, flag in the valley):
 //
-//   spine-1 (120) ──road──▶ spine-2 (100) ─┐
-//        │                                   ├─▶ spine-3 (120) ─▶ FLAG
-//        └──[great tree]──▶ tree (100) ─────┘
+//   summit (120) ──▶ FOREST fork (Type A) ──▶ lake (100) ──▶ LAKE fork ──┐
+//        │           forest-road (120) ─┐                    │           │
+//        └─[tree]──▶ forest-tree (120) ─┴─▶ (lake)      around│    into  │[hole]
+//                                                             ▼           ▼
+//                                            YETI fork (Type B)      water (200)
+//                                            yeti (80)                    │
+//                                        cave│    around│[ledge]          │
+//                                            ▼           ▼                │
+//                                        cave (120)   ledge (60)          │
+//                                            │           │                │
+//                                            │        valley (80)         │
+//                                            ▼           │                ▼
+//                                         cliff (100) ◀──┼──────── (cliff, shared)
+//                                            │        ice-castle (80)
+//                                          FLAG          │
+//                                                      FLAG
 //
-// Two full routes, BOTH 340 long: stay-on-road (120+100+120) and detour
-// (120+100+120). Equal by construction ⇒ same clock, same flag. The two middle
-// segments (spine-2 the road, tree the detour world) are kept flat and equal
-// for this de-risk, so the *handoff* is what's on trial, not hazard balancing —
-// they read as the same length, different place. The one gap lives in spine-3,
-// AFTER the rejoin, so both routes prove a chasm still fires across a segment
-// handoff. (Per-segment hazards differing route-to-route — the road tenser, the
-// detour a lower-stakes reward run — is just a data change on these lists; §5's
-// design, deferred past the de-risk.)
+// The three full routes to time-balance (§4), each 640 long by construction:
+//   Cave  — summit·forest·lake·yeti·cave·cliff            = 120+120+100+80+120+100
+//   Ice   — summit·forest·lake·yeti·ledge·valley·icecastle= 120+120+100+80+60+80+80
+//   Water — summit·forest·lake·water·cliff                = 120+120+100+200+100
+// The forest Type A (road vs. tree) is a same-length no-op on any of the three.
+// Two reconvergences: Cave & Water share `cliff` (both reach it at offset 540 —
+// the same clock), and Ice runs its own tail (valley → ice-castle) to a second
+// flag at the same total distance. Hazards are deliberately sparse grayblock
+// (one gap on the shared prefix, one on the shared cliff, one on the Ice tail):
+// enough to prove chasms fire on every route and across the handoffs; per-route
+// hazard balancing (the road tenser, the detours lower-stakes) is §5, deferred.
 export const BRANCH_SEGMENTS: Readonly<Record<string, Segment>> = {
-  "spine-1": {
-    id: "spine-1",
+  // 0 · Summit Descent (shared). Everyone drops in here. The great tree waits in
+  // the back half on the right (lateral 4..12): steer into it and the forest
+  // swallows you into the tree world instead of the road.
+  summit: {
+    id: "summit",
     length: 120,
-    next: "spine-2",
+    next: "forest-road",
     chasms: [],
     checkpoints: [],
-    // The great tree sits on the right through the back half of the segment:
-    // drift or steer right (lateral 4..12) and it takes you.
-    trigger: { at: 90, halfWidth: 30, lateralMin: 4, lateralMax: 12, into: "tree" },
+    trigger: { at: 90, halfWidth: 30, lateralMin: 4, lateralMax: 12, into: "forest-tree" },
   },
-  "spine-2": {
-    id: "spine-2",
-    length: 100,
-    next: "spine-3",
-    chasms: [],
-    checkpoints: [],
-  },
-  tree: {
-    id: "tree",
-    length: 100,
-    next: "spine-3",
-    chasms: [],
-    checkpoints: [],
-  },
-  "spine-3": {
-    id: "spine-3",
+  // 1 · Enchanted Forest — Type A. The road and the tree world are the same
+  // length and both flow into the lake, so the detour is a same-clock no-op.
+  "forest-road": {
+    id: "forest-road",
     length: 120,
+    next: "lake",
+    chasms: [],
+    checkpoints: [],
+  },
+  "forest-tree": {
+    id: "forest-tree",
+    length: 120,
+    next: "lake",
+    chasms: [],
+    checkpoints: [],
+  },
+  // 2 · Frozen Lake — Type A trigger, but its "into" branch feeds the cliff line
+  // rather than rejoining where "around" continues: the yeti smashes a hole
+  // (back half, right), and dropping in routes you through the penguin world to
+  // the shared cliff, skipping Yeti's Peak. Skiing "around" (the default) presses
+  // on to the peak. Both faces of the fork are same-clock to the flag. The shared
+  // lake gap sits before the hole, so all three routes learn the jump here.
+  lake: {
+    id: "lake",
+    length: 100,
+    next: "yeti",
+    chasms: [{ id: "lake-gap", start: 50, width: 3 }],
+    checkpoints: [45],
+    trigger: { at: 70, halfWidth: 25, lateralMin: 4, lateralMax: 12, into: "water" },
+  },
+  // 2b · Into the hole → drivable penguin → underwater penguin castle → surface
+  // back on the normal trail (the Water Line). Built the same 200 as
+  // yeti(80)+cave(120) so it rejoins the cliff at the same clock.
+  water: {
+    id: "water",
+    length: 200,
+    next: "cliff",
+    chasms: [],
+    checkpoints: [],
+  },
+  // 3 · Yeti's Peak — Type B (splits to the flag). Only the around-lake routes
+  // reach it. Ski it, then the yeti's son shoves you off the ledge (back half,
+  // right) into the Ice Line, or press through to the cave (the default) and the
+  // reunion cliff run.
+  yeti: {
+    id: "yeti",
+    length: 80,
+    next: "cave",
+    chasms: [],
+    checkpoints: [],
+    trigger: { at: 50, halfWidth: 25, lateralMin: 4, lateralMax: 12, into: "ledge" },
+  },
+  // 3a · Through the cave → the main road (your friend surfaces from their lake
+  // run) → the cliff. The Cave Line, the reunion route.
+  cave: {
+    id: "cave",
+    length: 120,
+    next: "cliff",
+    chasms: [],
+    checkpoints: [],
+  },
+  // 3b · Around — the ledge → the steep valley → the Ice Castle → its own flag.
+  // The Ice Line, run blind to the finish. ledge+valley+ice-castle = 220 =
+  // cave(120)+cliff(100), so the two Type B branches reach the flag same-clock.
+  ledge: {
+    id: "ledge",
+    length: 60,
+    next: "valley",
+    chasms: [],
+    checkpoints: [],
+  },
+  valley: {
+    id: "valley",
+    length: 80,
+    next: "ice-castle",
+    chasms: [{ id: "valley-gap", start: 40, width: 3 }],
+    checkpoints: [35],
+  },
+  "ice-castle": {
+    id: "ice-castle",
+    length: 80,
     next: null,
-    chasms: [{ id: "spine-3-gap", start: 60, width: 3 }],
-    checkpoints: [55],
+    chasms: [],
+    checkpoints: [],
+  },
+  // 4 · The Cliff jump — the shared finale for the Cave and Water lines. Reached
+  // from cave (yeti·cave, offset 540) and from water (offset 540) at the same
+  // clock. The signature gap lives here (grayblock width 3 for now — the wide
+  // "charged-jump-or-boost" cliff is §5 balancing).
+  cliff: {
+    id: "cliff",
+    length: 100,
+    next: null,
+    chasms: [{ id: "cliff-gap", start: 50, width: 3 }],
+    checkpoints: [45],
   },
 };
 
-// Cumulative arc length from the summit to the *start* of each segment — the
-// key to reading "same clock, same flag" live. Because the tree detour and the
-// spine-2 road it parallels are the same length, they share an offset (120), so
-// `routeDistanceOf` returns the SAME progress whichever way you went: proof, on
-// screen, that no route is a shortcut. Grayblock-explicit (a general graph would
-// derive these); honest about being hand-authored for this one fork.
+// Cumulative arc length from the summit to the *start* of each segment — the key
+// to reading "same clock, same flag" live. The construction guarantees every
+// shared point lands at one offset whichever fork reached it: the tree detour
+// shares spine-2's/the road's forest offset (120); `water` (into the lake) and
+// `yeti`→`cave` both deliver you to `cliff` at 540. So `routeDistanceOf` returns
+// the SAME progress on every route: proof, on screen, that no line is a shortcut.
+// Grayblock-explicit (a general graph would derive these); honest about being
+// hand-authored for this map.
 const SEGMENT_OFFSETS: Readonly<Record<string, number>> = {
-  "spine-1": 0,
-  "spine-2": 120,
-  tree: 120,
-  "spine-3": 220,
+  summit: 0,
+  "forest-road": 120,
+  "forest-tree": 120,
+  lake: 240,
+  // After the lake: around (→ yeti) and into (→ water) both start at 340.
+  yeti: 340,
+  water: 340,
+  // Yeti's Peak splits: cave and ledge both start at 420.
+  cave: 420,
+  ledge: 420,
+  // The Ice tail continues from ledge.
+  valley: 480,
+  "ice-castle": 560,
+  // The shared cliff: cave ends at 540 and water ends at 540, so cliff is 540
+  // whichever way you came — the load-bearing same-clock coincidence.
+  cliff: 540,
 };
 
 // The full summit → flag length every route shares.
-export const TOTAL_ROUTE_LENGTH = 340;
+export const TOTAL_ROUTE_LENGTH = 640;
 
 /** How far down the whole route you are, independent of which fork you took. */
 export function routeDistanceOf(segmentId: string, distance: number): number {
   return (SEGMENT_OFFSETS[segmentId] ?? 0) + distance;
+}
+
+/**
+ * The segment ids on the default road — the ones you reach by never taking a
+ * fork, walked from BRANCH_START along each `next`. Everything else is a detour
+ * world. Single source of truth for the grayblock renderer's spine-vs-detour
+ * coloring and the debug readout's "(detour)" label, so adding segments to the
+ * map above just works. Recomputed on call (the graph is tiny); the `has` guard
+ * stops a hypothetical `next` cycle from looping forever.
+ */
+export function roadSegmentIds(): ReadonlySet<string> {
+  const road = new Set<string>();
+  let id: string | null = BRANCH_START;
+  while (id && !road.has(id)) {
+    road.add(id);
+    id = BRANCH_SEGMENTS[id]?.next ?? null;
+  }
+  return road;
 }

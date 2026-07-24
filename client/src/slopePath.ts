@@ -197,15 +197,22 @@ export function slopeToWorld(
 }
 
 // ---------------------------------------------------------------------------
-// The branching map's segment placement (slope-mech, 2026-07-24 — the §8
-// de-risk of SLOPE_BRANCHING.md). Presentation-only, the same as the road
-// above: the sim (route.ts) knows a run as (segmentId, segment-local distance);
-// this maps that to a world point + facing. Each segment is a straight
-// grayblock corridor with its own world origin — the spine chained down −z, the
-// tree detour offset far to the side so it reads as a separate "world." A run
-// that forks jumps between corridors at the handoff (the tree swallows you /
-// the bird drops you back on the road): a deliberate, diegetic cut, exactly the
-// enter→detour→rejoin the de-risk is proving.
+// The branching map's segment placement (slope-mech, 2026-07-24 — the §4 map of
+// SLOPE_BRANCHING.md, grayblock). Presentation-only, the same as the road above:
+// the sim (route.ts) knows a run as (segmentId, segment-local distance); this
+// maps that to a world point + facing. Each segment is a straight grayblock
+// corridor with its own world origin — the spine chained straight down −z (x≈0),
+// the detour worlds offset to the sides so they read as separate "places." A run
+// that forks jumps between corridors at the handoff (the tree swallows you / the
+// penguin surfaces you back on the trail): a deliberate, diegetic cut, exactly
+// the enter→detour→rejoin the map is built on.
+//
+// The layout mirrors route.ts's lengths and reconvergences: the spine runs down
+// the middle (summit → forest-road → lake → yeti → cave → cliff), forest-tree
+// bulges right of the forest and rejoins the lake, water swings far left and
+// rejoins the shared cliff at z=−540 (same world-point cave arrives at), and the
+// Ice tail (ledge → valley → ice-castle) branches right off the peak to its own
+// flag. Both terminal ends (cliff, ice-castle) sit at z=−640, the same clock.
 //
 // "main" (the Overlook's single segment) has NO placement here, so the segment
 // functions fall straight through to the road above — the un-branched run is
@@ -221,14 +228,21 @@ export interface SegmentPlacement {
 }
 
 export const SEGMENT_PLACEMENTS: Readonly<Record<string, SegmentPlacement>> = {
-  // Spine: chained straight down −z. spine-1 [0,120], spine-2 [120,220],
-  // spine-3 [220,340] (matching route.ts's segment lengths).
-  "spine-1": { originX: 0, originZ: 0, heading: 0 },
-  "spine-2": { originX: 0, originZ: -120, heading: 0 },
-  // The detour "world": a parallel corridor offset +50 in x, spanning the same
-  // downhill extent as spine-2. Entering/leaving it cuts across that gap.
-  tree: { originX: 50, originZ: -120, heading: 0 },
-  "spine-3": { originX: 0, originZ: -220, heading: 0 },
+  // The spine, straight down −z at x=0 (each origin = the previous end):
+  summit: { originX: 0, originZ: 0, heading: 0 }, // [0, −120]
+  "forest-road": { originX: 0, originZ: -120, heading: 0 }, // [−120, −240]
+  lake: { originX: 0, originZ: -240, heading: 0 }, // [−240, −340]
+  yeti: { originX: 0, originZ: -340, heading: 0 }, // [−340, −420]
+  cave: { originX: 0, originZ: -420, heading: 0 }, // [−420, −540]
+  cliff: { originX: 0, originZ: -540, heading: 0 }, // [−540, −640] → FLAG
+  // The forest tree world: right of the road, rejoins the lake entrance (0,−240).
+  "forest-tree": { originX: 50, originZ: -120, heading: 0 }, // [−120, −240]
+  // The penguin/underwater world: far left, rejoins the shared cliff at (0,−540).
+  water: { originX: -70, originZ: -340, heading: 0 }, // [−340, −540]
+  // The Ice Line's own tail: right of the peak, down to its own flag at (60,−640).
+  ledge: { originX: 60, originZ: -420, heading: 0 }, // [−420, −480]
+  valley: { originX: 60, originZ: -480, heading: 0 }, // [−480, −560]
+  "ice-castle": { originX: 60, originZ: -560, heading: 0 }, // [−560, −640] → FLAG
 };
 
 /** The centerline point (world x/z + tangent) at a distance down a segment.

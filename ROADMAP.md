@@ -50,22 +50,25 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   a landing grip window, landing lockout + a "tired hop" cue.
 - **Road system** (`client/src/slopePath.ts`): a presentation-only centerline,
   curve-ready but **straight/identity today** (bit-for-bit the old world).
-- **Branching map (the "actual map") — mechanism proven; real layout is next.**
-  Per SLOPE_BRANCHING.md (director's new direction: one continuous descent that
-  grabs you into detour worlds, all obeying **"same clock, same flag"**), a
-  sim-side **segment graph** now exists (`shared/src/route.ts`): a run is a chain
-  of segments (spine + detours), the renderer places each in its own world
-  corridor (`segmentCenterline`/`addBranchGrayblock`, grayblock boxes, no
-  `skiScene.ts`), and a detour built the same length as the road it bypasses
-  rejoins the spine at the same world-point at the same time — the law holds by
-  construction, proven on one throwaway Type A "tree" fork (129 tests + live
-  bundle). **The current topology is a placeholder** (`spine-1/2/3` + one tree),
-  not the real map. **Director redirect (2026-07-24): next session lays out the
-  ACTUAL §4 map** — real segments (summit → enchanted forest → frozen lake →
-  yeti's peak) and the three same-clock routes to the flag — as grayblock on this
-  foundation, rather than adding toy forks one at a time. Dev-only behind
-  **`?branch=1`** (auto-loads the map now — a save no longer bypasses it); the
-  Overlook's single `"main"` segment is inert, so normal play is unchanged.
+- **Branching map (the "actual map") — the real §4 layout is in, as grayblock.**
+  Per SLOPE_BRANCHING.md (director's direction: one continuous descent that grabs
+  you into detour worlds, all obeying **"same clock, same flag"**), a sim-side
+  **segment graph** (`shared/src/route.ts`) chains the real map: **summit →
+  enchanted forest (Type A: road/tree) → frozen lake (Type A: around/into-water) →
+  yeti's peak (Type B: cave/ledge)**, resolving to the three §4 routes —
+  **Cave** (…yeti·cave·cliff), **Ice** (…yeti·ledge·valley·ice-castle), **Water**
+  (…lake·water·cliff) — each **640** units by construction, with the Cave/Water
+  reconvergence (`cliff`) landing at the identical route-offset (540) whichever
+  way it's reached. The renderer places each segment in its own grayblock world
+  corridor (`SEGMENT_PLACEMENTS`/`addBranchGrayblock`, now fully data-driven off
+  the registry — boxes only, no `skiScene.ts`); `roadSegmentIds()` is the single
+  source of truth for spine-vs-detour. 134 tests (incl. a behavioral proof all
+  three routes + the tree no-op reach the flag on the same step) + a clean
+  `?branch=1` bundle. Dev-only behind **`?branch=1`** (auto-loads the map — a save
+  doesn't bypass it); the Overlook's single `"main"` segment stays inert, so
+  normal play is unchanged. **Next:** detour *content* (animal world, bird,
+  penguin castle, ice castle) and per-route hazard balancing (§5); §7's open
+  reconciliations remain the director's.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
   across all 24 slope models; decor scatter follows the run. (Old birches removed.)
 - **Realism snow:** procedural displaced surface + GPU-carved ski trails.
@@ -129,17 +132,17 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       landing "poof" (needs a small `justLanded`/impact seam field, mechanics→visuals).
 - [ ] **Slope 1 gentle S-curve:** give `slopePath.ts` `BENDS` real amplitudes — a
       joint slope-mech + slope-vis flip, once visuals draw against the centerline.
-- [ ] **"The actual map"** (SLOPE_BRANCHING.md — a branching summit-to-flag map
-      with detour worlds). Segment/handoff **mechanism is de-risked** on a
-      placeholder tree fork (`?branch=1`; see Ski slope). **Next (director redirect,
-      2026-07-24): lay out the ACTUAL §4 map** as grayblock — the real segments
-      (summit descent → enchanted forest → frozen lake → yeti's peak) and the three
-      same-clock routes to the flag (Ice / Cave / Water Lines) — replacing the toy
-      `spine-1/2/3` topology in `route.ts`. §7's open reconciliation is still the
-      director's (branching as the template for all slopes vs. one branching map;
-      collectibles/achievements vs. XP; friend-race = later-phase MP, not v1.0) but
-      doesn't block laying out the topology. Detour *content* (animal world, bird,
-      penguin, ice castle) and art come after the layout stands.
+- [x] **"The actual map"** (SLOPE_BRANCHING.md — a branching summit-to-flag map
+      with detour worlds). Segment/handoff mechanism de-risked, then the **ACTUAL
+      §4 map laid out as grayblock (slope-mech, 2026-07-24):** real segments
+      (summit → enchanted forest → frozen lake → yeti's peak) and the three
+      same-clock routes to the flag (Cave / Ice / Water), replacing the toy
+      `spine-1/2/3` topology in `route.ts`. See Ski slope for the shape. **Still
+      open:** detour *content* (animal world, bird, penguin castle, ice castle),
+      per-route hazard balancing (§5 — the road tenser, detours lower-stakes; the
+      wide "signature" cliff), and §7's reconciliations (branching as the template
+      for all slopes vs. one branching map; collectibles/achievements vs. XP;
+      friend-race = later-phase MP, not v1.0). Art comes after the layout stands.
 - [ ] **Night → the enchanted forest (director redirect 2026-07-24).** First
       moonlit night was too bright; new target is an *extremely dark* forest with
       a few moonlight rays, lit by **glowing emissive assets** (mushrooms/crystals/
