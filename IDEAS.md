@@ -3,6 +3,26 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (lobby) Party lobby follow-ups — nameplates, real party data (2026-07-24)
+
+From the up-to-four-players + glowing-orbs chunk. The layout and orbs shipped;
+these are the parked next steps for when multiplayer (see DESIGN.md →
+Multiplayer) starts feeding the lobby real data:
+
+- **Nameplate / host marker per orb.** A small floating name — and a crown or
+  ring on the host — over each character would make a populated lobby read as
+  *people*, not just models. Cross-scene UI, so it belongs to the lobby
+  session. It's the natural next layer on top of the orbs.
+- **Feed real appearances + party size in.** `setLobbyPlayerCount()` currently
+  takes a preview count from `?players=`, and guests wear placeholder default
+  looks (`GUEST_APPEARANCES` in `lobbyRender.ts`). When multiplayer lands, call
+  it with the live party size and push each guest rig's real saved appearance
+  (each rig already has a `setAppearance`).
+- **Guest cat(s)?** DESIGN.md says visiting cats socialize, but only the local
+  player's cat is in the lobby today. Whether guests bring their cats — and how
+  four cats share the small vignette without clutter — is an open call, parked
+  for whenever friend-visits get built.
+
 ## (slope-vis) Adopt the road centerline so the curve can turn on (2026-07-24)
 
 **Hand-off from slope-mech.** The route bend is now a *shared road*, not a

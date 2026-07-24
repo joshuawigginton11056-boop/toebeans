@@ -167,6 +167,14 @@ and **660**, rock-gate pinch ~**560** (checkpoint 620 past it), finish **800**.
   find high-level partners (nice appliances, faster XP) and high-level
   players a reason to host (easy boost toward the next unlock) — a
   community, perhaps on Reddit, grows around this.
+- **The lobby already seats a party.** Visual scaffolding for the above
+  shipped 2026-07-24: the lobby stands **up to four characters**, a glowing
+  orb under each. "You" always read as the focus — a step **in front** of the
+  rest, on a warm birch-amber orb (guests get a cooler ice glow), on the
+  **left** in a two- or four-player lobby and in the **middle** of a
+  three-player one. Driven by a `?players=` preview hook until real party data
+  feeds `setLobbyPlayerCount()`. Open follow-ups (nameplates, guest cats, real
+  appearances) are parked in IDEAS.md.
 
 ## Look & Feel
 
