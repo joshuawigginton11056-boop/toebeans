@@ -61,6 +61,32 @@ use `segmentPitch(id, distance)` per-point (it varies down the route now).
 
 ## (slope-mech ✅ curves landed 2026-07-24 / rest still open) Branching map — the §4 layout landed; now make it PLAYABLE (2026-07-24)
 
+> **⏭ START HERE NEXT SESSION (handoff 2026-07-24, director): REPLACE THE GRAYBLOCK
+> RAMP WITH A REAL MOUNTAIN.** The branching map (the default slope) rides on a
+> grayblock ramp today — descending, curving floor/wall boxes built by
+> `addBranchGrayblock` in `skiRender.ts`. Make it a real, dressed mountain surface.
+> This is chiefly the **(slope-vis)** lift — `skiScene.ts`'s snow surface must go
+> **segment-aware** and lay real ground under every corridor — plus a small
+> **(slope-mech)** cleanup to retire the grayblock once real ground exists. Two hard
+> requirements from THIS session's work, both already exposed on `slopePath.ts`:
+>
+> 1. **Follow the CURVES.** Corridors are constant-curvature arcs now, not straight —
+>    build the surface along `segmentCenterline(id, distance)` (world x/z + `heading`)
+>    and `segmentToWorld(id, distance, lateral)`, per segment, not one straight strip
+>    down −z. The spine weaves an S; detours peel to the sides (`SEGMENT_SHAPES`).
+> 2. **Follow the VARYING grade.** The pitch is no longer one constant — use
+>    `segmentPitch(id, distance)` **per-point** (it changes down the route: steep ~27°
+>    summit, mellow ~15° forest/lake, steep lower pitch) and `segmentCenterline(...).y`
+>    for height. Do NOT tilt by a single `slopeGradePitch` — that's only the
+>    reference/average now. The height/grade truth is `routeHeightAt`/`routeGradeAt`
+>    in `shared/src/route.ts` if you want it raw.
+>
+> **(slope-mech) cleanup half:** once the real surface is under the run, gate
+> `addBranchGrayblock` (and the `branchDebug` readout) so the placeholder boxes +
+> proof text don't show in real play — see "Real entry + grayblock cleanup" below.
+> Detour worlds (lake/yeti/penguin/ice-castle) still dress in later; summit→forest is
+> the first slice, as before.
+
 **Shaped corridors landed (slope-mech, 2026-07-24):** the branching map's segments
 CURVE now — each a constant-curvature arc (`SEGMENT_SHAPES` in `slopePath.ts`), the
 spine a gentle centered S and the detours peeling to their sides, chained smoothly
@@ -100,28 +126,29 @@ The cross-session split:
   auto-transition's trigger is now answered: **it rides the summit→forest
   descent.** Wire `setTimeOfDay` off route progress (`routeDistanceOf`, or the
   segment id: summit → dusk, forest → dark).
-- **(slope-mech ✅ landed / slope-vis TODO) The branching map has a REAL 3D grade
-  now — the snow surface must follow it.** Director call 2026-07-24 ("ride down a
-  REAL mountain into the forest"): `slopePath.ts`'s `segmentCenterline(id, d)` now
-  returns a `y` — the branching corridors descend for real (summit y≈115 → flag
-  y=0, a constant ~10° pitch keyed to route distance so every route drops the same
-  total height; `slopeGradePitch`/`segmentPitch(id)` export the pitch; the Overlook
-  stays y=0, untouched). `skiRender.ts` rides it end-to-end: the skier, camera,
-  hazards, and grayblock corridors (now descending floor ramps + tilted walls) all
-  sit at the real y, and the **environment `anchor` now carries `anchor.y = the
-  ground y`.** BUT the dressed snow surface in `skiScene.ts` still ignores
-  `anchor.y` — it recenters the flat plane on `anchor.z` only (line ~479,
-  `slope.position.z = centerZ`), so on the branching map the skier rides the
-  grayblock ramp while the real snow stays flat at y=0. **The slope-vis half: sit +
-  TILT the snow surface (and treeline/trails/decor) to the grade** — follow
-  `anchor.y` for height and pitch the surface by `slopeGradePitch` (import from
-  `slopePath.ts`), so the dressed descent lands under the skier. Do it with the
-  segment-aware surface rework above (same chunk). **URGENCY BUMP (2026-07-24): the
-  branching map is now the DEFAULT slope** (main.ts — "Hit the slopes" loads it at
-  the plain URL, `?overlook=1` opts out), so the flat snow under a descending run is
-  what everyone sees on the live build now, not a hidden dev view. The grayblock ramp
-  is the stand-in ground until this lands. The Overlook (now `?overlook=1`) is still
-  unaffected (its anchor.y stays 0).
+- **(slope-mech ✅ landed / slope-vis TODO) The branching map has a REAL, VARYING 3D
+  grade — the snow surface must follow it.** Director call 2026-07-24 ("ride down a
+  REAL mountain into the forest") + the 2026-07-24 "steepness → speed" pass:
+  `slopePath.ts`'s `segmentCenterline(id, d)` returns a `y`, and the pitch now VARIES
+  down the route (steep ~27° summit, mellow ~15° forest/lake, steep lower pitch —
+  `routeHeightAt`/`routeGradeAt` in `shared/src/route.ts`, embedded as
+  `segmentCenterline(...).y` and `segmentPitch(id, distance)`; the Overlook stays y=0,
+  untouched). `skiRender.ts` rides it end-to-end: the skier, camera, hazards, and
+  grayblock corridors (descending, CURVING floor ramps + tilted walls, faceted per-
+  point) all sit at the real y + local pitch, and the **environment `anchor` carries
+  `anchor.y = the ground y`.** BUT the dressed snow surface in `skiScene.ts` still
+  ignores `anchor.y` — it recenters the flat plane on `anchor.z` only (line ~479,
+  `slope.position.z = centerZ`), so on the branching map the skier rides the grayblock
+  ramp while the real snow stays flat at y=0. **The slope-vis half (this is the
+  "replace the ramp with a real mountain" task banner'd at the top of this section):
+  sit + TILT the snow surface (and treeline/trails/decor) to the grade** — follow
+  `anchor.y` for height and pitch the surface by **`segmentPitch(id, distance)`
+  per-point (NOT a single `slopeGradePitch` — the grade varies now)**, along each
+  segment's curved centerline. Do it with the segment-aware surface rework above (same
+  chunk). **The branching map is the DEFAULT slope** (main.ts — plain URL; `?overlook=1`
+  opts out), so the flat snow under a descending, curving run is what everyone sees on
+  the live build now. The grayblock ramp is the stand-in ground until this lands. The
+  Overlook (now `?overlook=1`) is unaffected (its anchor.y stays 0).
 - **(slope-mech) Real entry + grayblock cleanup.** Promote entry off the
   `?branch=1` dev flag into real play (the exact UX is lobby's — below); gate the
   debug readout (`branchDebug.ts`) and the grayblock markers (`addBranchGrayblock`)

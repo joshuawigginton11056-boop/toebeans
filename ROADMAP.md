@@ -218,18 +218,26 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       dressed for real (this is the run that becomes the game). A coordinated
       cross-session slice — the ride already works mechanically (proven by tests),
       what's missing is a real entry + real visuals:
-      - **(slope-mech) — real 3D grade ✅ landed (2026-07-24):** the branching map
-        drops for real now ("ride down a REAL mountain", director). `slopePath.ts`'s
-        `segmentCenterline` returns a `y` — the corridors descend from an elevated
-        summit (~224) to y=0 at the flag, a constant **~19° pitch** (`SEGMENT_GRADE`
-        0.35, steepened from 0.18 on the director's ride) keyed to route distance so
-        every route falls the same total height (same-clock → same floor); the
-        Overlook stays flat (no placement → y=0). The skier, camera, hazards, and
-        grayblock (now descending floor ramps + tilted walls) ride the grade, and the
-        environment `anchor` carries `anchor.y`. **Snow-follow is the slope-vis half**
-        (tilt the surface to the grade — folds into the main lift; see IDEAS.md).
-        139 tests. **Angle director-approved at ~19° ("invigorating", 2026-07-24)
-        — locked, not a pending tune.**
+      - **(slope-mech) — real 3D grade + curves + steepness→speed ✅ landed
+        (2026-07-24):** the branching map drops for real ("ride down a REAL mountain",
+        director). `slopePath.ts`'s `segmentCenterline` returns a `y`; the corridors
+        descend from an elevated summit (~216) to y=0 at the flag AND **curve** (each
+        a constant-curvature arc, `SEGMENT_SHAPES` — the spine an S, detours peeling
+        off). The pitch now **VARIES** down the route (steep ~27° summit, mellow ~15°
+        forest/lake, steep lower — `routeHeightAt`/`routeGradeAt` in
+        `shared/src/route.ts`, keyed to route distance so every route falls the same
+        total: same-clock → same floor). The sim couples cruise/boost to it
+        (**steepness → speed**, `gradeSpeedFactor`; a no-op at the reference ~19° and
+        on the flat Overlook). The skier, camera, hazards, and grayblock (descending,
+        curving, per-point-pitched ramps) ride it; the `anchor` carries `anchor.y`.
+        153 tests. Reference ~19° stays the director-locked "invigorating" baseline.
+      - **(slope-vis) — REPLACE THE RAMP WITH A REAL MOUNTAIN — the next slice
+        (director, 2026-07-24, next session).** The run rides a grayblock ramp; make
+        `skiScene.ts`'s snow surface segment-aware and lay real dressed ground under
+        it, following the **curved centerlines** (`segmentCenterline`/`segmentToWorld`)
+        AND the **varying per-point pitch** (`segmentPitch(id, distance)`, not one
+        constant). Then (slope-mech) gates off `addBranchGrayblock`. See the START
+        HERE banner in IDEAS.md.
       - **(slope-mech) — branching map is now the DEFAULT slope ✅ (2026-07-24):**
         director couldn't see the grade because it was hidden behind `?branch=1` and
         the live build's plain URL served the flat Overlook. Promoted: the graded
