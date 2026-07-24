@@ -1,4 +1,4 @@
-# Parallel sessions: lobby + slope-mechanics + slope-visuals
+# Parallel sessions: lobby + slope-mechanics + slope-visuals + mountain-graphics + forest-graphics
 
 Three Claude sessions work this repo at the same time, each in its own git
 worktree (a separate folder sharing the same repo history). **Read this
@@ -15,6 +15,15 @@ gameplay-feel work can run side by side without colliding.)*
 its own worktree — `hud.ts` and all cross-scene UI chrome now belong to
 lobby. Still three sessions.)*
 
+*(2026-07-24: the slope-visuals SCENERY split into two sessions —
+**mountain-graphics** (terrain, snow, sky, lighting, hazard/checkpoint
+mesh styles) and **forest-graphics** (trees, decor scatter, glow props,
+mist, treelines). Slope-visuals narrows to the character rig + audio +
+asset tools. **This split is PENDING a code change** — see "The scenery
+split" below; until `skiScene.ts` is actually carved into
+`mountainGraphics.ts` + `forestGraphics.ts`, the two new sessions share
+`skiScene.ts` as shared territory.)*
+
 ## Who works where
 
 | Session | Branch | Folder | Dev server |
@@ -22,6 +31,8 @@ lobby. Still three sessions.)*
 | **Lobby** | `lobby` | `C:\Users\joshu\Toebeans-lobby` | launch config `toebeans-lobby` (port 5301) |
 | **Slope-mechanics** | `slope-mechanics` | `C:\Users\joshu\Toebeans-slope-mechanics` | launch config `toebeans-slope-mechanics` (port 5302) |
 | **Slope-visuals** | `slope-visuals` | `C:\Users\joshu\Toebeans-slope-visuals` | launch config `toebeans-slope-visuals` (port 5303) |
+| **Mountain-graphics** | `mountain-graphics` | `C:\Users\joshu\Toebeans-mountain-graphics` | launch config `toebeans-mountain-graphics` (port 5306) |
+| **Forest-graphics** | `forest-graphics` | `C:\Users\joshu\Toebeans-forest-graphics` | launch config `toebeans-forest-graphics` (port 5307) |
 
 The main checkout at `C:\Users\joshu\Toebeans` stays on `master` and is
 **merge-target only** — no session edits files there. Josh's own dev
@@ -53,14 +64,38 @@ where each frame:
 - `client/src/skiRender.ts` (camera + the state→presentation wiring: reads
   `SkiState` every frame and tells the rig and scene pieces where to be)
 
-**Slope-visuals session owns** — how the slope *looks and sounds*:
-- `client/src/skiScene.ts` (palette, lighting, sky, snow surface, decor
-  scatter, hazard/checkpoint mesh styles)
+**Slope-visuals session owns** — the character *and* the soundscape (the
+scenery moved out to the two graphics sessions below):
 - `client/src/skierModel.ts` (the character rig: pose, gear, hair, all
   body presentation)
 - `client/src/audio.ts`
-- `assets/slope/`, `assets/characters/`
+- `assets/characters/`
 - `tools/` (the asset converters)
+
+**Mountain-graphics session owns** — the ground and the sky:
+- `client/src/mountainGraphics.ts` (terrain, snow surface + shader, sky
+  dome, day/night lighting solve, palette, hazard + checkpoint mesh styles)
+- the terrain/rock GLBs in `assets/slope/`
+
+**Forest-graphics session owns** — everything growing on and glowing over
+the slope:
+- `client/src/forestGraphics.ts` (trees, decor scatter, treelines, the
+  enchanted-night glow props + snow pools, drifting mist banks)
+- the tree/plant/decor GLBs in `assets/slope/`
+
+> **The scenery split (PENDING — do this before mountain/forest do real
+> work).** Today all of the above still lives in one 3050-line
+> `client/src/skiScene.ts`, and mountain and forest are *not* a clean cut:
+> both halves lean on one shared core — `PALETTE`, `solveSnowLights`,
+> `applyTimeOfDay`/`setTimeOfDay`, and the `createEnvironment` build. The
+> split therefore produces **three** files, not two: a shared
+> `skiScene.ts` (the palette + lighting/day-night core, still imported by
+> both) plus `mountainGraphics.ts` and `forestGraphics.ts`. Until that
+> carve lands on master, **mountain-graphics and forest-graphics treat
+> `skiScene.ts` as shared territory** (small, additive, localized edits;
+> expect conflicts). Who carves it and when is Josh's call — see the note
+> he'll leave here / the handoff prompt. Nobody splits it while another
+> session has uncommitted changes in it.
 
 **The mechanics↔visuals seam.** `skiRender.ts` computes *numbers* from
 `SkiState` and passes them across the seam — to `skierModel.ts` via
@@ -97,9 +132,9 @@ write the problem into IDEAS.md tagged for that session instead.
   yours on top of it. Never two sessions bumping in the same cycle without
   a merge in between.
 - **ROADMAP.md / IDEAS.md**: prefix every new entry heading with
-  `(lobby)`, `(slope-mech)`, or `(slope-vis)`. Older entries keep their
-  historical `(bedroom)`/`(slope)` tags. On merge conflict, keep both
-  sides.
+  `(lobby)`, `(slope-mech)`, `(slope-vis)`, `(mountain)`, or `(forest)`.
+  Older entries keep their historical `(bedroom)`/`(slope)` tags. On merge
+  conflict, keep both sides.
 - **The Art Style Bible in DESIGN.md binds all three sessions** — during
   the texture transition (see the bible's status note), check the bible's
   current wording before making any new asset or material.

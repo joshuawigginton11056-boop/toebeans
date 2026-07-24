@@ -3,12 +3,17 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## ⏭ START HERE (slope-mech) — ONE solid mountain, one trail to the forest + 2 forest bugs (director look-pass, 2026-07-24)
+## ⏭ START HERE (slope-mech) — ONE solid mountain, one SMOOTH trail summit → back of the forest (director look-pass, 2026-07-24)
 
 Director look-pass on the real-terrain build. **Redirect: stop branching. Build one
 solid mountain with a SINGLE trail going down toward the forest — no forks, no
-switching over to other areas — and make the path smooth, not jerky.** Plus two feel
-bugs at the forest. Fix in the next chat; this session only captured it here.
+switching over to other areas — and make the path smooth, not jerky.**
+
+**Status (2026-07-24):** the speed-drop bug (item 2) is **DONE and shipped to master**.
+**Remaining — the next chunk = the smooth single trail (items 1 + 3).** Item 3 (drift-right)
+is subsumed by item 1: build the single continuous trail and the +x drift goes away. Trail
+scope is settled — it **ends at the back of the forest** (Josh, so he can gauge forest size).
+Coordinate with slope-vis on the terrain seam (`addBranchTerrain` → one continuous surface).
 
 **1. One trail, no switching, NOT jerky.** The run still rides the branching segment
 graph — each segment is a constant-curvature arc whose curvature SIGN FLIPS at every
