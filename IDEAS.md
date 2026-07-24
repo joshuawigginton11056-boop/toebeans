@@ -3,6 +3,38 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (multiplayer) Ghost racing — fast-follows past the first slice (2026-07-24)
+
+The first slice landed (see ROADMAP): two players in a room by code, each
+broadcasting pose ~12×/sec over a Supabase relay (+ a same-device
+BroadcastChannel mirror), drawn as ghost skiers. Purely visual — no shared sim,
+no collisions. Client-only (`client/src/net.ts`, `ghosts.ts`; UI in
+`lobbyUi.ts`; wiring in `main.ts`). This is EARLY vs. the plan — DESIGN.md/
+ROADMAP put real-time co-op at M7, post-v1.0 — built now as a lightweight
+testing/fun layer at Josh's request. Parked next steps, roughly ordered:
+
+- **Name tags over ghosts.** The packet already carries `name` (hard-coded
+  "Friend" today); add a name-entry field in the friend panel and a floating
+  label sprite over each ghost so you can tell who's who with >2 players.
+- **A real race:** synced countdown + start gate, a finish-line "who won"
+  readout. Needs a tiny shared agreement on "go" time over the channel (still no
+  server sim — just a broadcast timestamp both count down to).
+- **Lobby presence.** Ghosts only show on the slope right now; showing the
+  friend's character in the lobby vignette would make "we're both here" legible
+  before the run.
+- **Lazy-load Supabase.** `@supabase/supabase-js` added ~0.9MB to the bundle
+  (241KB gzip). Dynamic-import it only when a room is actually opened, so the
+  solo-play initial load stays lean (M4's <15MB / fast-load bar).
+- **Crash tip-over + tired-hop on ghosts.** Ghosts skip the frame-diff pose
+  niceties (pole push, jump envelope, tired hop) and the crash tip, since those
+  need local input history. If ghosts start reading "stiff," broadcast a couple
+  extra derived flags rather than re-deriving.
+- **Reconnect/robustness.** Supabase channel drop currently just shows an error
+  status; a retry/backoff would help flaky Wi-Fi. Peer timeout is a flat 3s.
+- **Segment-seam interpolation.** On the branching map a ghost snaps (doesn't
+  interpolate) across a segment boundary — fine for the Overlook (single
+  segment), revisit when detour worlds are playable.
+
 ## (slope-mech / slope-vis / lobby) Branching map — the §4 layout landed; now make it PLAYABLE (2026-07-24)
 
 The **real §4 map is laid out** (slope-mech, 2026-07-24 — see ROADMAP +
