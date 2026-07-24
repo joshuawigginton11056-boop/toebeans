@@ -4911,6 +4911,17 @@ Concrete directions for the next session (all in `skiScene.ts`'s lens block):
 turns, and the landing "poof" needing the `justLanded`/impact seam field) from
 the earlier hand-off, untouched.
 
+## (slope-vis) 2026-07-24 — Director verdict on the snow-clump splat: approved
+
+Look-pass on the build below: **"looks good."** The naturalistic snow clumps
+land — the tacky-crystal problem is resolved and the lens-splat thread
+(make-it-read → smaller/sticky → real particles) is **closed**. No code changed
+this turn; docs flipped to done/approved. The size/persistence/mix knobs stay as
+named constants if the mix ever wants a nudge, but no ask remains on the splat.
+**Still open — the separate fling-more half** (plume + lens carve-boost on hard
+turns, and the landing "poof" needing the `justLanded`/impact seam field):
+untouched, its own next chunk. See [IDEAS.md](IDEAS.md).
+
 ## (slope-vis) 2026-07-24 — Lens splat: real snow particles, not crystal flakes (build)
 
 Cashed in the director's 2026-07-24 verdict ("the snowflakes are tacky, I
