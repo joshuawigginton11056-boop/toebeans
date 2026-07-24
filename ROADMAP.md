@@ -81,13 +81,20 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   (branching-map "sun sets as we race" idea, director 2026-07-24) but the
   look-pass called it **too bright / too evenly lit** → **redirected to an
   *enchanted forest*: extremely dark, a few moonlight rays, lit by glowing
-  emissive assets** (plan in IDEAS.md). **First redirect pass — darker night —
-  landed (slope-vis 2026-07-24):** the `NIGHT` constants crushed toward black
-  (open-snow floor `#3F4D70`→`#12182B`, sky zenith `#1A2138`→`#0B0F1C`); the
-  moon stays a faint down-lane key so the lit lane (`#4E608A`) still reads
-  until the glow assets carry lane light. Still to do: moonlight *rays*,
-  glowing/emissive props + bloom + glow palette, phase-aware decor/spray/audio,
-  the auto-transition. ⚠ amends the bible's "bright only" rule (DESIGN.md note).
+  emissive assets** (plan in IDEAS.md). Landed so far (slope-vis 2026-07-24):
+  (1) **darker-night pass** — `NIGHT` constants crushed toward black (open-snow
+  floor `#3F4D70`→`#12182B`, sky zenith `#1A2138`→`#0B0F1C`); the moon stays a
+  faint down-lane key so the lit lane (`#4E608A`) still reads until the glow
+  assets carry lane light. (2) **the glowing-forest first layer** — the glow
+  ramp (G1–G4, DESIGN.md) + code-built emissive mushroom clusters with faked
+  additive snow pools scattered along both treelines, night-gated (`glowFactor`,
+  fades in past dusk). **Director look-passed (2026-07-24):** keep the glowing
+  props; **cut the fireflies** (too many colors, glued in front of the skier —
+  realistic ones come from a CC0 pack later); and next: **stronger bloom**,
+  **darken the snow sparkle at night**, and **make the tree trunks glow**. Still
+  to do (verdict-ordered): bloom (strong), phase-aware snow-sparkle + glowing
+  trunks, real MegaKit glow props, realistic fireflies, moonlight *rays*, the
+  auto-transition, night audio. ⚠ amends the bible's "bright only" rule (DESIGN.md).
 - **Loose snow:** ski-trail spray, screen flurries, and a lens splat of
   naturalistic snow-clump particles (director-approved).
 - **Camera:** free zoom, fixed angle, pointer-lock mouse look.
@@ -173,6 +180,17 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       dressed for real (this is the run that becomes the game). A coordinated
       cross-session slice — the ride already works mechanically (proven by tests),
       what's missing is a real entry + real visuals:
+      - **(slope-mech) — real 3D grade ✅ landed (2026-07-24):** the branching map
+        drops for real now ("ride down a REAL mountain", director). `slopePath.ts`'s
+        `segmentCenterline` returns a `y` — the corridors descend from an elevated
+        summit (~115) to y=0 at the flag, a constant ~10° pitch keyed to route
+        distance so every route falls the same total height (same-clock → same
+        floor); the Overlook stays flat (no placement → y=0). The skier, camera,
+        hazards, and grayblock (now descending floor ramps + tilted walls) ride the
+        grade, and the environment `anchor` carries `anchor.y`. **Snow-follow is the
+        slope-vis half** (tilt the surface to the grade — folds into the main lift;
+        see IDEAS.md). 139 tests. Dev-only (`?branch=1`), so shipped play is
+        unchanged. Grade steepness is a live tuning knob (`SEGMENT_GRADE`).
       - **(slope-vis) — the main lift:** dress the summit + forest corridors. The
         grayblock map renders boxes only (`addBranchGrayblock`, mechanics-owned) and
         `skiScene.ts` draws along the *single* Overlook road, not per-segment — it
@@ -195,15 +213,21 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 - [ ] **Night → the enchanted forest (director redirect 2026-07-24).** First
       moonlit night was too bright; new target is an *extremely dark* forest with
       a few moonlight rays, lit by **glowing emissive assets** (mushrooms/crystals/
-      fireflies) — needs a glow palette + bloom + sourcing calls. **Done so far
-      (slope-vis 2026-07-24): the darker-night first pass** — `NIGHT` ambient/sky
-      crushed toward near-black, faint moon key preserved for lane readability.
-      Still open: moonlight *rays*, the glowing emissive props + bloom + glow
-      palette (the big piece — needs sourcing + palette director calls), a designed
-      dusk midpoint, and night audio/lobby. **The auto-transition trigger is now
-      answered** (director, 2026-07-24): the enchanted forest *is* the branching
-      map's forest segment, so the sunset→dark transition rides the **summit→forest
-      descent** — this folds into the "play the summit → forest ride" slice above.
+      fireflies). **Done so far (slope-vis 2026-07-24):** (1) the darker-night pass
+      — `NIGHT` ambient/sky crushed toward near-black, faint moon key kept for lane
+      readability; (2) the **glow ramp signed off** (G1–G4, DESIGN.md) and the
+      **glowing-forest first layer** — code-built emissive mushroom clusters +
+      additive snow pools, night-gated (MegaKit sourcing call made, CC0).
+      **Director look-pass verdict (2026-07-24):** keep the props; **fireflies cut**
+      (rainbow + glued to the skier — realistic ones from a CC0 pack later);
+      **bloom must be stronger**, **snow sparkle too bright at night**, **tree
+      trunks need to glow**. Still open, verdict-ordered: **bloom (strong)**,
+      **phase-aware snow-sparkle + glowing trunks**, **real MegaKit glow props**,
+      **realistic fireflies (CC0)**, **moonlight rays**, a designed dusk midpoint,
+      night audio/lobby. **The auto-transition trigger is answered** (director,
+      2026-07-24): the enchanted forest *is* the branching map's forest segment, so
+      the sunset→dark transition rides the **summit→forest descent** — folds into
+      the "play the summit → forest ride" slice above.
       Full plan in IDEAS.md (slope-vis).
 - [ ] **Music:** timed per-slope songs à la Geometry Dash (tense before big jumps)
       — deliberately the **last** M2 item.

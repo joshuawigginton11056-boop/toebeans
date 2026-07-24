@@ -18,8 +18,10 @@ import { createSkierRig, type SkierRig } from "./skierModel";
 import {
   SEGMENT_PLACEMENTS,
   segmentCenterline,
+  segmentPitch,
   segmentToWorld,
   slopeCenterline,
+  slopeGradePitch,
 } from "./slopePath";
 import {
   createChasmMesh,
@@ -548,7 +550,15 @@ export function syncSkiSceneToState(
   const skierX = skierPt.x + skierCosH * state.lateral;
   const skierZ = skierPt.z + skierSinH * state.lateral;
   const curveYaw = -skierPt.heading;
-  handle.player.position.set(skierX, state.height, skierZ);
+  // The real grade (slope-mech, 2026-07-24): the branching map descends in
+  // world-Y, so the skier's ground height is the centerline's y (0 on the flat
+  // Overlook — unchanged), and state.height (the jump) rides on top of it.
+  handle.player.position.set(skierX, skierPt.y + state.height, skierZ);
+  // Lay the body along the slope: a nose-down pitch equal to the downhill grade
+  // (negative rotation.x is the downhill/forward direction, same convention as
+  // the crash tip below), 0 on the un-graded Overlook so its skier stays
+  // upright. Pitches within the road-yawed frame (rotation.order = "YXZ").
+  const slopePitch = -segmentPitch(state.segmentId);
   // The crash tip-over: chasms are the game's only crash now (turning
   // round 3 removed the fall-over), and a chasm always reads as a forward
   // drop — downhill, the way you were traveling, whatever the stance.
@@ -556,16 +566,16 @@ export function syncSkiSceneToState(
   // as the clock (forfeit holds it at 0 = fully tipped) — and accelerating
   // like a real topple, not a linear hinge. The tip pitches within the
   // road-yawed frame (rotation.order = "YXZ"), so it stays a forward drop
-  // down the curve.
+  // down the curve, and composes on top of the slope pitch.
   if (state.status === "skiing") {
-    handle.player.rotation.set(0, curveYaw, 0);
+    handle.player.rotation.set(slopePitch, curveYaw, 0);
   } else {
     const progress = Math.min(
       1,
       (RESPAWN_DELAY - state.respawnTimer) / TIP_DURATION,
     );
     const tip = (Math.PI / 2) * progress * progress;
-    handle.player.rotation.set(-tip, curveYaw, 0);
+    handle.player.rotation.set(slopePitch - tip, curveYaw, 0);
   }
 
   // Hazards and checkpoints span the lane at their distance, so they ride the
@@ -576,8 +586,10 @@ export function syncSkiSceneToState(
     if (checkpoint === 0 || checkpointMeshes.has(checkpoint)) continue;
     const marker = createCheckpointMarker();
     const pt = segmentCenterline(state.segmentId, checkpoint);
-    marker.position.set(pt.x, 0.02, pt.z);
-    marker.rotation.y = -pt.heading;
+    marker.position.set(pt.x, pt.y + 0.02, pt.z);
+    // Lie the slab flat on the graded ground: yaw to the tangent, pitch to the
+    // slope (0 on the flat Overlook). YXZ so the two compose like the rig.
+    marker.rotation.set(-segmentPitch(state.segmentId), -pt.heading, 0, "YXZ");
     handle.scene.add(marker);
     checkpointMeshes.set(checkpoint, marker);
   }
@@ -591,8 +603,8 @@ export function syncSkiSceneToState(
       meshes.set(chasm.id, mesh);
     }
     const pt = segmentCenterline(state.segmentId, chasm.start + chasm.width / 2);
-    mesh.position.set(pt.x, 0.01, pt.z);
-    mesh.rotation.y = -pt.heading;
+    mesh.position.set(pt.x, pt.y + 0.01, pt.z);
+    mesh.rotation.set(-segmentPitch(state.segmentId), -pt.heading, 0, "YXZ");
   }
 
   // The camera rig: ease the orbit distance toward the zoom target, hold the
@@ -625,7 +637,9 @@ export function syncSkiSceneToState(
   const localPosZ = flat * Math.cos(azimuth);
   handle.camera.position.set(
     skierX + localPosX * skierCosH - localPosZ * skierSinH,
-    state.height + cam.radius * Math.sin(elevation),
+    // skierPt.y grounds the framing on the real grade (0 on the flat Overlook),
+    // and state.height rides on top so jumps lift the camera as before.
+    skierPt.y + state.height + cam.radius * Math.sin(elevation),
     skierZ + localPosX * skierSinH + localPosZ * skierCosH,
   );
   const yawSin = Math.sin(cam.lookYaw);
@@ -634,7 +648,7 @@ export function syncSkiSceneToState(
   const localAimZ = AIM_Z * yawCos - AIM_X * yawSin;
   handle.camera.lookAt(
     skierX + localAimX * skierCosH - localAimZ * skierSinH,
-    state.height + AIM_Y,
+    skierPt.y + state.height + AIM_Y,
     skierZ + localAimX * skierSinH + localAimZ * skierCosH,
   );
 
@@ -651,7 +665,14 @@ export function syncSkiSceneToState(
   // centerline tangent (`slopeCenterline(state.distance).heading`) on the
   // visuals side so trails point the right way in world space. Parked in
   // IDEAS.md (slope-vis).
-  const anchor = new THREE.Vector3(skierX, 0, skierZ);
+  //
+  // GRADE SEAM (slope-mech, 2026-07-24): the anchor now carries the real ground
+  // y (skierPt.y — 0 on the flat Overlook, descending on the branching map).
+  // The snow surface still ignores anchor.y (flat plane), so on the branching
+  // map the skier rides the grayblock corridor while the dressed snow stays at
+  // 0 — the slope-vis task is to sit + tilt the snow surface to anchor.y (see
+  // IDEAS.md). Harmless on the Overlook (y stays 0).
+  const anchor = new THREE.Vector3(skierX, skierPt.y, skierZ);
   syncEnvironment(handle.environment, anchor, handle.camera, {
     heading: state.heading,
     grounded: state.height <= 0 && state.status === "skiing",
@@ -668,6 +689,10 @@ export function syncSkiSceneToState(
 // skiRender (slope-mech) and NOT skiScene (slope-vis): grayblock placeholders,
 // not the visuals session's dressed scene.
 export function addBranchGrayblock(handle: SkiSceneHandle): void {
+  // `pitch` tilts the box around world-x so a corridor floor/wall lies along the
+  // real grade (see slopePath.ts); 0 leaves it axis-aligned for the upright
+  // gates and trigger landmarks. All placements are heading 0 today, so the box
+  // needs no yaw.
   const addBox = (
     x: number,
     y: number,
@@ -676,12 +701,14 @@ export function addBranchGrayblock(handle: SkiSceneHandle): void {
     h: number,
     d: number,
     color: number,
+    pitch = 0,
   ): void => {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(w, h, d),
       new THREE.MeshStandardMaterial({ color }),
     );
     mesh.position.set(x, y, z);
+    mesh.rotation.x = pitch;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     handle.scene.add(mesh);
@@ -696,53 +723,87 @@ export function addBranchGrayblock(handle: SkiSceneHandle): void {
     const seg = BRANCH_SEGMENTS[id];
     if (!seg) continue;
     const onRoad = road.has(id);
-    // Lane-edge walls down both sides. Road corridors read cool/gray; detour
-    // worlds read green, a different place.
+    // The real grade (slope-mech, 2026-07-24): the corridor descends in world-Y,
+    // so its floor and walls are ramps, not level boxes. Endpoints carry the
+    // grade's y (0 at the flag, highest at the summit); the box tilts by the
+    // slope pitch (nose-down along −z, like the skier rig) and its length is
+    // stretched by 1/cos(pitch) to cover the pitched span.
+    const pitch = -segmentPitch(id);
+    const y0 = segmentCenterline(id, 0).y;
+    const y1 = segmentCenterline(id, seg.length).y;
+    const midY = (y0 + y1) / 2;
+    const rampLength = seg.length / Math.cos(slopeGradePitch);
+    const entrance = segmentCenterline(id, 0);
+    const midZ = entrance.z - seg.length / 2; // heading 0 → straight down −z
+    // The corridor FLOOR — a descending ramp so there's real ground under the
+    // skier (the dressed snow is flat until the visuals seam lands). Road reads
+    // cool/gray, detour worlds read green.
+    addBox(
+      entrance.x,
+      midY - 0.05,
+      midZ,
+      LATERAL_LIMIT * 2,
+      0.1,
+      rampLength,
+      onRoad ? 0x3c4654 : 0x365a3e,
+      pitch,
+    );
+    // Lane-edge walls down both sides, tilted onto the same ramp. Road corridors
+    // read cool/gray; detour worlds read green, a different place.
     for (const side of [-1, 1]) {
       const a = segmentToWorld(id, 0, side * LATERAL_LIMIT);
-      const b = segmentToWorld(id, seg.length, side * LATERAL_LIMIT);
       addBox(
-        (a.x + b.x) / 2,
-        0.6,
-        (a.z + b.z) / 2,
+        a.x,
+        midY + 0.6,
+        midZ,
         0.4,
         1.2,
-        seg.length,
+        rampLength,
         onRoad ? 0x5a6a7a : 0x4a7a52,
+        pitch,
       );
     }
     // A colored entrance stripe — on the road these mark the reconvergence
     // points (where a detour cuts back and both routes are the same clock).
-    const entrance = segmentCenterline(id, 0);
     addBox(
       entrance.x,
-      0.05,
+      entrance.y + 0.05,
       entrance.z,
       LATERAL_LIMIT * 2,
       0.1,
       1,
       onRoad ? 0x44506a : 0x6a9a72,
+      pitch,
     );
     // The "world reaches out and grabs you" marker at each trigger volume: the
-    // great tree, the yeti's hole, the ledge shove — one tall box on the side
-    // the trigger's lateral window sits.
+    // great tree, the yeti's hole, the ledge shove — one tall box (kept upright)
+    // on the side the trigger's lateral window sits, standing on the grade.
     if (seg.trigger) {
       const t = seg.trigger;
       const grab = segmentToWorld(id, t.at, (t.lateralMin + t.lateralMax) / 2);
-      addBox(grab.x, 2, grab.z, 2, 4, 2, 0x2f6b3a);
+      const grabY = segmentCenterline(id, t.at).y;
+      addBox(grab.x, grabY + 2, grab.z, 2, 4, 2, 0x2f6b3a);
     }
   }
 
-  // Start gate (the summit) and a finish gate at every terminal segment (the
-  // routes reconverge at the flag, ~same clock — here both cliff and ice-castle
-  // end at z=−640).
+  // Start gate (the summit, up high) and a finish gate at every terminal segment
+  // (the routes reconverge at the flag, ~same clock and — since the grade — the
+  // same height: both cliff and ice-castle end at z=−640, y=0). Kept upright.
   const start = segmentCenterline(BRANCH_START, 0);
-  addBox(start.x, 1.5, start.z, LATERAL_LIMIT * 2 + 2, 3, 0.5, 0x888888);
+  addBox(start.x, start.y + 1.5, start.z, LATERAL_LIMIT * 2 + 2, 3, 0.5, 0x888888);
   for (const id of Object.keys(SEGMENT_PLACEMENTS)) {
     const seg = BRANCH_SEGMENTS[id];
     if (!seg || seg.next !== null) continue;
     const finish = segmentCenterline(id, seg.length);
-    addBox(finish.x, 1.5, finish.z, LATERAL_LIMIT * 2 + 2, 3, 0.5, 0xffffff);
+    addBox(
+      finish.x,
+      finish.y + 1.5,
+      finish.z,
+      LATERAL_LIMIT * 2 + 2,
+      3,
+      0.5,
+      0xffffff,
+    );
   }
 }
 

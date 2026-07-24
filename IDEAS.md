@@ -67,6 +67,26 @@ The cross-session split:
   auto-transition's trigger is now answered: **it rides the summit→forest
   descent.** Wire `setTimeOfDay` off route progress (`routeDistanceOf`, or the
   segment id: summit → dusk, forest → dark).
+- **(slope-mech ✅ landed / slope-vis TODO) The branching map has a REAL 3D grade
+  now — the snow surface must follow it.** Director call 2026-07-24 ("ride down a
+  REAL mountain into the forest"): `slopePath.ts`'s `segmentCenterline(id, d)` now
+  returns a `y` — the branching corridors descend for real (summit y≈115 → flag
+  y=0, a constant ~10° pitch keyed to route distance so every route drops the same
+  total height; `slopeGradePitch`/`segmentPitch(id)` export the pitch; the Overlook
+  stays y=0, untouched). `skiRender.ts` rides it end-to-end: the skier, camera,
+  hazards, and grayblock corridors (now descending floor ramps + tilted walls) all
+  sit at the real y, and the **environment `anchor` now carries `anchor.y = the
+  ground y`.** BUT the dressed snow surface in `skiScene.ts` still ignores
+  `anchor.y` — it recenters the flat plane on `anchor.z` only (line ~479,
+  `slope.position.z = centerZ`), so on the branching map the skier rides the
+  grayblock ramp while the real snow stays flat at y=0. **The slope-vis half: sit +
+  TILT the snow surface (and treeline/trails/decor) to the grade** — follow
+  `anchor.y` for height and pitch the surface by `slopeGradePitch` (import from
+  `slopePath.ts`), so the dressed descent lands under the skier. Do it with the
+  segment-aware surface rework above (same chunk). Until then the branching map's
+  snow is flat under a descending run — visible only under `?branch=1`, and the
+  Overlook is unaffected (its anchor.y stays 0). Grayblock ramp is the stand-in
+  ground meanwhile.
 - **(slope-mech) Real entry + grayblock cleanup.** Promote entry off the
   `?branch=1` dev flag into real play (the exact UX is lobby's — below); gate the
   debug readout (`branchDebug.ts`) and the grayblock markers (`addBranchGrayblock`)
@@ -100,35 +120,68 @@ The cross-session split:
 
 ## (slope-vis) NIGHT → the enchanted forest — director redirect (2026-07-24)
 
-> **⏭ START HERE NEXT SESSION (slope-vis, handoff 2026-07-24):** the
-> **darker-night first pass landed and is merged to master** — the `NIGHT`
-> constants in `skiScene.ts` are crushed toward near-black (open-snow floor
-> `#12182B`, sky zenith `#0B0F1C`, moon-lit lane `#4E608A`), moon kept on as a
-> faint down-lane key.
+> **⏭ START HERE NEXT SESSION (slope-vis, handoff 2026-07-24):** the darker
+> night **and** the glowing-forest *first layer* are merged, and the director has
+> now **look-passed** the first layer (verdict below). Settled: darkness values
+> are the base (Josh: "feels right"); the **glow ramp is signed off** — G1
+> `#5FE9D0` cyan, G2 `#8CF08A` moss, G3 `#B98CF0` violet, G4 `#F0C06A` warm
+> lantern (DESIGN.md, `GLOW` in `skiScene.ts`); **sourcing = MegaKit mushrooms/
+> plants** (CC0). Live tuning knobs are named constants at the top of the
+> ENCHANTED NIGHT section (`GLOW_EMISSIVE`, `POOL_ALPHA`, `GLOW_ONSET`,
+> `GLOW_CELL`/`GLOW_DENSITY`).
 >
-> **↳ This work now has a concrete home (director, 2026-07-24):** the enchanted
-> forest *is* the branching map's forest segment, and the new priority is to make
-> the **summit → forest ride playable** (drop in at the summit → ride into the
-> dark enchanted forest). That means the enchanted look gets applied to a real,
-> skiable corridor, and the sunset→dark auto-transition rides the descent. See the
-> branching-map section at the top of this file for the full cross-session slice —
-> the first visuals step there (make `skiScene` segment-aware so it can dress the
-> summit + forest corridors) is the gateway this glow/rays work then fills in.
+> **★ Director look-pass verdict on the first layer (2026-07-24) — the punch
+> list for next session:**
+> 1. **Fireflies: CUT and re-source.** The code-built mote cloud was "too many
+>    colors and always in front of the skier" — **removed from `skiScene.ts`**
+>    this session. Josh wants **realistic fireflies from a CC0 pack** (not
+>    stylized additive dots). New sourcing task: find a CC0 firefly asset —
+>    likely a small animated/particle firefly, or a sprite sheet of a warm-white
+>    firefly glow — and scatter it in the world (NOT glued to the camera/skier;
+>    place it in world space near the treeline so the skier passes through it).
+>    Realistic ⇒ warm-white/amber, sparse, blinking — not the rainbow ramp.
+> 2. **Snow sparkle is too bright at night.** The realism-snow glitter/sparkle
+>    pass (`getSnowTextures().sparkle`, the roughness-noise glints in the snow
+>    material) reads too hot in the near-black scene — it must **darken with the
+>    night phase** like the rest of the atmosphere (drive it off `timeOfDay`/
+>    `glowFactor`; the snow material or its sparkle contribution needs a phase
+>    term). This is the "phase-aware snow" half of the decor-darkening item.
+> 3. **Tree trunks need to glow.** The frosted-green pines' *trunks* should glow
+>    at night (enchanted). A phase-gated emissive on the trunk material — the
+>    painted-decor materials are shared, so add a night emissive term keyed to
+>    the trunk material name (`Bark`/`Trunk`…) in `applyPaintedDetail`/a phase
+>    hook, brought in by `glowFactor` (probably a soft cool/`GLOW` hue). Judge
+>    against the "light passes through" tree direction — glowing trunks read as
+>    the enchanted magic in the wood.
+> 4. **Bloom must be STRONGER for glowing plants.** When bloom lands (next
+>    chunk), crank it — the director wants "a greater bloom for glowing plants";
+>    the caps/plants should really bleed halo, not just brighten. `GLOW_EMISSIVE`
+>    is already pushed >1 to give bloom headroom; tune the bloom strength/radius/
+>    threshold high and re-check.
 >
-> **Two things before building on the night look itself:**
-> 1. **Look-pass still pending** — the darkness value was verified numerically
->    but never eyeballed (port 5303 was held, pane wouldn't composite). Confirm
->    with Josh that it's dark enough / not too dark on **N** before treating the
->    values as final; they may still get tuned.
-> 2. **The big piece is next: glowing emissive props + bloom + a glow palette**
->    (the "enchanted" lighting model). This is blocked on **two director calls**
->    — (a) sourcing preference: CC0 pack (Quaternius/Kenney mushrooms/crystals/
->    plants) vs. re-lighting existing props; (b) sign-off on a small glow palette
->    (cool bioluminescent teals/greens/violets ± a warm lantern amber), carved
->    out separately from the 13 like the character ramps. **Ask these first.**
->    Then: moonlight *rays*, phase-aware decor/spray/audio, the auto-transition.
-> **Do NOT crush the ambient further until glow-pool lighting exists** — past
-> the current values the lane stops being readable (see the ✅ bullet below).
+> **↳ This work's concrete home (director, 2026-07-24):** the enchanted forest
+> *is* the branching map's forest segment; the priority is the **summit → forest
+> ride playable**, and the sunset→dark auto-transition rides that descent. See the
+> branching-map section up top — the first visuals step there (make `skiScene`
+> segment-aware to dress the summit + forest corridors) is the gateway this
+> glow/rays work fills in. For now the glow layer lives on the ordinary Overlook
+> night (the **N** debug phase) and carries over once the corridor is dressed.
+>
+> **Next chunks, in order (verdict-driven):**
+> 1. **Bloom** — the halo that makes emissive read as *glowing*, tuned STRONG
+>    (verdict #4). A render-seam add: `render()` in `skiRender.ts` (mechanics)
+>    calls `renderer.render(scene, camera)`; route it through an `EffectComposer`
+>    (`three/addons/postprocessing/…`, present in r185) with an `UnrealBloomPass`
+>    owned by `skiScene.ts`. Smallest additive seam change, mark `// slope-vis`.
+> 2. **Phase-aware darkening:** snow sparkle (verdict #2) + glowing tree trunks
+>    (verdict #3), both driven off `glowFactor`. (Also the general decor/spray
+>    darkening flagged earlier.)
+> 3. **Real MegaKit glow props** — download + convert the mushrooms/plants Josh
+>    picks, swap them for the code-built `makeGlowCluster` primitives.
+> 4. **Realistic fireflies** from a CC0 pack (verdict #1), world-placed.
+> 5. **Moonlight rays**, then the auto-transition + night audio.
+> **Do NOT crush the ambient further until bloom + real glow-pool light exist** —
+> past the current values the lane stops being readable (see the ✅ bullet below).
 
 **Redirect after the first night look-pass (director, 2026-07-24):** the
 moonlit night I built is **too bright and too evenly lit**. The new target:
