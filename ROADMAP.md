@@ -4874,6 +4874,43 @@ above). **Still open — the fling-more half** (plume + lens carve-boost on hard
 turns, and the landing "poof" that needs the `justLanded`/impact seam field) is
 a separate next chunk; see IDEAS.
 
+## (slope-vis) 2026-07-24 — Director verdict on the crystal flakes: tacky, wanted real snow particles (hand-off)
+
+Look-pass on the smaller/detailed/sticky build above: **"the snowflakes are
+tacky. I wanted actual snow particles."** The *smaller* and *sticky* levers were
+on target; the **"higher detail" lever went the wrong way** — the six-arm
+snow-crystal sprite reads as decorative clip-art, not snow flung onto a lens.
+No code changed this turn (docs-only per the director); the rebuild starts fresh
+next session. Full new spec is the lens-splat item in [IDEAS.md](IDEAS.md).
+
+The correction in one line: **snow on glass is irregular and asymmetric — soft
+clumps of packed powder and scattered fine grains, no symmetry, no geometric
+star.** Kill the crystal sprite. Keep everything else about this pass (the
+smaller radius, the longer cling/slow melt, the soft-hit/edge-frost, idle-skip)
+as the starting point; only the flake *shape* is being replaced.
+
+Concrete directions for the next session (all in `skiScene.ts`'s lens block):
+
+- **Replace `makeFlakeSprite()`'s six-arm crystal** with a naturalistic snow
+  particle. Candidates from the original spec that we did *not* pick and should
+  now try: a **clustered speckle of finer grains** (a clump built from a few
+  overlapping soft blobs at jittered offsets + a scatter of tiny dots), and/or a
+  **noise-roughened irregular soft blob** (asymmetric feathered edge, not a clean
+  circle). Pre-render a small *set* of 2–4 variant sprites so it doesn't read
+  repetitive, still blit-cheap (`drawImage` scaled + rotated), palette stays the
+  cool `LENS_TINT` — the read is irregular *shape/edge + grain*, not a motif.
+- **Consider a slight motion streak** in the fling direction (snow hits at an
+  angle, not head-on) — a soft directional smear reads more like impact than a
+  centred dot. Optional; judge on the eye.
+- **Keep the smaller/sticky tuning** (`base` radius, `LENS_LIFE`/`LENS_LIFE_VAR`,
+  the softened `min(1, age·12)·√t` fade, low drip/spread) and the soft "direct
+  hit" blobs + edge-frost vignette — the director only rejected the crystal
+  motif, not the size/persistence/mix.
+
+**Still also open — the fling-more half** (plume + lens carve-boost on hard
+turns, and the landing "poof" needing the `justLanded`/impact seam field) from
+the earlier hand-off, untouched.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
