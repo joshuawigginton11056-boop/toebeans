@@ -17,6 +17,7 @@ import { createLobbyScene, renderLobby, syncLobbyScene } from "./lobbyRender";
 import { createLobbyUi, type LobbyCycle } from "./lobbyUi";
 import { readSave, writeSave } from "./save";
 import { createSkiScene, render, syncSkiSceneToState } from "./skiRender";
+import { cycleTimeOfDay } from "./skiScene";
 
 const container = document.getElementById("app");
 if (!container) {
@@ -148,6 +149,13 @@ window.addEventListener("keydown", (event) => {
     cycleAppearance(
       event.code === "KeyC" ? "character" : event.code === "KeyK" ? "skin" : "hair",
     );
+    return;
+  }
+  // Debug (slope-vis, 2026-07-24): N cycles time of day dawn → dusk → night →
+  // dawn so the director can look-pass the night atmosphere. Slope-only; a
+  // stand-in until the "sun sets as you race" auto-transition lands.
+  if (event.code === "KeyN") {
+    if (mode === "slope") cycleTimeOfDay();
     return;
   }
   // Camera round 3 (slope-mech): the slope camera is all mouse/touch now —

@@ -3,6 +3,45 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (slope-vis) Night follow-ups — from the "sun sets as we race" night look (2026-07-24)
+
+The night time-of-day landed (see the ROADMAP entry): a `timeOfDay` phase in
+`skiScene.ts` lerps dawn ⇄ moonlit night (sky, fog, moon disc, cool dimmed
+lighting solved onto palette-family snow targets, a fade-in starfield), driven
+today by a debug key (`N`) for the director's look-pass. Open threads, all
+slope-vis unless noted:
+
+- **The auto-transition — "the sun sets *as you race*."** This is the actual
+  branching-map ask; only the *end-state look* is built. Wiring is easy on the
+  visuals side (run progress is derivable from the anchor — `-anchor.z` while
+  straight, or add a tiny additive `distance` seam field for robustness under
+  the curve), but the **trigger is a director call**: linear distance down the
+  run? tied to *which branch* of the branching map you take (so a branch can be
+  "the night branch")? a fixed wall-clock over the run? Don't guess — pin it
+  with the director, then drive `setTimeOfDay` from it in `syncEnvironment`.
+- **A designed dusk / golden hour.** The mid-phase (t≈0.5) is a plain day→night
+  colour lerp — a passable dusky twilight, but not a *designed* fiery sunset
+  (a real golden hour peaks warm-orange, which a straight lerp between dawn-pink
+  and night-blue skips). If the director wants the sunset itself to be a moment,
+  add a third warm endpoint and make the phase a 3-stop ramp (dawn → sunset →
+  night) instead of a 2-endpoint lerp.
+- **Decor / trees / spray under moonlight.** The frosted-green pines, rocks, and
+  the snow spray/flurries all still render as if lit at dawn (their materials
+  don't read the phase). At full night they'll look a touch bright against the
+  dimmed ground. If it reads wrong in the look-pass: tint the decor toward the
+  night ambient with the phase, and cool the spray's two-tone toward the moon.
+- **Night audio (`audio.ts`).** Nothing changes on the ear at night. A colder
+  wind bed, a sparser ambience, maybe a distant owl — cheap mood once the visual
+  lands and the transition trigger is known (so audio can ride the same phase).
+- **The lobby vignette's own night.** The lobby (`lobbyRender.ts`, lobby
+  session) has its own dawn sky/light and can't see `skiScene`'s phase. If the
+  director wants the menu to also turn to night, that's a lobby-session port of
+  the same idea — tagged there, not here.
+- **Bible amendment.** The Art Style Bible's "the whole game is bright — dark
+  moods are out of scope" is now in tension (DESIGN.md carries a ⚠ pointer). The
+  full rewrite is a director-framing call (slope-only vs game-wide) — folds into
+  the bible's already-pending shape-language/sourcing rewrite.
+
 ## (slope-vis) Adopt the road centerline so the curve can turn on (2026-07-24)
 
 **Hand-off from slope-mech.** The route bend is now a *shared road*, not a

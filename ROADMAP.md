@@ -5031,6 +5031,68 @@ substrate map work builds on, and the Slope 1 gentle-curve joint-flip with
 slope-vis remains parked and independent of whatever "the actual map" turns out
 to be.
 
+## (slope-vis) 2026-07-24 — Night falls: a moonlit time-of-day for the slope
+
+**Director direction (2026-07-24):** the branching-map idea — "*the sun sets as
+we race, and it turns to night.*" First slice, this session: **build what the
+slope looks like at night** and make it viewable, so the look can be judged
+before the transition is wired.
+
+**⚠ Art Style Bible tension, flagged for a look-pass + a bible note.** The bible
+says "the whole game is bright — dark moods are out of scope." Night is a
+deliberate director amendment to that line. It's kept inside the bible's *spirit*
+as far as it can be: the night is **moonlit and readable, never black**, every
+new color is a cool/dark **value shift of an existing palette entry** (snow
+shadow #2, glacial ice #10, the chasm navy), and — per the bible's "warmth comes
+from the characters, not the landscape" — the cold night leaves the cat's
+signal-red scarf as the one warm thing in frame. I did **not** rewrite the
+bible's "bright only" rule yet — that's a director call on framing (slope-only?
+game-wide? which map branches?); a matching ⚠ note is added to DESIGN.md's
+Lighting & atmosphere section pointing here, pending the look-pass.
+
+**What landed** (all in `client/src/skiScene.ts`, slope-visuals territory, plus a
+one-line debug key in shared `main.ts`):
+
+- **One phase drives the whole sky/light.** The scene used to be a single
+  hardcoded dawn; now everything atmospheric lives on a `timeOfDay` in [0,1]
+  (0 = the *exact* dawn from before — verified a no-op — 1 = full night).
+  `setTimeOfDay(t)` lerps between two prebuilt `Atmosphere` endpoints and applies
+  the result; `cycleTimeOfDay()` steps dawn → dusk → night → dawn.
+- **The snow stays palette-anchored at night.** The dawn lighting was solved from
+  two snow targets (ambient-only snow → snow-shadow #2, ambient+sun → sunlit
+  snow #1). That solve is generalized (`solveSnowLights`) and reused for night
+  with cooler targets — moonlit facing snow **#8FA0BE**, deep cool shadow
+  **#3F4D70**. Verified by replicating the three.js render math offline: day still
+  renders `#f8f5ef` / `#d3dfef` (unchanged, same 1/255 blue clamp as before),
+  night lands *exactly* on `#8fa0be` / `#3f4d70`, no channel-clamp artifacts.
+- **The sun becomes the moon.** The one directional light recolors + dims to a
+  cool near-white moon (still casts soft shadows, now faint). The sun billboard
+  is now a neutral-white disc tinted by `material.color` — sun-glow warm by day,
+  cool **#DFE8F5** and smaller/crisper by night — hung a little higher
+  (`MOON_BILLBOARD_DIRECTION`, ~11° vs the sun's ~4°).
+- **Sky + fog + a starfield.** The dome repaints from a dawn-pink→sky-blue
+  gradient to a dim-blue→deep-navy one (`repaintSkyDome`, off a cached
+  per-vertex height so it's cheap); fog re-tints to the night horizon (near/far
+  unchanged, so distance-read gameplay is identical); a 550-star deterministic
+  (seeded, no `Math.random`) field on a shell just inside the dome fades in with
+  night and rides the camera like the dome.
+- **Debug key `N`** (slope-only) cycles the phase for the director's look-pass —
+  a stand-in until the auto-transition lands. `createSkiScene` builds the env
+  once and reuses it across runs, so the chosen phase persists between runs.
+
+Presentation-only: no sim change, no save change, no `SAVE_VERSION` bump. Seam
+untouched — run progress is derivable from the anchor on the visuals side, so no
+new `syncEnvironment` field was needed. `npm run check` (119 tests) + `npm run
+build` pass. **Live visual verification was blocked** — another chat held this
+worktree's dev-server port (5303, strict), so per PARALLEL.md I didn't steal a
+port; the look-pass goes to the director's own `npm run dev`.
+
+**Parked for follow-up (IDEAS.md, slope-vis):** the "sun sets *as you race*"
+auto-transition (what triggers it — linear distance? which map branch? — is a
+director call), a dedicated golden-hour **dusk** midpoint (today the mid-phase is
+a plain day→night lerp, a serviceable but undesigned twilight), night behavior
+for decor/trees/spray and audio, and the lobby vignette's own time-of-day.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in
