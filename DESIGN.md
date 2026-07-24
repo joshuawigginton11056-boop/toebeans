@@ -463,8 +463,10 @@ pools, gone by the canopy — a vertical gradient, never a uniform wash. And it
 must **sit under the painted bark detail**: you still see the tree's bark
 strokes *through* the glow, so the emissive can't blow the trunk out to a flat
 color. (First pass was a flat emissive up the whole trunk — sent back on both
-counts; the revision is driven by a director reference photo. See ROADMAP /
-IDEAS slope-vis night entry.)
+counts. **Revised 2026-07-24 (slope-vis, ref photos):** an object-space vertical
+gradient textured by the triplanar bark — `primeTrunkGlowGradient` in
+`skiScene.ts` — meeting both requirements; awaiting the director's look-pass.
+See ROADMAP / IDEAS slope-vis night entry.)
 
 *Not* covered by this ramp: **fireflies**. The first code-built additive-mote
 cloud was cut on the director's look (too many colors, glued to the camera);
