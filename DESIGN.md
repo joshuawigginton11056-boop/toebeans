@@ -93,9 +93,17 @@ concrete build list is the `(slope-mech)` entry in [IDEAS.md](IDEAS.md).
   still a straight axis. The curve turns on once the visuals session draws the
   ground against the same centerline (snow, treeline, trails); until then the
   map is straight. See the ROADMAP entry and the `(slope-vis)` hand-off in
-  IDEAS.md.
-- **Grade:** flat-underneath model kept for v1 (the downhill read comes from
-  motion + framing, not real elevation change).
+  IDEAS.md. **NOTE — this describes the Overlook (`?overlook=1`). The BRANCHING map,
+  now the default slope, has REAL curved corridors** (constant-curvature arcs,
+  `SEGMENT_SHAPES`) as of 2026-07-24 — the "straight until the visuals adopt it" note
+  above applies to the Overlook road only.
+- **Grade:** flat-underneath model kept for v1 **on the Overlook**. **The BRANCHING
+  map (default slope) has a REAL, VARYING 3D grade** as of 2026-07-24 (steep summit,
+  mellow forest/lake, steep lower — `routeHeightAt`/`routeGradeAt` in
+  `shared/src/route.ts`), and the sim couples **speed to steepness** (steeper = faster,
+  director call). The dressed snow following that grade — "replace the ramp with a real
+  mountain" — is the next slope-vis slice (see IDEAS.md). The downhill read on the
+  Overlook still comes from motion + framing, not elevation.
 - **Width:** **built with a pinch.** `laneHalfWidth(distance)` narrows the
   lane from the full ±12 to ±6 at the rock gate (~560), smoothly over ±40
   units — tension before the finish, no new crash. ±12 is now the *maximum*;
