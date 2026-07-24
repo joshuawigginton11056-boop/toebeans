@@ -4783,6 +4783,39 @@ possible seam field:
   Fallback: infer the landing from `anchor.y` motion the way the plume infers
   speed. Decide at build time.
 
+## (slope-vis) 2026-07-24 — Made the lens splash READ (make-it-read pass)
+
+Cashed in the first half of the prior hand-off: the director's "splash not
+noticeable enough." All in `skiScene.ts`, no seam, no bible change (still the
+one cool snow-shadow tint from the #1/#2 snow family). The CTM gradient bug was
+already fixed last chunk — splats paint; they were just too faint. Levers, all
+named constants at the top of the lens block:
+
+- **Opacity up.** `LENS_PEAK_ALPHA` 0.34 → 0.6. A big splat's center pixel now
+  reads **122/255 (was 69)**, a small one **86 (was 49)** — a clear white smear,
+  still translucent (~48%) so the play read stays open.
+- **Bigger hits.** Base radius `(0.02+.045)` → `(0.028+.06)·minDim` and the big
+  multiplier 2.1 → 2.4: a big splat's radius **71 → 111 px**, small **34 → 46**.
+  `LENS_BIG_CHANCE` 0.12 → 0.24 so more of them are the large direct hits.
+- **More of them.** `LENS_SPLAT_RATE` 16 → 28/s, `LENS_SPLAT_MAX` 70 → 110.
+- **Edge-frost vignette (new).** Under a sustained hard carve, a soft white rim
+  now cakes the *lens corners* — the "buried in it" read discrete blobs can't
+  give. A smoothed `frost` level (0..1) eases toward the carve intensity (quick
+  attack `5.5`/s, slow decay `2.2`/s) and drives a radial vignette: **~50/255 at
+  the very corner at full carve, 0 at screen center**, so it frames without ever
+  touching the play read. Reset on scene-hide with the splats; the idle-skip
+  zero-fill now also waits for `frost` to reach 0, so an idle glide still costs
+  nothing.
+
+`npm run check` passes (typecheck + 113 tests). Verified deterministically
+(the Browser pane still pauses the render loop when hidden — a live moving-frame
+look-pass is the director's, same wall as every prior entry in this thread, and
+this session couldn't even boot a pane server: port 5303 was held by another
+chat's dev server): replayed the exact new draw math and sampled center/corner
+pixels (numbers above). **Still open — the fling-more half of the hand-off**
+(plume + lens carve-boost on hard turns, and the landing "poof" that needs the
+`justLanded`/impact seam field) is deliberately a separate next chunk; see IDEAS.
+
 ## Milestones
 
 Tracking toward the v1.0 web launch scope in

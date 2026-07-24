@@ -1201,9 +1201,9 @@ const FLURRY_WIND_X = 0.5;
 // off the same speed/carve signals as the spray, so no seam crosses. The
 // overlay is pointer-events:none (camera clicks pass through) and mirrors the
 // ski canvas's visibility so nothing lingers over the lobby.
-const LENS_SPLAT_MAX = 70; // hard cap on live splats (bounds fill cost)
-const LENS_SPLAT_RATE = 16; // splats/sec at full carve, before the closeness gate
-const LENS_BIG_CHANCE = 0.12; // fraction that are bigger, longer "direct hits"
+const LENS_SPLAT_MAX = 110; // hard cap on live splats (bounds fill cost)
+const LENS_SPLAT_RATE = 28; // splats/sec at full carve, before the closeness gate
+const LENS_BIG_CHANCE = 0.24; // fraction that are bigger, longer "direct hits"
 const LENS_LIFE = 0.5; // seconds a splat lingers before it's gone
 const LENS_LIFE_VAR = 0.5;
 const LENS_SLIDE = 55; // px/sec a splat drips down the lens
@@ -1211,7 +1211,14 @@ const LENS_MELT = 70; // px/sec a splat spreads as it melts
 // Cool-white, same snow-shadow family as the plume — a splat is that powder
 // hitting glass. Kept subtly translucent so it never blocks the play read.
 const LENS_TINT = "233, 240, 250";
-const LENS_PEAK_ALPHA = 0.34;
+const LENS_PEAK_ALPHA = 0.6; // per-splat opacity ceiling (2026-07-24 make-it-read pass)
+// Under a hard sustained carve, snow cakes the *edges* of the lens — a soft
+// white vignette that eases in with the splat intensity and lingers as it
+// decays, reading as "buried in it" the way discrete blobs alone can't. Center
+// stays clear so the play read is never blocked. (slope-vis 2026-07-24.)
+const LENS_FROST_PEAK_ALPHA = 0.2; // corner opacity at full, sustained carve
+const LENS_FROST_ATTACK = 5.5; // per-sec ease-up toward the current intensity
+const LENS_FROST_DECAY = 2.2; // per-sec ease-down when the carve lets up
 
 // Both systems draw as soft round sprites through this one shader. Point size
 // is world-radius attenuated to pixels; a near-camera fade keeps a flake from
@@ -1353,6 +1360,7 @@ interface LensSplashSystem {
   readonly ctx: CanvasRenderingContext2D;
   readonly splats: LensSplat[];
   emitAccum: number;
+  frost: number; // 0..1 smoothed edge-cake level (eases with carve intensity)
   wasDrawn: boolean; // last frame left ink on the canvas (so we clear once)
 }
 
@@ -1741,7 +1749,7 @@ function createLensSplash(renderer: THREE.WebGLRenderer): void {
     parent.removeChild(canvas);
     return;
   }
-  lensSplash = { canvas, ctx, splats: [], emitAccum: 0, wasDrawn: false };
+  lensSplash = { canvas, ctx, splats: [], emitAccum: 0, frost: 0, wasDrawn: false };
 
   // Follow the ski canvas in and out (main.ts sets display:none in the lobby).
   // Clear on hide so no splat is frozen on-screen behind the lobby.
@@ -1749,6 +1757,7 @@ function createLensSplash(renderer: THREE.WebGLRenderer): void {
     canvas.style.display = gl.style.display;
     if (gl.style.display === "none" && lensSplash) {
       lensSplash.splats.length = 0;
+      lensSplash.frost = 0;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       lensSplash.wasDrawn = false;
     }
@@ -1775,6 +1784,13 @@ function updateLensSplash(
   const h = canvas.height;
   const minDim = Math.min(w, h);
 
+  // Ease the edge-frost toward the current carve intensity — quick to cake on,
+  // slower to melt off — so a sustained hard carve grows a white rim on the lens.
+  const frostTarget = Math.min(1, intensity);
+  const frostRate = frostTarget > ls.frost ? LENS_FROST_ATTACK : LENS_FROST_DECAY;
+  ls.frost += (frostTarget - ls.frost) * Math.min(1, frostRate * dt);
+  if (ls.frost < 0.002) ls.frost = 0;
+
   // Emit — accumulate fractional splats so a low rate still lands them.
   if (intensity > 0.02 && splats.length < LENS_SPLAT_MAX) {
     ls.emitAccum += LENS_SPLAT_RATE * intensity * dt;
@@ -1789,11 +1805,11 @@ function updateLensSplash(
       // Spray erupts low and rises into frame: land splats across the lower
       // band, then let them drip further down as they melt.
       const y = h * (0.4 + Math.random() * 0.55);
-      const base = (0.02 + Math.random() * 0.045) * minDim;
+      const base = (0.028 + Math.random() * 0.06) * minDim;
       splats.push({
         x,
         y,
-        r: big ? base * 2.1 : base,
+        r: big ? base * 2.4 : base,
         vy: LENS_SLIDE * (0.5 + Math.random()),
         grow: LENS_MELT * (0.5 + Math.random()) * (big ? 1.4 : 1),
         life: (big ? LENS_LIFE * 1.6 : LENS_LIFE) +
@@ -1820,8 +1836,9 @@ function updateLensSplash(
   }
 
   // Draw. Skip the clear+repaint entirely when nothing's on screen and nothing
-  // was last frame (idle glide costs zero fill).
-  if (splats.length === 0) {
+  // was last frame (idle glide costs zero fill — the frost also has to be gone).
+  const drawFrost = ls.frost > 0.01;
+  if (splats.length === 0 && !drawFrost) {
     if (ls.wasDrawn) {
       ctx.clearRect(0, 0, w, h);
       ls.wasDrawn = false;
@@ -1829,6 +1846,23 @@ function updateLensSplash(
     return;
   }
   ctx.clearRect(0, 0, w, h);
+
+  // Edge-frost vignette first (behind the blobs): a soft white rim that packs
+  // the lens corners under heavy carve. Center stays fully clear so it never
+  // blocks the play read; only the periphery caches snow.
+  if (drawFrost) {
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    const outer = Math.hypot(w, h) * 0.5;
+    const a = ls.frost * LENS_FROST_PEAK_ALPHA;
+    const fg = ctx.createRadialGradient(cx, cy, outer * 0.45, cx, cy, outer);
+    fg.addColorStop(0, `rgba(${LENS_TINT}, 0)`);
+    fg.addColorStop(0.75, `rgba(${LENS_TINT}, ${a * 0.35})`);
+    fg.addColorStop(1, `rgba(${LENS_TINT}, ${a})`);
+    ctx.fillStyle = fg;
+    ctx.fillRect(0, 0, w, h);
+  }
+
   for (const s of splats) {
     const t = s.life / s.maxLife; // 1 at birth → 0 at death
     // Quick appear, long fade — a splat hits then melts off.

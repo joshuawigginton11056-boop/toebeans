@@ -163,23 +163,18 @@ them, all `skiScene.ts`:
   through the shared shader (`color * vColor`). Palette-legal, no bible change.
   *Open only as a look-pass:* the mix ratio (`SPRAY_SHADOW_FRAC`) is a director's
   eye call on a composited frame. See ROADMAP 2026-07-23 build entry.
-- **Lens splash now paints, but NOT NOTICEABLE ENOUGH — OPEN (director verdict
-  2026-07-24: "splash not noticeable enough").** The CTM gradient bug is fixed
-  (built 2026-07-23; center-pixel alpha 0 → ~0.34), so splats now render — but
-  at the current tuning they're too subtle to feel. This is now a *make-it-read*
-  pass, the levers all named constants at the top of the lens block:
-  - **Opacity** `LENS_PEAK_ALPHA` (0.34) — push it up; a lens hit should be a
-    clear white smear, not a faint haze. Kept translucent enough not to block
-    the play read, but that ceiling is higher than 0.34.
-  - **Size** `base` radius (`0.02–0.065·minDim`) and `LENS_BIG_CHANCE` (0.12) —
-    bigger and more frequent "direct hits" so a splat covers real screen area.
-  - **Frequency** `LENS_SPLAT_RATE` (16/s) and `LENS_SPLAT_MAX` (70) — more
-    splats landing per second at full carve.
-  - Consider a subtle white **frosting/blur** at the lens edge under heavy carve
-    (a vignette-ish accumulation), not just discrete blobs — reads as "buried in
-    it" more than dots do. Optional; try blob tuning first.
-  - Watch fill cost: the idle-skip (zero fill when nothing's on the lens) must
-    stay; more/bigger splats raise the per-frame `fill` area under heavy carve.
+- **Lens splash make-it-read — BUILT 2026-07-24, open only as a look-pass.**
+  The director's "splash not noticeable enough" (2026-07-24) was cashed in: all
+  the levers below were pushed — `LENS_PEAK_ALPHA` 0.34 → 0.6 (big-splat center
+  69 → 122/255), base radius up + big multiplier 2.1 → 2.4 (big radius 71 → 111
+  px) + `LENS_BIG_CHANCE` 0.12 → 0.24, `LENS_SPLAT_RATE` 16 → 28/s and
+  `LENS_SPLAT_MAX` 70 → 110, **plus** the edge-frost vignette (the "buried in it"
+  rim — a smoothed `frost` level drives a corner vignette, ~50/255 at the corner
+  at full carve, 0 at center). Idle-skip zero-fill preserved. See ROADMAP
+  2026-07-24. *Now open only as a director look-pass on a composited moving frame*
+  (the render loop pauses when the Browser pane is hidden, so no in-session
+  capture): whether the new opacity/size/frequency/frost read right — the knobs
+  above are all named constants at the top of the lens block.
 - **Fling MORE on hard turns and jump landings — OPEN (director ask 2026-07-24:
   "want it to fling more when turning or landing a jump").** Both the plume and
   the lens splash should surge on a hard carve and burst on touchdown. Two parts:
