@@ -3,12 +3,14 @@ import {
   BASE_SPEED,
   BOOST_SPEED,
   BRANCH_SEGMENTS,
+  BRANCH_START,
   JUMP_CHARGE_TIME,
   LATERAL_LIMIT,
   MIN_SPEED,
   RESPAWN_DELAY,
   TIRED_HOP_DURATION,
   downhillHeading,
+  roadSegmentIds,
   type SkiState,
 } from "@toebeans/shared";
 import { createCatRig, type CatRig } from "./catModel";
@@ -656,11 +658,12 @@ export function syncSkiSceneToState(
   });
 }
 
-// The branching map's grayblock scaffolding (slope-mech, 2026-07-24 — the §8
-// de-risk). Box shapes only, no art: enough to *see* the two routes, the fork,
-// and the two handoffs while proving "same clock, same flag." The tree detour
-// sits in its own offset corridor (SEGMENT_PLACEMENTS), so a forked run visibly
-// cuts across to it and cuts back — the enter→detour→rejoin the de-risk tests.
+// The branching map's grayblock scaffolding (slope-mech, 2026-07-24 — the §4 map
+// of SLOPE_BRANCHING.md). Box shapes only, no art: enough to *see* the three
+// routes, the three forks, and the handoffs while proving "same clock, same
+// flag." Each detour world sits in its own offset corridor (SEGMENT_PLACEMENTS),
+// so a forked run visibly cuts across to it and cuts back. Fully data-driven off
+// the route registry — adding segments to route.ts draws them here automatically.
 // Called once when a branching run starts (main.ts, dev-only). Deliberately in
 // skiRender (slope-mech) and NOT skiScene (slope-vis): grayblock placeholders,
 // not the visuals session's dressed scene.
@@ -684,12 +687,17 @@ export function addBranchGrayblock(handle: SkiSceneHandle): void {
     handle.scene.add(mesh);
   };
 
-  // Each segment: lane-edge walls down both sides + a colored entrance stripe.
-  // Spine corridors read cool/gray; the tree detour reads green, a different place.
+  // Which segments are the default road (walked from BRANCH_START) vs. detour
+  // worlds — the single source of truth in route.ts, so the coloring can't drift
+  // from the topology.
+  const road = roadSegmentIds();
+
   for (const id of Object.keys(SEGMENT_PLACEMENTS)) {
     const seg = BRANCH_SEGMENTS[id];
     if (!seg) continue;
-    const isTree = id === "tree";
+    const onRoad = road.has(id);
+    // Lane-edge walls down both sides. Road corridors read cool/gray; detour
+    // worlds read green, a different place.
     for (const side of [-1, 1]) {
       const a = segmentToWorld(id, 0, side * LATERAL_LIMIT);
       const b = segmentToWorld(id, seg.length, side * LATERAL_LIMIT);
@@ -700,9 +708,11 @@ export function addBranchGrayblock(handle: SkiSceneHandle): void {
         0.4,
         1.2,
         seg.length,
-        isTree ? 0x4a7a52 : 0x5a6a7a,
+        onRoad ? 0x5a6a7a : 0x4a7a52,
       );
     }
+    // A colored entrance stripe — on the road these mark the reconvergence
+    // points (where a detour cuts back and both routes are the same clock).
     const entrance = segmentCenterline(id, 0);
     addBox(
       entrance.x,
@@ -711,30 +721,29 @@ export function addBranchGrayblock(handle: SkiSceneHandle): void {
       LATERAL_LIMIT * 2,
       0.1,
       1,
-      isTree ? 0x6a9a72 : 0x44506a,
+      onRoad ? 0x44506a : 0x6a9a72,
     );
+    // The "world reaches out and grabs you" marker at each trigger volume: the
+    // great tree, the yeti's hole, the ledge shove — one tall box on the side
+    // the trigger's lateral window sits.
+    if (seg.trigger) {
+      const t = seg.trigger;
+      const grab = segmentToWorld(id, t.at, (t.lateralMin + t.lateralMax) / 2);
+      addBox(grab.x, 2, grab.z, 2, 4, 2, 0x2f6b3a);
+    }
   }
 
-  // The great tree at the trigger volume (spine-1, right side): ski into it and
-  // it swallows you into the detour.
-  const trigger = BRANCH_SEGMENTS["spine-1"]!.trigger!;
-  const tree = segmentToWorld(
-    "spine-1",
-    trigger.at,
-    (trigger.lateralMin + trigger.lateralMax) / 2,
-  );
-  addBox(tree.x, 2, tree.z, 2, 4, 2, 0x2f6b3a);
-
-  // The rejoin marker — where the bird drops you back on the road (spine-3
-  // entrance): both routes converge here, at the same world point.
-  const rejoin = segmentCenterline("spine-3", 0);
-  addBox(rejoin.x, 0.15, rejoin.z, LATERAL_LIMIT * 2, 0.3, 2, 0xc0a040);
-
-  // Start gate (summit) and finish gate (flag).
-  const start = segmentCenterline("spine-1", 0);
+  // Start gate (the summit) and a finish gate at every terminal segment (the
+  // routes reconverge at the flag, ~same clock — here both cliff and ice-castle
+  // end at z=−640).
+  const start = segmentCenterline(BRANCH_START, 0);
   addBox(start.x, 1.5, start.z, LATERAL_LIMIT * 2 + 2, 3, 0.5, 0x888888);
-  const finish = segmentCenterline("spine-3", BRANCH_SEGMENTS["spine-3"]!.length);
-  addBox(finish.x, 1.5, finish.z, LATERAL_LIMIT * 2 + 2, 3, 0.5, 0xffffff);
+  for (const id of Object.keys(SEGMENT_PLACEMENTS)) {
+    const seg = BRANCH_SEGMENTS[id];
+    if (!seg || seg.next !== null) continue;
+    const finish = segmentCenterline(id, seg.length);
+    addBox(finish.x, 1.5, finish.z, LATERAL_LIMIT * 2 + 2, 3, 0.5, 0xffffff);
+  }
 }
 
 export function render(handle: SkiSceneHandle): void {

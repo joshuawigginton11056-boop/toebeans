@@ -6,6 +6,15 @@ reconciled with the current three-linear-slopes model in
 Captured faithfully here so we can build against it session to session; the open
 questions in §7 are the director's to resolve before this rewrites DESIGN.md._
 
+> **Build status (2026-07-24).** Greenlit and building on the existing skiing sim
+> (confirming §7 #2). Done: the Type A handoff de-risked, then the **whole §4
+> topology laid out as grayblock** (`shared/src/route.ts` + `client/src/slopePath.ts`
+> — summit → forest → lake → yeti's peak, the three same-clock routes, 134 tests).
+> **Now building: the first *playable* slice — the summit → forest ride** (real
+> entry + dressed enchanted-forest visuals), per §8's "prove one fork, then grow."
+> Detour *content* (animal world, penguin castle, ice castle), Type B balancing,
+> and the lake/yeti dressing follow. §7 #1/#3/#4/#5 stay open (the director's).
+
 A visual version of this concept exists as an Artifact:
 https://claude.ai/code/artifact/0ee5c116-41f5-4cc7-b742-444d637cbe93
 
@@ -138,12 +147,22 @@ through the ice in front of you.
 5. **Same-clock authoring cost.** Keeping three routes the same length is the real
    balancing job; only provable by grayblocking timings.
 
-## 8. Build note (do not build yet)
+## 8. Build note (greenlit — building now)
 
-When it's greenlit: grayblock only, and **prove "same clock, same flag" with ONE Type
-A fork** (the tree) before building the rest — trigger volume → swap into a detour
-segment → exit onto the spine at the same world-position + same elapsed time. That
-handoff is the riskiest system in the whole concept; de-risk it first, reusing the
-existing skiing sim and `slopePath.ts` centerline. Then the lake (Type A), then Yeti's
-Peak (Type B). Multiplayer, collectibles/achievements, and art come after a solid solo
-run exists.
+The original order: grayblock only, **prove "same clock, same flag" with ONE Type A
+fork** (the tree) first — trigger volume → swap into a detour segment → exit onto the
+spine at the same world-position + same elapsed time — then the lake (Type A), then
+Yeti's Peak (Type B); multiplayer, collectibles/achievements, and art after a solid
+solo run exists.
+
+**Progress (2026-07-24):**
+- ✅ The Type A handoff de-risked on a throwaway tree fork (the riskiest system).
+- ✅ The **whole §4 topology laid out as grayblock** (all three routes, same-clock by
+  construction; 134 tests). Type B needed no new mechanics — the trigger + `next`
+  primitive already models a fork that doesn't rejoin until the flag.
+- ⏭ **Now: the first playable slice — the summit → forest ride.** Turn the top of the
+  grayblock map into a real, dressed, skiable run (real entry off the `?branch=1` flag
+  + `skiScene` dressing the summit/forest corridors, the forest being the enchanted
+  forest). The rest of the map — lake, yeti's peak, and all detour *content* (animal
+  world, bird, penguin castle, ice castle) — dresses in from there. See ROADMAP.md's
+  Open list and the branching-map section in IDEAS.md for the cross-session plan.

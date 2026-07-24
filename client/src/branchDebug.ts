@@ -1,13 +1,18 @@
-import { routeDistanceOf, TOTAL_ROUTE_LENGTH, type SkiState } from "@toebeans/shared";
+import {
+  roadSegmentIds,
+  routeDistanceOf,
+  TOTAL_ROUTE_LENGTH,
+  type SkiState,
+} from "@toebeans/shared";
 
-// A dev-only readout for the branching map's §8 de-risk (SLOPE_BRANCHING.md):
-// the live numbers that PROVE "same clock, same flag." It shows which segment
-// you're on, how far down the whole route you are, and — the load-bearing line
-// — how much route is left to the flag: that number is identical whether you
-// took the road or the tree, so you can watch two runs and see no line is a
-// shortcut. Not shipped: created only when a branching run starts (a URL flag
-// in main.ts), a plain fixed DOM panel over the canvas. Reads state, never
-// writes it — same contract as the HUD.
+// A dev-only readout for the branching map (SLOPE_BRANCHING.md §4): the live
+// numbers that PROVE "same clock, same flag." It shows which segment you're on,
+// how far down the whole route you are, and — the load-bearing line — how much
+// route is left to the flag: that number is identical whichever of the three
+// routes (Ice / Cave / Water) you took, so you can watch two runs and see no
+// line is a shortcut. Not shipped: created only when a branching run starts (a
+// URL flag in main.ts), a plain fixed DOM panel over the canvas. Reads state,
+// never writes it — same contract as the HUD.
 
 export interface BranchDebug {
   /** Advance the clock and repaint the panel from the current run state. */
@@ -38,6 +43,9 @@ export function createBranchDebug(): BranchDebug {
   document.body.appendChild(panel);
 
   let elapsed = 0;
+  // The default road (walked from the summit) — anything off it is a detour
+  // world. From route.ts, so the label tracks the topology.
+  const road = roadSegmentIds();
 
   const fmt = (n: number): string => n.toFixed(1);
 
@@ -48,15 +56,15 @@ export function createBranchDebug(): BranchDebug {
       if (state.status === "skiing" || state.status === "crashed") {
         elapsed += dt;
       }
-      const onDetour = state.segmentId === "tree";
+      const onDetour = !road.has(state.segmentId);
       const routeDist = routeDistanceOf(state.segmentId, state.distance);
       const remaining = Math.max(0, TOTAL_ROUTE_LENGTH - routeDist);
       panel.textContent = [
-        "BRANCHING MAP — §8 de-risk",
+        "BRANCHING MAP — §4",
         `segment    ${state.segmentId}${onDetour ? "  (detour)" : ""}`,
         `in segment ${fmt(state.distance)} / ${fmt(state.finishDistance)}`,
         `route      ${fmt(routeDist)} / ${TOTAL_ROUTE_LENGTH}`,
-        `to flag    ${fmt(remaining)}   ← same on either route`,
+        `to flag    ${fmt(remaining)}   ← same on every route`,
         `elapsed    ${fmt(elapsed)}s`,
         `fork armed ${state.divertTo ?? "—"}`,
         `status     ${state.status}`,

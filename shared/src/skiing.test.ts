@@ -22,7 +22,13 @@ import {
   type SkiInput,
   type SkiState,
 } from "./skiing";
-import { BRANCH_SEGMENTS, routeDistanceOf, TOTAL_ROUTE_LENGTH } from "./route";
+import {
+  BRANCH_SEGMENTS,
+  BRANCH_START,
+  roadSegmentIds,
+  routeDistanceOf,
+  TOTAL_ROUTE_LENGTH,
+} from "./route";
 
 const noInput: SkiInput = {
   left: false,
@@ -1382,38 +1388,45 @@ describe("Slope 1: the signature cliff jump demands commitment", () => {
   });
 });
 
-// The branching map's §8 de-risk (SLOPE_BRANCHING.md): one Type A "tree" fork,
-// grayblocked on this same sim. The riskiest system in the concept is the
-// handoff — enter a detour, ski it, rejoin the spine at the same place at the
-// same time — and its correctness reduces to one law: SAME CLOCK, SAME FLAG.
-// These pin that law at the sim level; the visual handoff continuity is the
-// live grayblock's job.
+// The branching map (SLOPE_BRANCHING.md §4): the real summit → flag map, as
+// grayblock on this same sim. Three full routes — Cave, Ice, Water — plus the
+// forest Type A no-op, all obeying one law: SAME CLOCK, SAME FLAG. The riskiest
+// system in the concept is the handoff (enter a detour, ski it, rejoin at the
+// same place at the same time), and its correctness reduces to that law. These
+// pin it at the sim level; the visual handoff continuity is the live
+// grayblock's job.
 describe("The branching map: same clock, same flag", () => {
   const dt = 0.02;
 
-  // Ski to the flag, recording the segments visited and the step count
-  // (elapsed time / dt). Taps the jump to clear any gap in the current segment
-  // (spine-3's, the only one), so a run doesn't die on the shared hazard. Both
-  // routes face that identical gap identically, so the policy never biases the
-  // comparison.
-  function runToFlag(start: SkiState): {
+  // Ski straight to the flag, arming the given diverts at the right segments,
+  // recording the segments visited and the step count (elapsed time / dt).
+  // `diverts` maps a segment id → the detour to take when the run reaches it —
+  // injected as state (not via the lateral trigger), so the motion stays a dead-
+  // straight coast on every route and the step counts are comparable. Taps a
+  // full jump to clear any gap in the current segment; jumps are time-neutral
+  // (vertical only, forward speed held), so they never bias the comparison.
+  function runToFlag(diverts: Record<string, string> = {}): {
     steps: number;
     segments: string[];
     final: SkiState;
   } {
-    let state = start;
+    let state = createBranchingSkiState();
     const segments = [state.segmentId];
     let steps = 0;
     for (
       ;
-      steps < 5000 && state.status !== "finished" && state.status !== "forfeited";
+      steps < 6000 && state.status !== "finished" && state.status !== "forfeited";
       steps++
     ) {
+      // Arm this segment's divert once, the frame we're on it.
+      const into = diverts[state.segmentId];
+      if (into && state.divertTo === null) {
+        state = { ...state, divertTo: into };
+      }
       // Charge a full jump across a wide window (~6 units out, long enough at
       // cruise to top the charge), then release ~6 units short to launch and
       // clear the width-3 gap with margin. Grounded-only so it doesn't recharge
-      // mid-air. Both routes face the one shared gap identically, so this never
-      // biases the comparison.
+      // mid-air.
       const grounded = state.height <= 0;
       const approaching = state.chasms.some(
         (c) => state.distance >= c.start - 12 && state.distance < c.start - 6,
@@ -1429,129 +1442,186 @@ describe("The branching map: same clock, same flag", () => {
 
   it("a fresh run starts at the summit segment with its skeleton", () => {
     const s = createBranchingSkiState();
-    expect(s.segmentId).toBe("spine-1");
-    expect(s.finishDistance).toBe(BRANCH_SEGMENTS["spine-1"]!.length);
-    expect(s.chasms).toEqual(BRANCH_SEGMENTS["spine-1"]!.chasms);
+    expect(s.segmentId).toBe("summit");
+    expect(s.segmentId).toBe(BRANCH_START);
+    expect(s.finishDistance).toBe(BRANCH_SEGMENTS.summit!.length);
+    expect(s.chasms).toEqual(BRANCH_SEGMENTS.summit!.chasms);
     expect(s.divertTo).toBeNull();
   });
 
-  it("the detour is built the same length as the road it bypasses (same clock, by construction)", () => {
-    expect(BRANCH_SEGMENTS.tree!.length).toBe(BRANCH_SEGMENTS["spine-2"]!.length);
-    expect(BRANCH_SEGMENTS.tree!.next).toBe("spine-3");
-    expect(BRANCH_SEGMENTS["spine-2"]!.next).toBe("spine-3");
-    // routeDistanceOf agrees: the two share an offset, so progress down the
-    // whole route is identical whichever fork you took — no line is a shortcut.
-    expect(routeDistanceOf("tree", 50)).toBe(routeDistanceOf("spine-2", 50));
-    // The whole route measures the same either way.
-    expect(
-      BRANCH_SEGMENTS["spine-1"]!.length +
-        BRANCH_SEGMENTS["spine-2"]!.length +
-        BRANCH_SEGMENTS["spine-3"]!.length,
-    ).toBe(TOTAL_ROUTE_LENGTH);
+  it("every full route is the same total length (same clock, by construction)", () => {
+    const len = (id: string): number => BRANCH_SEGMENTS[id]!.length;
+    const cave = ["summit", "forest-road", "lake", "yeti", "cave", "cliff"];
+    const ice = ["summit", "forest-road", "lake", "yeti", "ledge", "valley", "ice-castle"];
+    const water = ["summit", "forest-road", "lake", "water", "cliff"];
+    for (const route of [cave, ice, water]) {
+      expect(route.reduce((sum, id) => sum + len(id), 0)).toBe(TOTAL_ROUTE_LENGTH);
+    }
+    // The forest Type A is a same-length no-op: the tree world equals the road.
+    expect(len("forest-tree")).toBe(len("forest-road"));
   });
 
-  it("staying on the road runs spine-1 → spine-2 → spine-3 → flag", () => {
-    const { segments, final } = runToFlag(createBranchingSkiState());
-    expect(segments).toEqual(["spine-1", "spine-2", "spine-3"]);
-    expect(
-      routeDistanceOf(final.segmentId, final.distance),
-    ).toBeGreaterThanOrEqual(TOTAL_ROUTE_LENGTH);
-  });
-
-  it("taking the tree detour runs spine-1 → tree → spine-3 → flag", () => {
-    const { segments, final } = runToFlag({
-      ...createBranchingSkiState(),
-      divertTo: "tree",
-    });
-    expect(segments).toEqual(["spine-1", "tree", "spine-3"]);
-    expect(
-      routeDistanceOf(final.segmentId, final.distance),
-    ).toBeGreaterThanOrEqual(TOTAL_ROUTE_LENGTH);
-  });
-
-  it("road and detour reach the flag at the same elapsed time (the law, behaviorally)", () => {
-    // Identical skiing — the ONLY difference is the fork — so the two must
-    // finish on the same step and at the same route distance. That equality is
-    // 'no line is faster', proven end to end, not just asserted on the data.
-    const road = runToFlag(createBranchingSkiState());
-    const tree = runToFlag({ ...createBranchingSkiState(), divertTo: "tree" });
-    expect(tree.steps).toBe(road.steps);
-    expect(routeDistanceOf(tree.final.segmentId, tree.final.distance)).toBeCloseTo(
-      routeDistanceOf(road.final.segmentId, road.final.distance),
-      6,
+  it("shared reconvergences sit at the same clock whichever fork reached them", () => {
+    // The cliff is shared by the Cave line (via yeti·cave) and the Water line
+    // (via water). routeDistanceOf reports the same progress there both ways —
+    // proof no line is a shortcut into the finale.
+    expect(routeDistanceOf("cave", BRANCH_SEGMENTS.cave!.length)).toBe(
+      routeDistanceOf("water", BRANCH_SEGMENTS.water!.length),
+    );
+    expect(routeDistanceOf("cliff", 0)).toBe(
+      routeDistanceOf("cave", BRANCH_SEGMENTS.cave!.length),
+    );
+    // The forest fork shares an offset too (road and tree both at 120).
+    expect(routeDistanceOf("forest-tree", 50)).toBe(
+      routeDistanceOf("forest-road", 50),
     );
   });
 
-  it("skiing into the great tree's volume arms the detour fork", () => {
-    // Inside the trigger's down-window (60..120) and lateral window (4..12).
-    let state: SkiState = {
-      ...createBranchingSkiState(),
-      distance: 85,
-      lateral: 8,
-      speed: BASE_SPEED,
-    };
-    state = stepSkiing(state, noInput, dt);
-    expect(state.divertTo).toBe("tree");
+  it("the Cave line runs summit → forest-road → lake → yeti → cave → cliff → flag", () => {
+    const { segments, final } = runToFlag(); // all defaults
+    expect(segments).toEqual([
+      "summit",
+      "forest-road",
+      "lake",
+      "yeti",
+      "cave",
+      "cliff",
+    ]);
+    expect(
+      routeDistanceOf(final.segmentId, final.distance),
+    ).toBeGreaterThanOrEqual(TOTAL_ROUTE_LENGTH);
   });
 
-  it("outside the tree's lateral window it does NOT arm (you skied past it)", () => {
+  it("the Ice line splits at the peak: … → yeti → ledge → valley → ice-castle → flag", () => {
+    const { segments, final } = runToFlag({ yeti: "ledge" });
+    expect(segments).toEqual([
+      "summit",
+      "forest-road",
+      "lake",
+      "yeti",
+      "ledge",
+      "valley",
+      "ice-castle",
+    ]);
+    expect(
+      routeDistanceOf(final.segmentId, final.distance),
+    ).toBeGreaterThanOrEqual(TOTAL_ROUTE_LENGTH);
+  });
+
+  it("the Water line drops at the lake: … → lake → water → cliff → flag", () => {
+    const { segments, final } = runToFlag({ lake: "water" });
+    expect(segments).toEqual(["summit", "forest-road", "lake", "water", "cliff"]);
+    expect(
+      routeDistanceOf(final.segmentId, final.distance),
+    ).toBeGreaterThanOrEqual(TOTAL_ROUTE_LENGTH);
+  });
+
+  it("all three routes (+ the tree no-op) reach the flag on the same step (the law, behaviorally)", () => {
+    // Identical dead-straight skiing — the ONLY difference is the fork — so all
+    // must finish on the same step and at the same route distance. That equality
+    // is 'no line is faster', proven end to end, not just asserted on the data.
+    const cave = runToFlag();
+    const ice = runToFlag({ yeti: "ledge" });
+    const water = runToFlag({ lake: "water" });
+    const tree = runToFlag({ summit: "forest-tree" }); // Type A, then Cave line
+    for (const run of [ice, water, tree]) {
+      expect(run.steps).toBe(cave.steps);
+      expect(routeDistanceOf(run.final.segmentId, run.final.distance)).toBeCloseTo(
+        routeDistanceOf(cave.final.segmentId, cave.final.distance),
+        6,
+      );
+    }
+  });
+
+  it("roadSegmentIds is the default line; the detour worlds are off it", () => {
+    const road = roadSegmentIds();
+    expect([...road]).toEqual(["summit", "forest-road", "lake", "yeti", "cave", "cliff"]);
+    for (const detour of ["forest-tree", "water", "ledge", "valley", "ice-castle"]) {
+      expect(road.has(detour)).toBe(false);
+    }
+  });
+
+  it.each([
+    ["summit", "forest-tree", 85], // the great tree
+    ["lake", "water", 70], // the yeti's hole
+    ["yeti", "ledge", 50], // the yeti's-son shove
+  ])(
+    "skiing into %s's trigger volume arms the %s fork",
+    (segmentId, into, distance) => {
+      const seg = BRANCH_SEGMENTS[segmentId]!;
+      let state: SkiState = {
+        ...createBranchingSkiState(),
+        segmentId,
+        finishDistance: seg.length,
+        chasms: seg.chasms,
+        checkpoints: seg.checkpoints,
+        distance,
+        lateral: 8, // inside every trigger's lateral window (4..12)
+        speed: BASE_SPEED,
+      };
+      state = stepSkiing(state, noInput, dt);
+      expect(state.divertTo).toBe(into);
+    },
+  );
+
+  it("outside the trigger's lateral window it does NOT arm (you skied past it)", () => {
     let state: SkiState = {
       ...createBranchingSkiState(),
       distance: 85,
-      lateral: 0, // straight down the road, well left of the tree
+      lateral: 0, // straight down the road, well left of the great tree
       speed: BASE_SPEED,
     };
     state = stepSkiing(state, noInput, dt);
     expect(state.divertTo).toBeNull();
   });
 
-  it("an armed fork routes into the tree at the boundary, not the road", () => {
+  it("an armed fork routes into the detour at the boundary, not the road", () => {
     let state: SkiState = {
       ...createBranchingSkiState(),
-      distance: 118,
+      distance: BRANCH_SEGMENTS.summit!.length - 2,
       lateral: 8,
       speed: BASE_SPEED,
     };
-    for (let i = 0; i < 60 && state.segmentId === "spine-1"; i++) {
+    for (let i = 0; i < 60 && state.segmentId === "summit"; i++) {
       state = stepSkiing(state, noInput, dt);
     }
-    expect(state.segmentId).toBe("tree");
+    expect(state.segmentId).toBe("forest-tree"); // the detour, not forest-road
     expect(state.divertTo).toBeNull(); // consumed at the boundary
   });
 
   it("crossing a boundary loads the next segment and resets the respawn to its entrance", () => {
-    const seg2 = BRANCH_SEGMENTS["spine-2"]!;
+    const yeti = BRANCH_SEGMENTS.yeti!;
     let state: SkiState = {
       ...createBranchingSkiState(),
-      segmentId: "spine-2",
-      distance: seg2.length - 0.05,
+      segmentId: "yeti",
+      distance: yeti.length - 0.05,
       speed: BASE_SPEED,
-      finishDistance: seg2.length,
-      chasms: seg2.chasms,
-      checkpoints: seg2.checkpoints,
+      finishDistance: yeti.length,
+      chasms: yeti.chasms,
+      checkpoints: yeti.checkpoints,
       lastCheckpoint: 0,
     };
     state = stepSkiing(state, noInput, dt);
-    expect(state.segmentId).toBe("spine-3");
-    expect(state.finishDistance).toBe(BRANCH_SEGMENTS["spine-3"]!.length);
-    expect(state.chasms).toEqual(BRANCH_SEGMENTS["spine-3"]!.chasms);
+    expect(state.segmentId).toBe("cave"); // the default successor
+    expect(state.finishDistance).toBe(BRANCH_SEGMENTS.cave!.length);
+    expect(state.chasms).toEqual(BRANCH_SEGMENTS.cave!.chasms);
     expect(state.lastCheckpoint).toBe(0);
     expect(state.distance).toBeGreaterThanOrEqual(0);
     expect(state.distance).toBeLessThan(1);
   });
 
   it("crashing in a segment respawns within it and clears any fork (§6)", () => {
-    const seg3 = BRANCH_SEGMENTS["spine-3"]!;
+    const cliff = BRANCH_SEGMENTS.cliff!;
     let state: SkiState = {
       ...createBranchingSkiState(),
-      segmentId: "spine-3",
-      distance: seg3.chasms[0]!.start - 1,
+      segmentId: "cliff",
+      distance: cliff.chasms[0]!.start - 1,
       speed: BASE_SPEED,
-      finishDistance: seg3.length,
-      chasms: seg3.chasms,
-      checkpoints: seg3.checkpoints,
-      lastCheckpoint: seg3.checkpoints[0]!, // 55, just before the gap
-      divertTo: "tree", // a stale fork that a respawn must clear
+      finishDistance: cliff.length,
+      chasms: cliff.chasms,
+      checkpoints: cliff.checkpoints,
+      lastCheckpoint: cliff.checkpoints[0]!, // 45, just before the gap
+      divertTo: "water", // a stale fork that a respawn must clear
     };
     for (let i = 0; i < 60 && state.status === "skiing"; i++) {
       state = stepSkiing(state, noInput, dt);
@@ -1560,8 +1630,8 @@ describe("The branching map: same clock, same flag", () => {
     for (let i = 0; i < 120 && state.status !== "skiing"; i++) {
       state = stepSkiing(state, noInput, dt);
     }
-    expect(state.segmentId).toBe("spine-3");
-    expect(state.distance).toBe(seg3.checkpoints[0]);
+    expect(state.segmentId).toBe("cliff");
+    expect(state.distance).toBe(cliff.checkpoints[0]);
     expect(state.divertTo).toBeNull();
   });
 });
