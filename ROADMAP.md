@@ -155,8 +155,13 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   props; **cut the fireflies** (too many colors, glued in front of the skier —
   realistic ones come from a CC0 pack later); and next: **stronger bloom**,
   **darken the snow sparkle at night**, and **make the tree trunks glow**.
-  **Session 2 (slope-vis 2026-07-24):** snow sparkle now dims with the phase
-  (`sparkleGain`, done — awaiting look-pass). **Self-glowing tree trunks: tried
+  **Session 2 (slope-vis 2026-07-24):** snow sparkle dims with the phase
+  (`sparkleGain`) — but ⚠ **still too bright (director 2026-07-25): re-tune.**
+  The `NIGHT_SPARKLE_GAIN` 0.12 floor was set against the first brighter night
+  and never re-tuned after the crush to near-black, so lit facets (~0.19 linear)
+  twinkle ~10× the ~0.02 snow floor; not the bloom bump (below its 0.55
+  threshold). Fix direction parked in IDEAS.md (drop the floor / scale to the
+  crushed darkness / gate to the moon key). **Self-glowing tree trunks: tried
   twice, REJECTED and REMOVED** (director, 2026-07-24 — "tacky; I don't want the
   trees to glow themselves"): flat wash, then a base-bright bark-textured
   gradient, both cut. New direction from the reference photos: **trees are dark

@@ -285,13 +285,32 @@ The cross-session split:
 >    firefly glow — and scatter it in the world (NOT glued to the camera/skier;
 >    place it in world space near the treeline so the skier passes through it).
 >    Realistic ⇒ warm-white/amber, sparse, blinking — not the rainbow ramp.
-> 2. **Snow sparkle is too bright at night. ✅ BUILT (slope-vis 2026-07-24,
->    session 2 — awaiting look-pass.)** The realism-snow glitter was a
->    *light-independent* additive flash (`reflectedLight.directSpecular +=` in
->    `createSnowMaterial`), so it stayed full-bright once the scene went black.
->    Added a `sparkleGain` uniform that fades with `timeOfDay` down to a faint
->    `NIGHT_SPARKLE_GAIN` (0.12) floor at full night — a bare moonlit shimmer,
->    not dead matte. Set from `applyTimeOfDay`.
+> 2. **Snow sparkle is too bright at night. ⚠ STILL TOO BRIGHT — RE-TUNE (director,
+>    2026-07-25). The first fix undershot.** The realism-snow glitter is a
+>    *light-independent* additive flash (`reflectedLight.directSpecular += white ×
+>    flash × … × 1.6 × sparkleGain` in `createSnowMaterial`, `mountainGraphics.ts`),
+>    so it stayed full-bright once the scene went black. The 2026-07-24 fix added a
+>    `sparkleGain` uniform (`setSnowNightFade`, driven from `applyTimeOfDay`) fading
+>    1 → `NIGHT_SPARKLE_GAIN` **0.12** at full night. **Why it's still bright:** that
+>    0.12 floor was tuned against the *first, brighter* moonlit night, then the night
+>    was crushed to near-black (`NIGHT.snowShadow` #12182B, luminance ~0.01–0.02) in
+>    the darker-forest redirect **and the sparkle floor was never re-tuned for it**. A
+>    lit facet peaks at ~`1.6 × 0.12 ≈ 0.19` linear — ~10× the surrounding snow, so it
+>    reads as hard bright twinkles in a forest meant to be "extremely dark." NOTE it is
+>    **not** the 2026-07-25 bloom bump: 0.19 sits well under the 0.55 bloom threshold,
+>    so bloom doesn't touch it — this is pure sparkle tuning, and predates the rays.
+>    **Fix direction (next session, look-pass value):**
+>    - Drop `NIGHT_SPARKLE_GAIN` hard — try ~0.03, or 0 at deep night (moonlight
+>      doesn't make snow flash the way the sun does); Josh's eye picks the value.
+>    - Better than a flat floor: make the night sparkle *proportional to the crushed
+>      darkness* (scale it with the snow-shadow luminance) and/or **gate it to the moon
+>      key** — multiply by the moon N·L so only the moon-raked lane shimmers faintly and
+>      the near-black flanks go quiet, instead of the whole field twinkling uniformly.
+>    - Latent gap to verify while here: `applyTimeOfDay`'s re-assert at the end of
+>      `createEnvironment` runs `setSnowNightFade` *before* the snow material compiles
+>      (`snowSparkleGain` still null → no-op), so a scene that loads directly into night
+>      would render at gain 1 until the next phase change. Not Josh's path (he cycles
+>      from day via **N**), but worth closing when the auto-transition lands.
 > 3. **Tree trunks glowing: TRIED TWICE, REJECTED, REMOVED (director, 2026-07-24,
 >    session 3).** ~~Self-glowing `PineBark` emissive.~~ Two passes shipped — a
 >    flat wash up the whole trunk (session 2), then a base-bright vertical
@@ -371,7 +390,8 @@ The cross-session split:
 >    MSAA on the composer target (night edges are aliased vs the antialiased
 >    direct path), and a *subtle* daytime sun-bloom (bible allows it — out of
 >    scope here to protect the crisp daylight).
-> 2. **Phase-aware darkening:** snow sparkle (verdict #2, ✅ built), driven off
+> 2. **Phase-aware darkening:** snow sparkle (verdict #2, ⚠ **re-tune — still too
+>    bright**, see the fix direction there), driven off
 >    `timeOfDay`/`glowFactor`. (Trunk glow is gone — verdict #3 — so nothing to
 >    darken there. Also the general decor/spray darkening flagged earlier —
 >    still open.)
