@@ -341,6 +341,10 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 - **Menu lobby / title screen** (`lobbyRender.ts` + `lobbyUi.ts`) — a live 3D
   vignette of the character + cat on dawn snow; doubles as character select.
   This **replaced the scrapped walkable bedroom**; there is no walkable home space.
+  The vignette's background trees are the MegaKit `StylizedPine` models, matching
+  the slope (lobby, 2026-07-25 — swapped off the old Ultimate Nature Pack
+  birches/amber-pines; those 13 tree GLBs + their CREDITS rows were deleted, the
+  pack's rocks/bushes/stump/log stay).
 - **HUD** (`client/src/hud.ts`): nine cat-face lives with a **"N lives left!"**
   caption, crash/forfeit banners. **Losing a life plays out** (lobby, 2026-07-24):
   the spent cat takes a red X, shakes, and tumbles off the row, leaving a faint
