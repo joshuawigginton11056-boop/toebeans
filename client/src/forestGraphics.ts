@@ -570,6 +570,16 @@ const MIST_DENSITY = 0.8;
 // additive glow pools shining up into the overlapping mist.
 const MIST_COLOR = 0x5a6e9c;
 
+// Distance falloff (fog-pass 2026-07-25). The banks are ADDITIVE, so without a
+// far fade the many cells the perspective stacks toward the end of the window
+// (DECOR_AHEAD 170, past the fog's far=150) sum into a bright wall that stops
+// dead at the window edge — a hard "the fog ends here" line at the horizon, the
+// opposite of floating haze. Fade each bank out over this forward-distance band
+// so the mist thins into the distance and dissolves before it can pile up. Near
+// and mid banks (the haze you actually drive through) stay at full strength.
+const MIST_FADE_START = 50; // full haze up to here (metres ahead of the anchor)
+const MIST_FADE_END = 130; // gone by here — before the horizon can wall up
+
 // A soft, slightly uneven puff — a base radial plus a few offset lobes so the
 // silhouette doesn't read as a perfect disc. Grayscale; the sprite's color
 // tints it. Generated once, shared by every bank.
@@ -685,7 +695,17 @@ export function updateMistField(field: MistField, anchorZ: number): void {
       u.baseX + Math.sin(t * u.swaySpeed * 6.283 + u.swayPhase) * u.swayAmp;
     object.position.y =
       u.baseY + Math.sin(t * u.swaySpeed * 4.0 + u.swayPhase) * u.bobAmp;
-    (object.material as THREE.SpriteMaterial).opacity = u.baseOpacity * mistFactor;
+    // Fade banks out with forward distance so the far ones never stack into a
+    // bright additive wall (see MIST_FADE_START/END). dAhead > 0 is ahead of the
+    // anchor; behind-camera banks (negative) stay at full strength.
+    const dAhead = anchorZ - object.position.z;
+    const f = Math.min(
+      1,
+      Math.max(0, (dAhead - MIST_FADE_START) / (MIST_FADE_END - MIST_FADE_START)),
+    );
+    const distFade = 1 - f * f * (3 - 2 * f);
+    (object.material as THREE.SpriteMaterial).opacity =
+      u.baseOpacity * mistFactor * distFade;
   }
   // Despawn cells the window has left behind; free each bank's unique material.
   for (const [key, object] of placed) {
