@@ -101,10 +101,17 @@ const NIGHT = {
   // until the glow assets take over lane lighting.
   snowLit: 0x4e608a,
   snowShadow: 0x12182b,
-  // Sky: a dim, deep navy at the horizon melting up to near-black overhead —
-  // much darker than the first night. The fog rides the horizon color so
-  // distance still fades into the sky.
-  skyHorizon: 0x1e2740,
+  // Sky: a dim, deep navy at the horizon melting up to near-black overhead.
+  // The fog rides this same color so distance fades into the sky — which is
+  // exactly why it must sit just barely above the ambient snow floor
+  // (`snowShadow` below). At the old 0x1e2740 the shared fog+horizon color was
+  // a brighter value than BOTH the zenith above it and the fogged far ground
+  // below it, so it painted a luminous horizontal stripe across the frame — a
+  // flat "fog line" that slid against the passing trees (2026-07-25 fix). Kept
+  // a hair above the floor so the horizon still reads as a soft seam, not a
+  // hard bright band. (Day/dawn is a separate regime — PALETTE.dawnPink —
+  // untouched by this.)
+  skyHorizon: 0x141a2e,
   skyZenith: 0x0b0f1c,
   // The moon: a pale cool disc, smaller and crisper than the hazy dawn sun,
   // hung a touch higher in the sky. In the darker sky it's the one bright
