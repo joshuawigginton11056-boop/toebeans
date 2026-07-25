@@ -8,12 +8,15 @@ import {
 } from "./route";
 
 describe("route — the descent's grade profile (steepness → speed)", () => {
-  it("varies the grade: steep summit + lower pitch, mellow forest/lake", () => {
+  it("varies the grade: steep summit + lower pitch, faster-than-before forest/lake", () => {
     const summit = routeGradeAt(0);
-    const forest = routeGradeAt(230); // the mellow forest/lake zone
+    const forest = routeGradeAt(230); // the forest/lake glide (a fast stretch since 2026-07-25)
     const lower = routeGradeAt(560); // the steep lower pitch
-    expect(summit).toBeGreaterThan(forest + 0.1);
-    expect(lower).toBeGreaterThan(forest + 0.1);
+    // The steeps stay clearly steeper than the forest so "steeper = faster" still reads;
+    // the margin relaxed 0.1 → 0.05 when the forest was raised to carry speed through the
+    // trees (director look-pass: "extremely slow through the forest") — see route.ts.
+    expect(summit).toBeGreaterThan(forest + 0.05);
+    expect(lower).toBeGreaterThan(forest + 0.05);
     // Every zone stays under the camera's ~27° framing (tan ≈ 0.51) and above a
     // gentle floor — the grade is always a real, look-down descent.
     for (const d of [0, 120, 230, 340, 460, 560, 640]) {
@@ -66,9 +69,11 @@ describe("route — the descent's grade profile (steepness → speed)", () => {
     }
   });
 
-  it("keeps the total drop near the old constant-grade ~224 (the run's scale)", () => {
-    expect(routeHeightAt(0)).toBeGreaterThan(190);
-    expect(routeHeightAt(0)).toBeLessThan(240);
+  it("has a taller total drop since the forest was steepened for speed (the run's scale)", () => {
+    // The forest-speed round-2 raise (0.33 → 0.42 plateau, 2026-07-25) makes the mountain
+    // ~19% taller than the old ~238 — a genuinely steeper forest. Still a bounded scale.
+    expect(routeHeightAt(0)).toBeGreaterThan(250);
+    expect(routeHeightAt(0)).toBeLessThan(310);
   });
 
   describe("gradeSpeedFactor", () => {
@@ -77,10 +82,13 @@ describe("route — the descent's grade profile (steepness → speed)", () => {
       expect(gradeSpeedFactor("main", 400)).toBe(1);
     });
 
-    it("is the local grade over the reference — >1 steep, <1 mellow", () => {
-      // Summit is steep → faster than reference; the forest/lake is mellow → slower.
+    it("is the local grade over the reference — steeps fastest, forest/lake a fast glide", () => {
+      // Summit is steepest → fastest. The forest/lake used to be < 1 (a mellow-slow zone);
+      // since the 2026-07-25 forest-speed raise it carries speed (> 1, ~1.2×), but stays
+      // clearly below the summit so "steeper = faster" still reads. See route.ts.
       expect(gradeSpeedFactor("summit", 0)).toBeGreaterThan(1);
-      expect(gradeSpeedFactor("lake", 30)).toBeLessThan(1); // route ~270, mellow
+      expect(gradeSpeedFactor("lake", 30)).toBeGreaterThan(1); // route ~270, a fast glide now
+      expect(gradeSpeedFactor("lake", 30)).toBeLessThan(gradeSpeedFactor("summit", 0));
       expect(gradeSpeedFactor("summit", 0)).toBeCloseTo(
         routeGradeAt(0) / REFERENCE_GRADE,
         9,

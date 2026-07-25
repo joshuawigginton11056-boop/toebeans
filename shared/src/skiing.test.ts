@@ -1777,11 +1777,16 @@ describe("The single played trail: summit → the frozen lake, forks parked", ()
 });
 
 describe("steepness → speed (M2 grade coupling)", () => {
-  // Cruise from a standstill with no input for 3 s and read the settled speed —
-  // the natural pace the terrain's grade pulls you to.
+  // Cruise from a standstill with no input for 5 s and read the settled speed —
+  // the natural pace the terrain's grade pulls you to. 5 s not 3 s (bumped
+  // 2026-07-25): since the forest was steepened to carry speed, even the mellow
+  // forest/lake zone now targets ~14 u/s, and from a standstill SKI_ACCEL only
+  // reaches ~12 in 3 s — a 3 s window left the mellow zone still accel-limited and
+  // tied with the summit. 5 s lets the mellow zone actually settle at its target
+  // while the summit is still steep enough to be pulling higher.
   const cruise = (state: SkiState): number => {
     let s = state;
-    for (let i = 0; i < 180; i++) s = stepSkiing(s, noInput, 1 / 60);
+    for (let i = 0; i < 300; i++) s = stepSkiing(s, noInput, 1 / 60);
     return Math.abs(s.speed);
   };
 
