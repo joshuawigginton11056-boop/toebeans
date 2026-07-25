@@ -70,6 +70,13 @@ const LOBBY_CSS = `
 }
 .lobby-play:hover { background: ${BIRCH_AMBER}; }
 
+/* The tutorial door: friendly but secondary to Play — a soft snow card,
+   a touch wider than the small cyclers so it reads as a way in. */
+.lobby-tutorial {
+  padding: 11px 28px;
+  font-size: 16px;
+}
+
 .lobby-row {
   display: flex;
   gap: 10px;
@@ -145,6 +152,8 @@ export type LobbyCycle = "character" | "skin" | "hair";
 
 export interface LobbyUiCallbacks {
   onPlay(): void;
+  /** Start the new-player tutorial run (onboarding, 2026-07-25). */
+  onTutorial(): void;
   onCycle(kind: LobbyCycle): void;
   onToggleMute(): void;
   /** Open the settings menu (volume, music, controls). */
@@ -210,6 +219,10 @@ export function createLobbyUi(callbacks: LobbyUiCallbacks): LobbyUiHandle {
   menu.className = "lobby-menu";
 
   const play = button("lobby-play", "Hit the slopes", "Enter", callbacks.onPlay);
+
+  // The onboarding door: a gentle, clearly-labelled way in for a first-timer,
+  // sitting right under Play so it's the obvious second thing you see.
+  const tutorial = button("lobby-tutorial", "Tutorial — new here?", "", callbacks.onTutorial);
 
   const row = document.createElement("div");
   row.className = "lobby-row";
@@ -299,7 +312,7 @@ export function createLobbyUi(callbacks: LobbyUiCallbacks): LobbyUiHandle {
     codeInput.value = "";
   }
 
-  menu.append(play.el, row, friendToggle.el, panel);
+  menu.append(play.el, tutorial.el, row, friendToggle.el, panel);
   root.append(title, menu);
   document.body.appendChild(root);
 

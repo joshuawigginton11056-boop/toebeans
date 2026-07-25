@@ -250,6 +250,27 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 - **Save/load:** browser storage, `SAVE_VERSION 5`. Snapshots dynamic state only;
   static layout reloads from `createInitial*`; strict + self-healing decode.
 
+### Tutorial / onboarding (NEW — first slice, tutorial 2026-07-25)
+- **A new-player tutorial map**, reached from a **"Tutorial" button** in the lobby.
+  A short, gentle run in a **daytime grass forest biome** whose whole job is to
+  teach the basics: the run carries you off on its own, the **controls flash up**
+  (the existing ghost keyboard), the **sun rises as you advance** (the scene's
+  time-of-day driven off run progress), and about **30 seconds in a creek runs
+  across the forest floor** — jump it or you lose a life (it reuses the sim's
+  chasm plumbing, so "jump or die" already works).
+- **Kept in its own files** (director's ask): `shared/src/tutorial.ts` (the run
+  layout + the sunrise math — pure and tested, 7 tests incl. a real-sim proof the
+  creek lands at ~30s and that a jump clears it while skiing in crashes) and
+  `client/src/tutorialBiome.ts` (the grass/creek/tree look + the snow↔forest
+  swap). Small marked seams elsewhere: `setSlopeSceneryVisible`/`setBranchTerrainVisible`
+  (hide the snow scenery), the lobby button, and the `main.ts` wiring. Verified live
+  in the browser (grass forest, sunrise, creek, crash-if-not-jumped all working).
+- **First slice — polish parked in IDEAS.md `(tutorial)`:** the ski spray still
+  reads as snow on grass; the creek is a flat plane (wants flow/foam/splash); the
+  forest floor wants real dressing + real tree models; and the big next piece is
+  **coaching prompts** ("press Space to jump!" as the creek nears) so it actually
+  *teaches* rather than just showing keys once.
+
 ### Tooling / assets
 - `tools/obj2glb_palette.py`, `tools/glb_palette.py`, `tools/gltf_character.py`
   (palette-recolor OBJ/GLB → bible palette). Every asset licensed in

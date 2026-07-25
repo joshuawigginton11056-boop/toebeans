@@ -2,12 +2,14 @@ import {
   createDefaultAppearance,
   createInitialSkiState,
   createSingleTrailSkiState,
+  createTutorialSkiState,
   createSave,
   cycleCharacter,
   cycleRegion,
   resolveCharacter,
   restoreSave,
   stepSkiing,
+  tutorialSunPhase,
   type Appearance,
   type SceneMode,
   type SkiInput,
@@ -36,9 +38,11 @@ import {
   addBranchTerrain,
   createSkiScene,
   render,
+  setBranchTerrainVisible,
   syncSkiSceneToState,
 } from "./skiRender";
-import { cycleTimeOfDay } from "./skiScene";
+import { cycleTimeOfDay, setTimeOfDay } from "./skiScene";
+import { createTutorialBiome, type TutorialBiome } from "./tutorialBiome";
 
 // The mountain is the DEFAULT slope now (director, 2026-07-24: the graded "real
 // mountain" run must be what the live build shows — no more hiding it behind a dev
@@ -58,6 +62,15 @@ const BRANCH_MAP = !params.has("overlook");
 const BRANCH_DEBUG = params.has("branch") || params.has("debug");
 let branchTerrainAdded = false;
 let branchDebug: BranchDebug | null = null;
+
+// The tutorial (onboarding, 2026-07-25): its own short run in a grass forest
+// biome, entered from the lobby's "Tutorial" button. It reuses the whole slope
+// pipeline (same sim, camera, HUD, controls overlay) — it just swaps the snowy
+// look for the forest one (tutorialBiome) and drives the sunrise off progress.
+// The biome is built lazily on first entry and left in the scene (just hidden)
+// after. `tutorialActive` gates the sunrise + creek-slab hiding in the loop.
+let tutorialActive = false;
+let tutorialBiome: TutorialBiome | null = null;
 
 const container = document.getElementById("app");
 if (!container) {
@@ -182,9 +195,33 @@ function persist(): void {
   writeSave(createSave(mode, skiState, muted, appearance));
 }
 
-function goSkiing(): void {
-  if (mode === "slope") return;
+function goTutorial(): void {
+  // Entered from the lobby only. A fresh tutorial run every time (full lives,
+  // back to the top), in the grass forest biome.
   mode = "slope";
+  tutorialActive = true;
+  skiState = createTutorialSkiState();
+  if (!tutorialBiome) tutorialBiome = createTutorialBiome(skiScene);
+  // The snow mountain (if it was ever built this session) steps aside, the
+  // forest comes up, and the sky opens on the dim early morning the sunrise
+  // will lift as you descend.
+  setBranchTerrainVisible(false);
+  tutorialBiome.setActive(true);
+  setTimeOfDay(tutorialSunPhase(0, skiState.finishDistance));
+  showActiveCanvas();
+  persist();
+}
+
+function goSkiing(): void {
+  if (mode === "slope" && !tutorialActive) return;
+  mode = "slope";
+  // Leaving the tutorial behind: forest down, snow mountain + dawn back.
+  if (tutorialActive) {
+    tutorialActive = false;
+    tutorialBiome?.setActive(false);
+    setBranchTerrainVisible(true);
+    setTimeOfDay(0);
+  }
   // Every trip to the slope is a fresh run — full lives, back to the top.
   // This is also how you retry after a forfeit.
   if (BRANCH_MAP) {
@@ -210,6 +247,14 @@ function goSkiing(): void {
 function backToLobby(): void {
   if (mode === "lobby") return;
   mode = "lobby";
+  // If we're coming back from the tutorial, put the forest away and restore the
+  // snowy scenery so a normal run looks right again.
+  if (tutorialActive) {
+    tutorialActive = false;
+    tutorialBiome?.setActive(false);
+    setBranchTerrainVisible(true);
+    setTimeOfDay(0);
+  }
   showActiveCanvas();
   persist();
 }
@@ -232,6 +277,7 @@ function cycleAppearance(kind: LobbyCycle): void {
 // touch devices have no keys at all).
 const lobbyUi = createLobbyUi({
   onPlay: goSkiing,
+  onTutorial: goTutorial,
   onCycle: cycleAppearance,
   onToggleMute: () => {
     muted = audio.toggleMuted();
@@ -379,6 +425,14 @@ function loop(now: number): void {
   } else {
     skiState = stepSkiing(skiState, readSkiInput(), dt);
     syncSkiSceneToState(skiScene, skiState, dt);
+    if (tutorialActive) {
+      // The sun rises as you advance — drive the scene's time-of-day off run
+      // progress (dim start → full daybreak by the finish). And keep the
+      // creek's default rock-gap slab hidden so the water reads instead (the
+      // slab is created lazily inside the sync above, so hide it right after).
+      setTimeOfDay(tutorialSunPhase(skiState.distance, skiState.finishDistance));
+      tutorialBiome?.update(skiScene);
+    }
     // Ghost racing: place/animate the friend's skier(s) before drawing.
     ghosts.update(performance.now(), dt);
     render(skiScene);

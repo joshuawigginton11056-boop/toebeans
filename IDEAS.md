@@ -3,6 +3,37 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## (tutorial) NEXT — polish the onboarding tutorial (first slice landed 2026-07-25)
+
+The tutorial map's first slice is in and playable: a daytime grass forest with the
+sun rising as you go, the controls flashing up (the ghost keyboard), a rolling
+forest floor, and a **creek** crossing at ~30s that you must jump or you lose a
+life. Files: `shared/src/tutorial.ts` (the run + the sunrise math, pure + tested),
+`client/src/tutorialBiome.ts` (the grass/creek/trees look), and a "Tutorial" button
+in the lobby. Parked follow-ups, roughly in priority order:
+
+- **The ski spray still reads as white snow on the grass.** The trail spray + screen
+  flurries + lens-splat particles (slope-vis's snow effects in `skiScene.ts`) run in
+  every run, so on grass they look like snow. Recolor/gate them for the tutorial (a
+  dusty tan kick-up, or off) — needs a small seam on the snow-effects side.
+- **Make the creek feel like real water.** Today it's a flat blue plane. Give it a
+  gentle flow/ripple (scrolling normal or a simple shader), a soft foam edge at the
+  banks, and maybe a splash when you clear it (or when you fall in).
+- **Dress the forest floor.** The ground is flat-shaded green; add grass-blade
+  scatter, dirt patches, rocks, bushes, wildflowers, and a couple of *real* forest
+  tree models (the current trees are code-built low-poly stand-ins).
+- **Coaching prompts.** The tutorial should *teach*, not just show keys once: a "press
+  Space to jump!" callout as the creek approaches, a "nice!" when you clear it, arrows
+  on the ground before the creek. This is the real onboarding value — next big chunk.
+- **More to learn before the creek.** A gentle warm-up (a small bump to hop, a
+  cone/log to steer around) so the creek isn't the very first thing they do.
+- **Restyle the checkpoint marker** for the tutorial — the snow/ice-striped slab reads
+  as an odd ring on grass. A wooden signpost or a mossy stone would fit the forest.
+- **Palette:** the forest greens/browns/water in `tutorialBiome.ts` are new colors,
+  not in the Art Style Bible's 12. Fold a proper forest sub-palette into DESIGN.md.
+- **Where the tutorial goes next:** should finishing it drop you into the real slope?
+  Should first-time players auto-start here? (Director call.)
+
 ## ⏭ START HERE (slope-mech) — ONE solid mountain, one SMOOTH trail summit → back of the forest (director look-pass, 2026-07-24)
 
 Director look-pass on the real-terrain build. **Redirect: stop branching. Build one

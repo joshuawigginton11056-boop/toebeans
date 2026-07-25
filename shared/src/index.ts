@@ -1,5 +1,6 @@
 export * from "./skiing";
 export * from "./route";
+export * from "./tutorial";
 export * from "./save";
 export * from "./appearance";
 

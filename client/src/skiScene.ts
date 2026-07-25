@@ -2602,6 +2602,23 @@ interface DecorState {
 
 let decorState: DecorState | null = null;
 
+// Tutorial seam (onboarding, 2026-07-25): the tutorial's grass forest biome
+// (client/src/tutorialBiome.ts) replaces the snowy slope look, so while the
+// tutorial is on it hides the snow ground + the snow-dressed decor scatter and
+// lays its own forest floor over the top. Kept here because skiScene owns both
+// the snow `slope` and the decor singleton — the biome just flips this one
+// switch. The slope's own runs never touch it (stays visible).
+let slopeSceneryVisible = true;
+export function setSlopeSceneryVisible(visible: boolean): void {
+  slopeSceneryVisible = visible;
+  if (activeEnvironment) activeEnvironment.slope.visible = visible;
+  if (decorState) {
+    for (const object of decorState.placed.values()) {
+      if (object !== EMPTY_CELL) object.visible = visible;
+    }
+  }
+}
+
 function updateSlopeDecor(anchorZ: number): void {
   if (!decorState) return;
   const { scene, templates, placed } = decorState;
@@ -2636,6 +2653,8 @@ function updateSlopeDecor(anchorZ: number): void {
         copy.position.set(side * x, 0, -(cell + 0.1 + jitter) * band.cellSize);
         copy.rotation.y = random() * Math.PI * 2;
         copy.scale.setScalar(scale);
+        // Respect the tutorial's scenery toggle for clones spawned while hidden.
+        copy.visible = slopeSceneryVisible;
         scene.add(copy);
         placed.set(key, copy);
       }

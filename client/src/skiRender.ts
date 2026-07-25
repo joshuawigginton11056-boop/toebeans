@@ -703,6 +703,15 @@ export function syncSkiSceneToState(
 // material/displacement, decor, ski-trail carving) and will re-skin or replace
 // this mesh; the geometry helpers it needs are the same slopePath.ts exports used
 // here. Deliberately in skiRender (slope-mech): it's the ground the sim rides.
+// Tutorial seam (onboarding, 2026-07-25): the flat tutorial run shows a grass
+// forest biome instead of this snow mountain, so it hides these meshes while
+// it's on. Kept here because this function builds them and adds them straight
+// to the scene (untracked otherwise). The slope's own runs never touch it.
+const branchTerrainMeshes: THREE.Mesh[] = [];
+export function setBranchTerrainVisible(visible: boolean): void {
+  for (const mesh of branchTerrainMeshes) mesh.visible = visible;
+}
+
 export function addBranchTerrain(handle: SkiSceneHandle): void {
   // Which segments are the default road vs. detour worlds — the single source of
   // truth in route.ts. Kept as the faintest snow tint (road cool, detours a hair
@@ -789,6 +798,7 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     handle.scene.add(mesh);
+    branchTerrainMeshes.push(mesh);
   }
   // Fork-marker boulders are parked with the forks (the "world grabs you" landmarks
   // at each trigger). They return when the map reopens — iterate the trigger

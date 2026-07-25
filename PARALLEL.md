@@ -1,4 +1,4 @@
-# Parallel sessions: lobby + slope-mechanics + slope-visuals + mountain-graphics + forest-graphics
+# Parallel sessions: lobby + slope-mechanics + slope-visuals + mountain-graphics + forest-graphics + tutorial
 
 Three Claude sessions work this repo at the same time, each in its own git
 worktree (a separate folder sharing the same repo history). **Read this
@@ -24,6 +24,12 @@ split" below; until `skiScene.ts` is actually carved into
 `mountainGraphics.ts` + `forestGraphics.ts`, the two new sessions share
 `skiScene.ts` as shared territory.)*
 
+*(2026-07-25: a **tutorial** workstream was added for the new-player
+onboarding map. Its logic and look live in their OWN new files (kept out of
+the slope's files, per the director's ask); it reaches into shared/owned
+files only through a few small, clearly-marked additive seams. See its row
+and ownership below.)*
+
 ## Who works where
 
 | Session | Branch | Folder | Dev server |
@@ -33,6 +39,7 @@ split" below; until `skiScene.ts` is actually carved into
 | **Slope-visuals** | `slope-visuals` | `C:\Users\joshu\Toebeans-slope-visuals` | launch config `toebeans-slope-visuals` (port 5303) |
 | **Mountain-graphics** | `mountain-graphics` | `C:\Users\joshu\Toebeans-mountain-graphics` | launch config `toebeans-mountain-graphics` (port 5306) |
 | **Forest-graphics** | `forest-graphics` | `C:\Users\joshu\Toebeans-forest-graphics` | launch config `toebeans-forest-graphics` (port 5307) |
+| **Tutorial** | `claude/tutorial-map-onboarding-*` | (this session) | Josh's own dev server (5173) |
 
 The main checkout at `C:\Users\joshu\Toebeans` stays on `master` and is
 **merge-target only** — no session edits files there. Josh's own dev
@@ -82,6 +89,21 @@ the slope:
 - `client/src/forestGraphics.ts` (trees, decor scatter, treelines, the
   enchanted-night glow props + snow pools, drifting mist banks)
 - the tree/plant/decor GLBs in `assets/slope/`
+
+**Tutorial session owns** — the new-player onboarding map (its own files, so
+it stays out of the slope's):
+- `shared/src/tutorial.ts`, `shared/src/tutorial.test.ts` — the tutorial run
+  (a flat "tutorial" segment, the creek hazard, the checkpoint/finish) and the
+  sunrise math. Pure + tested, like the rest of `/shared`.
+- `client/src/tutorialBiome.ts` — the daytime grass forest look (rolling grass
+  floor, the creek water, the low-poly trees) and the snow↔forest swap.
+- **The seams it added into other sessions' files** (small, additive, marked
+  `Tutorial seam` in the code — the smallest change that works, per the seam
+  etiquette below): `setSlopeSceneryVisible(...)` in `skiScene.ts` (hide the
+  snow ground + decor), `setBranchTerrainVisible(...)` in `skiRender.ts` (hide
+  the snow mountain), the `onTutorial`/"Tutorial" button in `lobbyUi.ts`, and
+  the `goTutorial()` + sunrise/biome wiring in `main.ts`. Any polish these
+  deserve on the owner's side is parked in IDEAS.md tagged `(tutorial)`.
 
 > **The scenery split (PENDING — do this before mountain/forest do real
 > work).** Today all of the above still lives in one 3050-line
