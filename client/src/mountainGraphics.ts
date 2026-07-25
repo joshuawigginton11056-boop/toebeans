@@ -876,6 +876,27 @@ float snowHeightGeom(vec2 w) {
 }
 `;
 
+// Fragment-only value noise, used by the grass-through-snow reveal (its own
+// deterministic hash, so the coverage doesn't depend on the low-contrast dune
+// canvas's value range — that was too flat to threshold against). Two octaves
+// blended give broad thin-cover patches; a third, finer octave breaks the
+// edges into tufts.
+const GRASS_NOISE_GLSL = `
+float grassHash(vec2 i) {
+  return fract(sin(dot(i, vec2(41.3, 289.1))) * 43758.5453);
+}
+float grassNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = grassHash(i);
+  float b = grassHash(i + vec2(1.0, 0.0));
+  float c = grassHash(i + vec2(0.0, 1.0));
+  float d = grassHash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+`;
+
 // Fragment-only: the full-detail height (adds crust grain) and its
 // finite-difference normal. The epsilon matches the carve map's texel
 // size, so groove walls resolve as crisply as the data allows.
@@ -937,6 +958,7 @@ vSnowWorld = vec3(snowW.x, snowW.y + snowH, snowW.z);`,
       );
     shader.fragmentShader =
       SNOW_HEIGHT_GLSL +
+      GRASS_NOISE_GLSL +
       SNOW_NORMAL_GLSL +
       "varying vec3 vSnowWorld;\nuniform vec3 sunDir;\nuniform float sparkleGain;\n" +
       shader.fragmentShader
@@ -966,6 +988,29 @@ roughnessFactor = mix(1.0, roughnessFactor, sparkleGain);`,
   float hollow = clamp(-(snowDune(vSnowWorld.xz) + snowLump(vSnowWorld.xz)) * 2.2, 0.0, 1.0);
   float ao = clamp(hollow * 0.45 + core * 0.4 + smoothstep(0.03, 0.35, carve) * 0.15, 0.0, 1.0);
   diffuseColor.rgb *= mix(vec3(1.0), vec3(0.851, 0.912, 1.0), ao);
+  // Grass showing through the snow (tutorial-map redress, director ask
+  // 2026-07-25 — "slight snow but with the grass beneath still showing
+  // through," like the reference photo). Only a light snow lies here, so on the
+  // flatter lane floor it thins into patches and the grassy ground shows: a
+  // low-frequency mask (broad dune canvas) parts the white where the cover is
+  // thinnest, broken up tuft-fine by the grain canvas and tinted a muted winter
+  // olive->dead-tan so it reads as vegetation under snow, not a green field.
+  // Faded out toward the deep flank drifts (pure powder banks there) and never
+  // inside a fresh ski groove.
+  {
+    vec2 gp = vSnowWorld.xz;
+    // Broad patches of thin cover (two octaves), then a finer octave for tufty
+    // edges — a light snow, so the grass shows in the gaps between drifts.
+    float broad = grassNoise(gp * 0.28) * 0.6 + grassNoise(gp * 0.9) * 0.4;
+    float tuft  = grassNoise(gp * 2.6);
+    float grass = smoothstep(0.46, 0.7, broad) * smoothstep(0.3, 0.62, tuft);
+    float laneFade = 1.0 - smoothstep(${LANE_EDGE.toFixed(1)}, ${(LANE_EDGE + 8).toFixed(1)}, abs(gp.x));
+    grass *= laneFade * (1.0 - core);
+    // Muted winter olive -> dead-tan; the tuft octave shifts the hue so blades
+    // and dry grass mingle instead of one flat green.
+    vec3 grassCol = mix(vec3(0.34, 0.40, 0.26), vec3(0.56, 0.51, 0.35), tuft);
+    diffuseColor.rgb = mix(diffuseColor.rgb, grassCol, grass * 0.72);
+  }
   // Coarse dune form-shading (mountain-graphics, 2026-07-25): reveal the big
   // wind-dune forms on open, shadowless ground — the starting summit, where
   // there are no trees to cast the shadows the forest snow reads by. The
@@ -1927,7 +1972,12 @@ function updateFlurries(
   // the zoom radius. Close = zoomed in = flurries lean in hard.
   const dist = camPos.distanceTo(anchor);
   const closeness = 1 - smoothstep01(8, 30, dist);
-  const globalAlpha = (0.06 + 0.94 * gust) * (0.3 + 0.7 * closeness);
+  // Gentle, always-on snowfall (tutorial-map redress, director ask 2026-07-25 —
+  // "make it so there is slight snow fall coming down"). The floor used to be
+  // 0.06 — near-invisible unless a gust or a fast run brought the flakes in.
+  // Lifted so a light snow is always falling, still swelling in the gusts and
+  // leaning in as the camera zooms toward the skier.
+  const globalAlpha = (0.4 + 0.6 * gust) * (0.55 + 0.45 * closeness);
   f.material.uniforms.globalAlpha!.value = globalAlpha;
 
   // Camera velocity, so flakes drift *relative* to it and streak past as the

@@ -27,7 +27,8 @@ const DECOR_MODELS = {
   // recolored frosted-green): MegaKit stylized pines are the slope's tree,
   // scattered at three scales — giant trunks by the lane, mid fill, far
   // silhouettes — so the canopy lives above the camera and the haze eats the
-  // treetops, like the reference.
+  // treetops, like the reference. These are the "evergreens with slight snow"
+  // (frosted-green needles under white tips) — still the backbone of the grove.
   pines: [
     "StylizedPine_1",
     "StylizedPine_2",
@@ -35,10 +36,35 @@ const DECOR_MODELS = {
     "StylizedPine_4",
     "StylizedPine_5",
   ],
-  // The old Ultimate Nature Pack trees (amber-canopy PineTree_Snow, birches,
-  // dead birches) are retired from the scatter per the bible — the lingering
-  // birch/dead-birch rolls were removed 2026-07-23. Their .glb files stay in
-  // assets/slope/. Pines, rocks, and small ground props remain.
+  // Winter variety, brought BACK into the scatter (director ask, 2026-07-25 —
+  // "add more snowy trees and trees with brown leaves, and evergreens with
+  // slight snow"). The old Ultimate Nature Pack snow trees were retired from
+  // the scatter in 2026-07, but their palette-recolored .glb still ship in
+  // assets/slope/, so they cost nothing to re-enable:
+  //   brownLeaf — BirchTree_Snow: an amber (birch-amber #7) canopy under snow,
+  //     the reference photo's "brown-leaf" winter deciduous trees.
+  //   snowyPine — PineTree_Snow: snow-capped conifers, a second, denser-snow
+  //     evergreen silhouette next to the frosted stylized pines.
+  //   bare — BirchTree_Dead_Snow: bare snowy branches, sparse wintry accents.
+  brownLeaf: [
+    "BirchTree_Snow_1",
+    "BirchTree_Snow_2",
+    "BirchTree_Snow_3",
+    "BirchTree_Snow_5",
+  ],
+  snowyPine: [
+    "PineTree_Snow_1",
+    "PineTree_Snow_2",
+    "PineTree_Snow_4",
+    "PineTree_Snow_5",
+  ],
+  bare: [
+    "BirchTree_Dead_Snow_1",
+    "BirchTree_Dead_Snow_2",
+    "BirchTree_Dead_Snow_3",
+    "BirchTree_Dead_Snow_4",
+    "BirchTree_Dead_Snow_5",
+  ],
   rocks: [
     "Rock_Snow_1",
     "Rock_Snow_2",
@@ -95,6 +121,29 @@ export async function loadSlopeDecor(scene: THREE.Scene): Promise<void> {
 // Trees read slightly larger than before (director ask, 2026-07-23).
 const TREE_SCALE = 1.15;
 
+// The winter tree mix (director ask, 2026-07-25). Each roll of the near/far
+// flank bands picks a species by these weights: the frosted evergreens stay
+// dominant, brown-leaf birches and snowy pines fill in the variety, and a few
+// bare snowy birches thin through as accents. The giant lane colonnade stays
+// pure stylized pine (only those source models scale cleanly to sequoias).
+const TREE_MIX: readonly { readonly models: readonly string[]; readonly weight: number }[] = [
+  { models: DECOR_MODELS.pines, weight: 0.42 }, // frosted-green evergreens
+  { models: DECOR_MODELS.snowyPine, weight: 0.2 }, // snow-capped conifers
+  { models: DECOR_MODELS.brownLeaf, weight: 0.28 }, // amber "brown-leaf" birches
+  { models: DECOR_MODELS.bare, weight: 0.1 }, // bare snowy branches
+];
+
+// Roll one species out of the mix (weights sum to 1). Returns that species'
+// model list; the caller then picks one variant from it as before.
+function pickTree(random: () => number): readonly string[] {
+  let r = random();
+  for (const group of TREE_MIX) {
+    r -= group.weight;
+    if (r <= 0) return group.models;
+  }
+  return DECOR_MODELS.pines;
+}
+
 interface DecorBand {
   readonly key: string;
   /** One potential spawn per cell of this many meters of slope. */
@@ -136,7 +185,7 @@ const DECOR_BANDS: readonly DecorBand[] = [
       const isTree = roll < 0.55;
       const models =
         roll < 0.55
-          ? DECOR_MODELS.pines
+          ? pickTree(random) // the winter species mix, not pines alone
           : roll < 0.8
             ? DECOR_MODELS.rocks
             : DECOR_MODELS.filler;
@@ -156,7 +205,7 @@ const DECOR_BANDS: readonly DecorBand[] = [
     cellSize: 11,
     density: 0.8,
     spawn: (random) => ({
-      models: DECOR_MODELS.pines,
+      models: pickTree(random), // depth silhouettes across the winter mix
       x: LANE_EDGE + 11 + random() * 16,
       scale: (2.2 + random() * 1.6) * TREE_SCALE,
     }),
@@ -1185,12 +1234,18 @@ function applyPaintedDetail(object: THREE.Object3D): void {
       if (!(material instanceof THREE.MeshStandardMaterial)) return material;
       // Strip Blender-style ".001" suffixes (Rock_Snow_2 has Rock.001 /
       // Snow.001) so every model hits its intended detail row.
-      const detail = DETAIL_BY_MATERIAL[material.name.replace(/\.\d+$/, "")] ?? {
+      const baseName = material.name.replace(/\.\d+$/, "");
+      const detail = DETAIL_BY_MATERIAL[baseName] ?? {
         map: "grain" as const,
         scale: 1.2,
         strength: 0.5,
       };
       const clone = material.clone(); // templates share materials — never mutate
+      // Rocks read blue because the palette bakes exposed rock to slate
+      // #66738C (a blue-gray). The director wants stone, not ice (2026-07-25):
+      // retint just the Rock material to a neutral warm gray so the boulders
+      // read rocky. The white "Snow" caps on the same models are untouched.
+      if (baseName === "Rock") clone.color.setHex(0x8b8782);
       clone.onBeforeCompile = (shader) => {
         shader.uniforms.detailMap = { value: textures[detail.map] };
         shader.uniforms.detailScale = { value: detail.scale };

@@ -149,12 +149,39 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   per-route hazard balancing (§5) come after; §7's open reconciliations remain the
   director's.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
-  across all 24 slope models; decor scatter follows the run. (Old birches removed.)
+  across all 24 slope models; decor scatter follows the run.
+  **Winter tree mix re-enabled (tutorial-map redress, 2026-07-25 — director "add
+  more snowy trees and trees with brown leaves, and evergreens with slight
+  snow"):** the flank scatter is no longer stylized pines alone. A weighted
+  `TREE_MIX` (`forestGraphics.ts`) rolls the near/far bands across four species —
+  frosted-green stylized pines (evergreens, ~42%), snow-capped `PineTree_Snow`
+  conifers (~20%), amber-canopy `BirchTree_Snow` (the "brown-leaf" winter
+  deciduous, ~28%), and bare `BirchTree_Dead_Snow` accents (~10%). The old
+  Ultimate Nature Pack snow trees, retired from the scatter in 2026-07, are back
+  in — their palette-recolored .glb still shipped, so this cost nothing but the
+  weights. The giant lane colonnade stays pure stylized pine (only those scale to
+  sequoias). **Rocks retinted grey (same pass):** exposed rock was baking to slate
+  #66738C (a blue-gray) and read as ice; `applyPaintedDetail` now overrides the
+  `Rock` material to a neutral warm stone grey (#8B8782), snow caps untouched.
 - **Realism snow:** procedural displaced surface + GPU-carved ski trails. Plus
   **coarse dune form-shading** (mountain, 2026-07-25): the big wind-dunes get a
   self-cast blue (#2) shade on their sun-away faces so their form reads on open,
   shadowless ground — the summit, which has no trees to rake the shadows the
   forest snow reads by. In-palette, mood-untouched.
+  **Grass showing through the snow (tutorial-map redress, 2026-07-25 — director
+  "slight snow but with the grass beneath still showing through," per the
+  reference photo):** the snow shader (`createSnowMaterial`) now reveals a muted
+  winter grass on the flatter lane floor — a self-contained value-noise mask
+  (`GRASS_NOISE_GLSL`) parts the white in broad patches broken tuft-fine by a
+  finer octave, tinted olive→dead-tan so it reads as vegetation under a light
+  snow, not a green field. Faded out toward the deep flank drifts (pure powder
+  banks) and never inside a fresh ski groove. ⚠ a new ground colour outside the
+  12 (director-approved for this look); folds into the pending bible rewrite.
+- **Gentle snowfall (tutorial-map redress, 2026-07-25 — director "make it so
+  there is slight snow fall coming down"):** the flurry field's alpha floor was
+  raised (`updateFlurries`, `mountainGraphics.ts`) from a near-invisible 0.06 so a
+  light snow is always falling, still swelling in the gusts and leaning in as the
+  camera zooms — not just kicked up by a fast run.
 - **Starting-mountain backdrop** (mountain, 2026-07-25): the empty summit horizon
   now carries a **distant snowy peak vista** — `createMountainBackdrop`
   (`mountainGraphics.ts`), a 360° procedural mountain ring parented to the sky
