@@ -70,8 +70,14 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   the real mountain," director):** `addBranchTerrain` (skiRender.ts) builds a
   continuous mountain SURFACE per segment — a smooth playable lane flush with the
   sim's ground, flanked by snowbanks that rise into rolling mountainside — following
-  the curved centerlines + varying grade. Plain-shaded placeholder (slope-vis owns
-  the dressed look and re-skins/replaces it). Fork spots marked by boulders, not
+  the curved centerlines + varying grade. **DRESSED (mountain-graphics, 2026-07-25):**
+  it now wears the realism snow material (world-pinned dune/lump relief, palette
+  lit/shadow shading, sparkle — `createTerrainSnowMaterial`), so the open run reads as
+  sculpted powder instead of the old plain-shaded pink wash. The pretty snow *window*
+  is still welded to y=0 and so is invisible during the descent (it lives ~290u below
+  the elevated run) — the terrain dressing is what the skier now sees; the window still
+  owns near-skier ski-trail carving, which therefore does not show on the branch run
+  (parked in IDEAS). Fork spots marked by boulders, not
   gray boxes. 153 tests (incl. a behavioral proof all three routes + the tree no-op
   reach the flag on the same clock, plus the arcs' length/continuity).
   **It is the DEFAULT slope** — "Hit the slopes" loads it at the live URL;

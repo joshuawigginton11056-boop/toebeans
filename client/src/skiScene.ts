@@ -41,7 +41,11 @@ import {
 } from "./forestGraphics";
 // Preserve the public API: these now live in the feature files but stay
 // importable from skiScene.ts so skiRender.ts / main.ts need no change.
-export { createChasmMesh, createCheckpointMarker } from "./mountainGraphics";
+export {
+  createChasmMesh,
+  createCheckpointMarker,
+  createTerrainSnowMaterial,
+} from "./mountainGraphics";
 export { loadSlopeDecor } from "./forestGraphics";
 
 // skiScene.ts — the SHARED CORE of the slope's look (2026-07-24 scenery carve,
@@ -408,7 +412,15 @@ export function createEnvironment(
   // how pink something is tells you how far away it is. (Color is re-tinted
   // by setTimeOfDay; near/far stay put so gameplay read is identical day or
   // night.)
-  scene.fog = new THREE.Fog(PALETTE.dawnPink, 35, 150);
+  //
+  // Pulled back (mountain-graphics, 2026-07-25): the old 35→150 saturated the
+  // whole mid-distance to flat dawn-pink well inside the camera's far=200, so
+  // the open summit — where you stand at the top and should SEE the run drop
+  // away — was a pink wall a stone's throw ahead. 60→195 keeps the foreground
+  // crisp and lets the descending slope read most of the way to the far plane,
+  // hazing gently into the peak vista instead of hitting a curtain. Still a real
+  // aerial-perspective cue (farther = pinker), just over a believable depth.
+  scene.fog = new THREE.Fog(PALETTE.dawnPink, 80, 300);
 
   // The bible's two snow colors define the lighting exactly: ambient
   // skylight alone must render flat snow as snow-shadow blue, and ambient

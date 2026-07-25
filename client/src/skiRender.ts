@@ -10,7 +10,6 @@ import {
   SINGLE_TRAIL,
   TIRED_HOP_DURATION,
   downhillHeading,
-  roadSegmentIds,
   singleTrailNext,
   type SkiState,
 } from "@toebeans/shared";
@@ -26,6 +25,7 @@ import {
   createChasmMesh,
   createCheckpointMarker,
   createEnvironment,
+  createTerrainSnowMaterial,
   loadSlopeDecor,
   renderSlope,
   syncEnvironment,
@@ -704,11 +704,6 @@ export function syncSkiSceneToState(
 // this mesh; the geometry helpers it needs are the same slopePath.ts exports used
 // here. Deliberately in skiRender (slope-mech): it's the ground the sim rides.
 export function addBranchTerrain(handle: SkiSceneHandle): void {
-  // Which segments are the default road vs. detour worlds — the single source of
-  // truth in route.ts. Kept as the faintest snow tint (road cool, detours a hair
-  // greener) so the topology still reads without debug boxes.
-  const road = roadSegmentIds();
-
   // The cross-section of a corridor: a flat playable LANE (|lateral| ≤ LANE_HALF,
   // exactly the sim's ground so the skier sits flush at any lane position), then
   // FLANKS that rise into snowbanks out to ±FLANK_HALF. Columns are anchored at
@@ -779,13 +774,14 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geo.setIndex(indices);
     geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(
-      geo,
-      new THREE.MeshStandardMaterial({
-        color: road.has(id) ? 0xe4edf6 : 0xdbe8e0,
-        roughness: 1,
-      }),
-    );
+    // DRESSED (mountain-graphics, 2026-07-25): the plain off-white placeholder
+    // material is replaced with the realism snow — the same world-pinned dune
+    // relief + palette lit/shadow shading + sparkle the moving window wears, so
+    // the descending open slope reads as sculpted powder instead of a flat,
+    // pink-hazed wash. Shared across every segment (continuous world dune field,
+    // so no seam). The road/detour tint is dropped — it was a dev aid; snow is
+    // one albedo. Trails stay window-only (this carves nothing).
+    const mesh = new THREE.Mesh(geo, createTerrainSnowMaterial());
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     handle.scene.add(mesh);
