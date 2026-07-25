@@ -1,0 +1,1922 @@
+// mountainGraphics.ts — the ground and the sky (mountain-graphics session).
+// Split out of skiScene.ts on 2026-07-24 (the scenery carve — see PARALLEL.md):
+// the snowfield mesh + snow shader/sparkle, the sky dome, the sun/moon disc,
+// terrain, the loose-snow FX, and the hazard/checkpoint mesh styles. The shared
+// day/night engine, palette, and the createEnvironment/syncEnvironment
+// orchestration stay in the core (skiScene.ts), which imports and drives what
+// this file builds. This file reads the core for shared constants only; the
+// core reads this file for the factories/updaters it wires each frame.
+import * as THREE from "three";
+import { SKI_STANCE } from "./skierModel";
+import { LATERAL_LIMIT } from "@toebeans/shared";
+import {
+  PALETTE,
+  SLOPE_WIDTH,
+  SUN_DIRECTION,
+  makeRandom,
+  type SnowTrailInput,
+} from "./skiScene";
+
+// The visual lane half-width. Derived here from the leaf LATERAL_LIMIT rather
+// than imported from the core's LANE_EDGE (identical value: LANE_EDGE =
+// SLOPE_WIDTH/2 = LATERAL_LIMIT + 1) so this module reads NOTHING from the core
+// at module-eval time — the top-level snow-shader GLSL below bakes LANE_EDGE
+// into its source, and core<->mountain is an import cycle, so a load-time read
+// of the core would hit its temporal dead zone. (slope-vis carve, 2026-07-24.)
+const LANE_EDGE = LATERAL_LIMIT + 1;
+
+// The snowfield plane: one moving window of snow that follows the skier (see
+// syncEnvironment in the core). The trail ring buffer below shares these
+// numbers — they define the world<->texture mapping, so they live here, named.
+// (SNOWFIELD_LENGTH/LEAD are read by the core's create/syncEnvironment too.)
+const SNOWFIELD_WIDTH = 120;
+export const SNOWFIELD_LENGTH = 220;
+// The window's center sits this far downhill of the skier: most of the
+// snow lies ahead, where the camera looks.
+export const SNOWFIELD_LEAD = 50;
+
+// The snow's view-dependent sparkle dims as the light goes — verdict #2. The
+// core day/night engine calls setSnowNightFade each phase change; 1 by day ->
+// NIGHT_SPARKLE_GAIN at full night (a faint moonlit glint, not dead matte).
+//
+// This is a PERSISTENT shared uniform, deliberately created at module scope and
+// handed to the material's shader on every compile (createSnowMaterial). It
+// used to be a holder captured *inside* onBeforeCompile ("snowSparkleGain =
+// shader.uniforms.sparkleGain"), which is the bug behind the never-fixed "night
+// snow sparkle still too bright" note (forest-graphics, 2026-07-25): three.js
+// builds a FRESH shader.uniforms on every recompile, so the captured holder
+// went stale and setSnowNightFade updated a uniform nothing was rendering with
+// — the twinkle stayed at full day gain all night. Sharing one uniform object
+// across every compile makes the fade actually take.
+const snowSparkleUniform = { value: 1 };
+// Faded hard at night: against the near-black enchanted forest even a faint
+// additive-white twinkle pops as a busy shimmering carpet. 0.12 → 0.045: a
+// barely-there moonlit glint, not a field of static. (NB: mountain-graphics'
+// snow material; flagged in ROADMAP for that session.)
+const NIGHT_SPARKLE_GAIN = 0.045;
+export function setSnowNightFade(phase: number): void {
+  snowSparkleUniform.value = 1 - (1 - NIGHT_SPARKLE_GAIN) * phase;
+}
+
+// The snow is displaced geometry now, and these flat markers used to sit
+// 1–2 cm above y=0 — lane relief would poke through them. The lift is baked
+// into the geometry (mechanics code owns .position and sets its own small
+// y), sized to clear the lane's dune amplitude.
+// Raised 0.06 → 0.12 with the lane lump amplitude (refinement round,
+// 2026-07-23 follow-up): lane relief maxes at dune 0.04 + lump 0.06.
+const MARKER_LIFT = 0.12;
+
+// The look of a checkpoint: a glacial-ice stripe lying on the snow.
+// Mechanics code positions it at the checkpoint's distance.
+export function createCheckpointMarker(): THREE.Mesh {
+  const geometry = new THREE.PlaneGeometry(SLOPE_WIDTH, 0.5);
+  geometry.translate(0, 0, MARKER_LIFT); // pre-rotation: local +z = world +y
+  const marker = new THREE.Mesh(
+    geometry,
+    new THREE.MeshStandardMaterial({ color: PALETTE.glacialIce }),
+  );
+  marker.rotation.x = -Math.PI / 2;
+  marker.receiveShadow = true;
+  return marker;
+}
+
+// The look of a chasm: a deep-slate slab spanning the lane (the bible bans
+// pure black). Mechanics code sizes the gap and positions it.
+export function createChasmMesh(width: number): THREE.Mesh {
+  const geometry = new THREE.PlaneGeometry(SLOPE_WIDTH, width);
+  geometry.translate(0, 0, MARKER_LIFT); // pre-rotation: local +z = world +y
+  const mesh = new THREE.Mesh(
+    geometry,
+    new THREE.MeshStandardMaterial({ color: PALETTE.chasmDark }),
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+// ---------------------------------------------------------------------------
+// Sky: an inward-facing dome, dawn pink at the horizon blending up to sky
+// blue overhead, so the ground fog (also dawn pink) melts into the horizon
+// instead of hitting a flat-colored wall.
+
+// Per-vertex horizon→zenith blend factor, cached once so the dome can be
+// repainted for any time of day without re-running the smoothstep.
+let skyHeightT: Float32Array | null = null;
+
+export function createSkyDome(): THREE.Mesh {
+  const radius = 170;
+  const geometry = new THREE.SphereGeometry(radius, 32, 16);
+  const positions = geometry.attributes.position!;
+  skyHeightT = new Float32Array(positions.count);
+  for (let i = 0; i < positions.count; i++) {
+    const height = positions.getY(i) / radius; // -1 (below) … 1 (overhead)
+    // Blend fully to the zenith color within ~15° of elevation — the downhill
+    // camera only ever sees a low band of sky, so the top color reaches into
+    // it.
+    skyHeightT[i] = Math.min(1, Math.max(0, (height - 0.02) / 0.25));
+  }
+  geometry.setAttribute(
+    "color",
+    new THREE.BufferAttribute(new Float32Array(positions.count * 3), 3),
+  );
+  const dome = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      side: THREE.BackSide,
+      fog: false,
+      depthWrite: false,
+    }),
+  );
+  dome.renderOrder = -1; // paint the sky first; everything else draws over it
+  repaintSkyDome(dome, new THREE.Color(PALETTE.dawnPink), new THREE.Color(PALETTE.skyBlue));
+  return dome;
+}
+
+// Rewrite the dome's vertex colors for a horizon/zenith pair. Called on
+// create and on every time-of-day change.
+export function repaintSkyDome(
+  dome: THREE.Mesh,
+  horizon: THREE.Color,
+  zenith: THREE.Color,
+): void {
+  const attr = dome.geometry.attributes.color as THREE.BufferAttribute;
+  const colors = attr.array as Float32Array;
+  const heights = skyHeightT!;
+  const color = new THREE.Color();
+  for (let i = 0; i < heights.length; i++) {
+    color.lerpColors(horizon, zenith, heights[i]!);
+    colors[i * 3] = color.r;
+    colors[i * 3 + 1] = color.g;
+    colors[i * 3 + 2] = color.b;
+  }
+  attr.needsUpdate = true;
+}
+
+// A field of faint stars on a shell just inside the sky dome, upper hemisphere
+// only. Invisible by day (material opacity lerps in with night). It rides with
+// the camera like the dome, so the stars sit at infinity and never parallax.
+export function createStarfield(): THREE.Points {
+  const count = 550;
+  const radius = 165; // just inside the 170 dome
+  const positions = new Float32Array(count * 3);
+  // Deterministic scatter (a tiny LCG) so the sky is the same every run — no
+  // Math.random, matching the seeded-decor convention elsewhere in this file.
+  let seed = 0x5eed;
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 0xffffffff;
+  };
+  for (let i = 0; i < count; i++) {
+    // Cosine-free uniform-ish over the upper hemisphere; bias slightly up so
+    // few stars sit right on the horizon haze.
+    const theta = rand() * Math.PI * 2;
+    const y = 0.06 + rand() * 0.94; // 0 = horizon, 1 = zenith
+    const r = Math.sqrt(1 - y * y);
+    positions[i * 3] = Math.cos(theta) * r * radius;
+    positions[i * 3 + 1] = y * radius;
+    positions[i * 3 + 2] = Math.sin(theta) * r * radius;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.PointsMaterial({
+    color: 0xeaf1ff, // cool white, a hair off pure white per the bible
+    size: 1.1,
+    sizeAttenuation: false,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    fog: false,
+  });
+  const stars = new THREE.Points(geometry, material);
+  stars.renderOrder = -1; // with the dome, behind everything
+  stars.visible = false;
+  return stars;
+}
+
+// The visible sun: a solid sun-glow disc with a soft radial halo, drawn on
+// one always-camera-facing sprite. The bible wants a glow, not lens flare.
+export function createSunBillboard(): THREE.Sprite {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const gradient = ctx.createRadialGradient(
+    size / 2,
+    size / 2,
+    0,
+    size / 2,
+    size / 2,
+    size / 2,
+  );
+  // Neutral white disc + halo; the warm/cool tint comes from the sprite's
+  // material.color (sun-glow by day, cool moon by night — set in
+  // applyTimeOfDay), so one texture serves both.
+  gradient.addColorStop(0, "rgba(255,255,255,1)"); // solid core
+  gradient.addColorStop(0.28, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.34, "rgba(255,255,255,0.55)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: texture,
+      color: PALETTE.sunGlow, // day default; retinted by applyTimeOfDay
+      transparent: true,
+      depthWrite: false,
+      fog: false,
+    }),
+  );
+  sprite.scale.setScalar(34);
+  return sprite;
+}
+
+// ---------------------------------------------------------------------------
+// REALISM SNOW — ROUND 2 (2026-07-23): displaced geometry. Round 1 (bump
+// map + canvas-painted trails) failed the director's eye — "the snow is
+// flat, the trails are too pixelated, there's no depth" — because this
+// scene's lighting deliberately pushes ambient close to sunlit white, so a
+// bump map's few percent of brightness shift can't read as relief, and a
+// 2D color canvas shows raw texels at camera distance. The look to match
+// is the director's linked reference, the paid BruteForce Snow & Ice
+// shader (Unity asset 221389) — "interactive snow": displaced snow that
+// objects carve real deformation trails into via a height map. This is the
+// same technique built free and procedural (no image files, no CREDITS
+// rows):
+//
+//   1. The snowfield is a graded-density vertex grid — ~9 cm columns where
+//      the skis carve, coarse on the flanks — displaced in the vertex
+//      shader by a world-pinned height field: soft dunes (deep drifts on
+//      the flanks, groomed nearly flat inside the skiable lane) plus the
+//      carved trail depth below.
+//   2. Ski trails are carved as REAL depth: every grounded frame stamps a
+//      soft capsule brush per ski into a ring-buffer height render-target,
+//      MAX-blended so overlapping strokes merge instead of double-carving.
+//      The snow shader maps brush coverage onto a groove profile — core
+//      sunk CARVE_DEPTH, displaced-snow shoulders pushed up beside it — so
+//      grooves have real walls the sun shades: bright on the sun side,
+//      snow-shadow blue on the far side. Airborne lifts the pen — jump
+//      gaps carve themselves, the speed cue the references show.
+//   3. Normals come from finite differences of the full height field
+//      (dunes + grooves + fine crust grain) in the fragment shader — far
+//      finer than the vertex grid, so shading stays crisp even where the
+//      geometry is coarse.
+//   4. The snowfield casts shadows through a displacement-aware depth
+//      material: dunes shade their own hollows under the long dawn light —
+//      depth the sun draws, not a painted-on hint. Hollows and groove
+//      interiors also get an occlusion tint toward snow-shadow blue (#2),
+//      and trail cores wear carved snow (#3) — the bible's assignment for
+//      the inside of ski trails.
+//   5. The glitter pass survives from round 1 (it drew no complaint):
+//      view-dependent micro-facet sparkle, damped where a groove has
+//      broken the crust.
+
+// The carve height map covers the lane plus a margin — skis physically
+// can't reach past LATERAL_LIMIT, so the flanks need no trail resolution.
+const CARVE_HALF_WIDTH = LANE_EDGE + 1;
+const CARVE_TEX_WIDTH = 1024; // across the carve strip: ~2.7 cm per texel
+// Along the window: ~2.7 cm per texel, matching the width so diagonal
+// grooves (turns) sample as cleanly as straight ones — at half this, carved
+// turns showed a bilinear staircase (director callout, 2026-07-23).
+const CARVE_TEX_HEIGHT = 8192;
+// Brush: full carve inside BRUSH_IN of the ski line, feathered to nothing
+// at BRUSH_OUT. With the skis 2×SKI_STANCE apart, the feathered skirts
+// meet between the grooves as a low pushed-up ridge — like real tracks.
+const BRUSH_IN = 0.02;
+const BRUSH_OUT = 0.19;
+// The groove profile the shader maps brush coverage onto.
+const CARVE_DEPTH = 0.13; // the core sinks this far
+const CARVE_SHOULDER = 0.045; // pushed-up snow beside the groove
+// Dune relief amplitude. The skiable lane reads as a groomed piste
+// (small — the skis, markers, and shadows-as-height-cues all want nearly
+// flat snow underfoot), the flanks as wind-drifted powder (deep).
+const DUNE_AMP_LANE = 0.08;
+const DUNE_AMP_FLANK = 0.8;
+const DUNE_TILE = 13; // world units per dune-texture tile (~3–6 m dunes)
+// Mid-scale lumps — the "random lumpiness" between dune and grain
+// (director ask, 2026-07-23): the same smooth dune canvas re-sampled at a
+// small tile, in the real geometry, so the lumps sit in silhouettes and
+// self-shadow. Kept subtle in the lane (groomed piste, and the lane
+// surface must stay under the markers' 6 cm lift).
+const LUMP_TILE = 4.3;
+// Refinement round (2026-07-23 follow-up): the original 0.05/0.16 sat
+// below the visibility floor — the crank test (0.3/0.6) proved the
+// mechanism reads, so these settle at roughly double the originals: lane
+// lumps the trail visibly dips through, flank lumps that hold their own
+// against the ±40 cm dunes. MARKER_LIFT rose with the lane amplitude.
+const LUMP_AMP_LANE = 0.12;
+const LUMP_AMP_FLANK = 0.32;
+const GRAIN_TILE = 8; // world units per grain-texture tile
+const GRAIN_AMP = 0.05; // fine crust height — feeds normals, not geometry
+// A second, chunkier grain octave (same director ask) — shading-only
+// lumpiness at the half-meter scale.
+const GRAIN2_TILE = 2.6;
+// Same refinement round: 0.07 of shading-only relief was invisible under
+// this scene's near-white ambient (round 1's bump-map lesson repeating) —
+// the crank test's 0.3 read as dense crusty mottling, so it lands here.
+const GRAIN2_AMP = 0.2;
+// Vertex grid spacing: fine inside the carve strip and around the skier,
+// coarse elsewhere. SNOW_Z_STEP doubles as the window's recenter snap (see
+// syncEnvironment). ~305k vertices — all static; only the shader moves
+// them. If a weak GPU ever chokes, these two are the dial. Z sits near the
+// X spacing on purpose: with z at 0.2 the vertex grid staircased the
+// carved grooves whenever they ran diagonally (turns).
+const SNOW_X_STEP = 0.09;
+export const SNOW_Z_STEP = 0.12;
+
+// One axis of vertex coordinates from (from, to, step) spans — each span
+// subdivides evenly at the nearest count to its requested step, landing
+// exactly on the span ends so neighboring spans share a vertex.
+function gradedAxis(
+  spans: ReadonlyArray<readonly [number, number, number]>,
+): number[] {
+  const coords: number[] = [spans[0]![0]];
+  for (const [from, to, step] of spans) {
+    const count = Math.max(1, Math.round((to - from) / step));
+    for (let i = 1; i <= count; i++) {
+      coords.push(from + ((to - from) * i) / count);
+    }
+  }
+  return coords;
+}
+
+// The snowfield grid: flat, +y up (no mesh rotation — keeps the shader's
+// local↔world math trivial), UVs matching what the old plane gave so the
+// sparkle roughness map pins to the world the same way as before.
+export function createSnowfieldGeometry(): THREE.BufferGeometry {
+  const halfW = SNOWFIELD_WIDTH / 2;
+  const halfL = SNOWFIELD_LENGTH / 2;
+  const xs = gradedAxis([
+    [-halfW, -CARVE_HALF_WIDTH - 3, 1.6],
+    [-CARVE_HALF_WIDTH - 3, -CARVE_HALF_WIDTH, 0.5],
+    [-CARVE_HALF_WIDTH, CARVE_HALF_WIDTH, SNOW_X_STEP],
+    [CARVE_HALF_WIDTH, CARVE_HALF_WIDTH + 3, 0.5],
+    [CARVE_HALF_WIDTH + 3, halfW, 1.6],
+  ]);
+  // Dense z band: ±40 units around the skier, who rides at local
+  // +SNOWFIELD_LEAD (the window leads downhill, so that's fixed in mesh
+  // space). Grooves further off live in the haze, where the fragment
+  // normals carry them fine on coarse geometry.
+  const zs = gradedAxis([
+    [-halfL, SNOWFIELD_LEAD - 40, 1.0],
+    [SNOWFIELD_LEAD - 40, SNOWFIELD_LEAD + 40, SNOW_Z_STEP],
+    [SNOWFIELD_LEAD + 40, halfL, 1.0],
+  ]);
+  const cols = xs.length;
+  const rows = zs.length;
+  const positions = new Float32Array(cols * rows * 3);
+  const normals = new Float32Array(cols * rows * 3);
+  const uvs = new Float32Array(cols * rows * 2);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const i = r * cols + c;
+      positions[i * 3] = xs[c]!;
+      positions[i * 3 + 2] = zs[r]!;
+      normals[i * 3 + 1] = 1;
+      uvs[i * 2] = xs[c]! / SNOWFIELD_WIDTH + 0.5;
+      uvs[i * 2 + 1] = 0.5 - zs[r]! / SNOWFIELD_LENGTH;
+    }
+  }
+  const index = new Uint32Array((cols - 1) * (rows - 1) * 6);
+  let k = 0;
+  for (let r = 0; r < rows - 1; r++) {
+    for (let c = 0; c < cols - 1; c++) {
+      const a = r * cols + c;
+      const b = a + 1;
+      const d = a + cols;
+      const e = d + 1;
+      index[k++] = a;
+      index[k++] = d;
+      index[k++] = b;
+      index[k++] = b;
+      index[k++] = d;
+      index[k++] = e;
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+  geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+  geometry.setIndex(new THREE.BufferAttribute(index, 1));
+  return geometry;
+}
+
+interface SnowTextures {
+  readonly dune: THREE.CanvasTexture; // smooth displacement height, no grain
+  readonly grain: THREE.CanvasTexture; // fine multi-scale crust, normals only
+  readonly sparkle: THREE.CanvasTexture; // roughness — matte with shiny flecks
+}
+
+let snowTextures: SnowTextures | null = null;
+
+export function getSnowTextures(): SnowTextures {
+  if (snowTextures) return snowTextures;
+
+  const random = makeRandom(20260723);
+  const makeTexture = (
+    size: number,
+    draw: (ctx: CanvasRenderingContext2D) => void,
+  ): THREE.CanvasTexture => {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    draw(ctx);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    return texture;
+  };
+  // Soft radial-gradient stamp, drawn through a 3×3 wrap so the canvas
+  // tiles seamlessly. Gradients, not hard blobs: hard edges read as paint
+  // (the rejected direction); gradients read as wind-settled snow.
+  const softBlob = (
+    ctx: CanvasRenderingContext2D,
+    size: number,
+    x: number,
+    y: number,
+    r: number,
+    value: number,
+    alpha: number,
+  ): void => {
+    for (const dx of [-size, 0, size]) {
+      for (const dy of [-size, 0, size]) {
+        const px = x + dx;
+        const py = y + dy;
+        const gradient = ctx.createRadialGradient(px, py, 0, px, py, r);
+        gradient.addColorStop(0, `rgba(${value},${value},${value},${alpha})`);
+        gradient.addColorStop(1, `rgba(${value},${value},${value},0)`);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(px - r, py - r, r * 2, r * 2);
+      }
+    }
+  };
+
+  // Dune height around neutral 128 — ONLY smooth large shapes, because the
+  // displacement scales this up to ±0.4 units on the flanks and any fine
+  // speckle would spike. Fine detail lives in `grain` below, which only
+  // ever drives normals.
+  const dune = makeTexture(256, (ctx) => {
+    ctx.fillStyle = "#808080";
+    ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 8; i++) {
+      softBlob(
+        ctx, 256, random() * 256, random() * 256,
+        60 + random() * 70, random() < 0.5 ? 62 : 194, 0.6,
+      );
+    }
+    for (let i = 0; i < 22; i++) {
+      softBlob(
+        ctx, 256, random() * 256, random() * 256,
+        24 + random() * 40, random() < 0.5 ? 74 : 182, 0.5,
+      );
+    }
+    for (let i = 0; i < 40; i++) {
+      softBlob(
+        ctx, 256, random() * 256, random() * 256,
+        9 + random() * 18, random() < 0.5 ? 86 : 170, 0.45,
+      );
+    }
+  });
+
+  // Crust grain: round 1's multi-scale relief canvas, now feeding the
+  // fragment normals only — soft lumps down to granular top crust.
+  const grain = makeTexture(512, (ctx) => {
+    ctx.fillStyle = "#808080";
+    ctx.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 14; i++) {
+      softBlob(
+        ctx, 512, random() * 512, random() * 512,
+        90 + random() * 70, random() < 0.5 ? 102 : 154, 0.5,
+      );
+    }
+    for (let i = 0; i < 44; i++) {
+      softBlob(
+        ctx, 512, random() * 512, random() * 512,
+        24 + random() * 36, random() < 0.5 ? 98 : 158, 0.45,
+      );
+    }
+    for (let i = 0; i < 130; i++) {
+      softBlob(
+        ctx, 512, random() * 512, random() * 512,
+        6 + random() * 10, random() < 0.5 ? 93 : 163, 0.5,
+      );
+    }
+    // Fine grain: the granular top crust.
+    for (let i = 0; i < 900; i++) {
+      const v = 108 + random() * 40;
+      ctx.fillStyle = `rgba(${v},${v},${v},0.6)`;
+      ctx.fillRect(random() * 512, random() * 512, 1 + random(), 1 + random());
+    }
+  });
+
+  // Roughness: matte base (~0.66) with patchy sheen and sparse near-mirror
+  // flecks — the flecks catch the sun's specular as secondary sparkle on
+  // top of the shader glitter.
+  const sparkle = makeTexture(256, (ctx) => {
+    ctx.fillStyle = "#a8a8a8";
+    ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 60; i++) {
+      softBlob(
+        ctx, 256, random() * 256, random() * 256,
+        18 + random() * 30, random() < 0.5 ? 140 : 190, 0.4,
+      );
+    }
+    for (let i = 0; i < 380; i++) {
+      const v = 30 + random() * 55; // low roughness = shiny fleck
+      ctx.fillStyle = `rgb(${v},${v},${v})`;
+      ctx.fillRect(random() * 256, random() * 256, 1, 1);
+    }
+  });
+
+  // Dune and grain are sampled by world position in the shader; only the
+  // sparkle roughness map rides mesh UVs and needs a repeat.
+  sparkle.repeat.set(SNOWFIELD_WIDTH / 5, SNOWFIELD_LENGTH / 5);
+
+  snowTextures = { dune, grain, sparkle };
+  return snowTextures;
+}
+
+// The height field, shared by the surface material and its shadow-casting
+// depth material. Everything samples by world position, so the field is
+// pinned to the mountain no matter where the mesh window sits.
+const SNOW_HEIGHT_GLSL = `
+uniform sampler2D duneMap;
+uniform sampler2D grainMap;
+uniform sampler2D carveMap;
+float snowDune(vec2 w) {
+  float amp = mix(${DUNE_AMP_LANE.toFixed(3)}, ${DUNE_AMP_FLANK.toFixed(3)},
+    smoothstep(${LANE_EDGE.toFixed(1)}, 22.0, abs(w.x)));
+  return (texture2D(duneMap, w / ${DUNE_TILE.toFixed(1)}).r - 0.5) * amp;
+}
+float snowCarve(vec2 w) {
+  vec2 uv = vec2(
+    (w.x + ${CARVE_HALF_WIDTH.toFixed(1)}) / ${(CARVE_HALF_WIDTH * 2).toFixed(1)},
+    -w.y / ${SNOWFIELD_LENGTH.toFixed(1)});
+  return texture2D(carveMap, uv).r * step(abs(w.x), ${CARVE_HALF_WIDTH.toFixed(1)});
+}
+float snowCarveCore(float c) { return smoothstep(0.35, 0.95, c); }
+float snowProfile(float c) {
+  float shoulder = smoothstep(0.03, 0.30, c) - smoothstep(0.30, 0.70, c);
+  return shoulder * ${CARVE_SHOULDER.toFixed(3)} - snowCarveCore(c) * ${CARVE_DEPTH.toFixed(3)};
+}
+float snowLump(vec2 w) {
+  float amp = mix(${LUMP_AMP_LANE.toFixed(3)}, ${LUMP_AMP_FLANK.toFixed(3)},
+    smoothstep(${LANE_EDGE.toFixed(1)}, 22.0, abs(w.x)));
+  return (texture2D(duneMap, w / ${LUMP_TILE.toFixed(1)}).r - 0.5) * amp;
+}
+float snowHeight(vec2 w) {
+  return snowDune(w) + snowLump(w) + snowProfile(snowCarve(w));
+}
+// The height the GEOMETRY is displaced by: same field, but the groove
+// profile is band-limited to the vertex grid first. The shoulder ridge and
+// core wall are ~one grid cell wide — a diagonal groove crossing the grid
+// raw gets alternately caught and missed by vertices, a moiré sawtooth
+// whose period stretches to 20-30 cm at shallow angles (the director's
+// "weird wavy/jagged when turning": isotropic spacing alone couldn't fix a
+// sub-grid feature). A 3x3 tent filter spanning one cell keeps frequencies
+// the grid can't represent out of the mesh — silhouettes and the shadow
+// pass go smooth, while fragment normals / carve color / AO keep reading
+// the sharp field, so the carved look the verdict approved is untouched.
+float snowHeightGeom(vec2 w) {
+  vec2 e = vec2(${SNOW_X_STEP.toFixed(3)}, ${SNOW_Z_STEP.toFixed(3)});
+  float p = snowProfile(snowCarve(w)) * 4.0;
+  p += snowProfile(snowCarve(w + vec2(e.x, 0.0))) * 2.0;
+  p += snowProfile(snowCarve(w - vec2(e.x, 0.0))) * 2.0;
+  p += snowProfile(snowCarve(w + vec2(0.0, e.y))) * 2.0;
+  p += snowProfile(snowCarve(w - vec2(0.0, e.y))) * 2.0;
+  p += snowProfile(snowCarve(w + e)) * 1.0;
+  p += snowProfile(snowCarve(w - e)) * 1.0;
+  p += snowProfile(snowCarve(w + vec2(e.x, -e.y))) * 1.0;
+  p += snowProfile(snowCarve(w - vec2(e.x, -e.y))) * 1.0;
+  return snowDune(w) + snowLump(w) + p / 16.0;
+}
+`;
+
+// Fragment-only: the full-detail height (adds crust grain) and its
+// finite-difference normal. The epsilon matches the carve map's texel
+// size, so groove walls resolve as crisply as the data allows.
+const SNOW_NORMAL_GLSL = `
+float snowHeightFine(vec2 w) {
+  return snowHeight(w)
+    + (texture2D(grainMap, w / ${GRAIN_TILE.toFixed(1)}).r - 0.5) * ${GRAIN_AMP.toFixed(3)}
+    + (texture2D(grainMap, w / ${GRAIN2_TILE.toFixed(1)}).r - 0.5) * ${GRAIN2_AMP.toFixed(3)};
+}
+vec3 snowNormal(vec2 w) {
+  float e = 0.05;
+  float x0 = snowHeightFine(w - vec2(e, 0.0));
+  float x1 = snowHeightFine(w + vec2(e, 0.0));
+  float z0 = snowHeightFine(w - vec2(0.0, e));
+  float z1 = snowHeightFine(w + vec2(0.0, e));
+  return normalize(vec3(x0 - x1, 2.0 * e, z0 - z1));
+}
+`;
+
+// Vertex-shader displacement, shared verbatim by the surface material and
+// the shadow depth material. The mesh's modelMatrix is a pure translation,
+// so a world-space height offset is a local-space one too.
+const SNOW_DISPLACE_GLSL = `
+vec4 snowW = modelMatrix * vec4(position, 1.0);
+float snowH = snowHeightGeom(snowW.xz);
+transformed.y += snowH;
+`;
+
+export function createSnowMaterial(
+  carveTexture: THREE.Texture,
+): THREE.MeshStandardMaterial {
+  const snow = getSnowTextures();
+  const material = new THREE.MeshStandardMaterial({
+    color: PALETTE.sunlitSnow,
+    roughnessMap: snow.sparkle,
+    roughness: 1, // the map carries the value; 1 = don't scale it down
+  });
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.duneMap = { value: snow.dune };
+    shader.uniforms.grainMap = { value: snow.grain };
+    shader.uniforms.carveMap = { value: carveTexture };
+    shader.uniforms.sunDir = { value: SUN_DIRECTION.clone() };
+    // slope-vis (verdict #2, 2026-07-24): the glitter below is a light-
+    // independent additive flash, so it stayed just as bright once the scene
+    // went near-black — the director's "snow sparkle too bright at night".
+    // A phase gain fades it out with the night; driven from applyTimeOfDay via
+    // setSnowNightFade. It MUST be the module-scope shared uniform (not a fresh
+    // per-compile object) so the fade survives shader recompiles — see the note
+    // on snowSparkleUniform above.
+    shader.uniforms.sparkleGain = snowSparkleUniform;
+    shader.vertexShader =
+      SNOW_HEIGHT_GLSL +
+      "varying vec3 vSnowWorld;\n" +
+      shader.vertexShader.replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+${SNOW_DISPLACE_GLSL}
+vSnowWorld = vec3(snowW.x, snowW.y + snowH, snowW.z);`,
+      );
+    shader.fragmentShader =
+      SNOW_HEIGHT_GLSL +
+      SNOW_NORMAL_GLSL +
+      "varying vec3 vSnowWorld;\nuniform vec3 sunDir;\nuniform float sparkleGain;\n" +
+      shader.fragmentShader
+        .replace(
+          "#include <roughnessmap_fragment>",
+          `#include <roughnessmap_fragment>
+// Night: fade the near-mirror sparkle flecks toward matte (forest-graphics
+// look-pass, 2026-07-25). The roughness map's shiny flecks are what the moon
+// key's specular blazes off — a busy bright sparkle carpet the earlier
+// additive-glitter fade (sparkleGain) never touched, because that only dims
+// the extra glitter, not the material's own specular. sparkleGain is ~1 by day
+// (flecks keep their shine, day look untouched) and ~0.045 at full night, so
+// this lifts the flecks to ~matte only as the light goes.
+roughnessFactor = mix(1.0, roughnessFactor, sparkleGain);`,
+        )
+        .replace(
+          "#include <color_fragment>",
+          `#include <color_fragment>
+{
+  float carve = snowCarve(vSnowWorld.xz);
+  float core = snowCarveCore(carve);
+  // The inside of a ski trail is carved snow (#3) — the bible's assignment.
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.686, 0.761, 0.871), core * 0.7);
+  // Occlusion: dune hollows and groove interiors tint toward snow-shadow
+  // blue (#2) — multiplied under the lighting, so sun and shade still play
+  // on top. This is the depth cue ambient-bright lighting alone can't draw.
+  float hollow = clamp(-(snowDune(vSnowWorld.xz) + snowLump(vSnowWorld.xz)) * 2.2, 0.0, 1.0);
+  float ao = clamp(hollow * 0.45 + core * 0.4 + smoothstep(0.03, 0.35, carve) * 0.15, 0.0, 1.0);
+  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.851, 0.912, 1.0), ao);
+  // Coarse dune form-shading (mountain-graphics, 2026-07-25): reveal the big
+  // wind-dune forms on open, shadowless ground — the starting summit, where
+  // there are no trees to cast the shadows the forest snow reads by. The
+  // palette-solved lights already tilt-shade these dunes, but the soft
+  // #1<->#2 range is too gentle to register without cast shadows, so the open
+  // field washes flat. This nudges the sun-away face of each big dune further
+  // toward snow-shadow blue (#2) — mixing toward #2, never past it, so it
+  // stays inside the palette floor. A coarse (dune-scale) sample normal keeps
+  // it sculpting the big forms without disturbing the fine grain mottling.
+  {
+    vec2 wp = vSnowWorld.xz;
+    float dh = 0.4;
+    float fx0 = snowDune(wp - vec2(dh, 0.0)) + snowLump(wp - vec2(dh, 0.0));
+    float fx1 = snowDune(wp + vec2(dh, 0.0)) + snowLump(wp + vec2(dh, 0.0));
+    float fz0 = snowDune(wp - vec2(0.0, dh)) + snowLump(wp - vec2(0.0, dh));
+    float fz1 = snowDune(wp + vec2(0.0, dh)) + snowLump(wp + vec2(0.0, dh));
+    vec3 coarseN = normalize(vec3(fx0 - fx1, 2.0 * dh, fz0 - fz1));
+    float formShade = smoothstep(0.5, 0.12, dot(coarseN, sunDir));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.827, 0.875, 0.941), formShade * 0.32);
+  }
+}`,
+        )
+        .replace(
+          "#include <normal_fragment_maps>",
+          `#include <normal_fragment_maps>
+normal = normalize((viewMatrix * vec4(snowNormal(vSnowWorld.xz), 0.0)).xyz);`,
+        )
+        .replace(
+          "#include <lights_fragment_end>",
+          `#include <lights_fragment_end>
+{
+  // Glitter, kept from round 1 (it drew no complaint): every ~3.5 cm cell
+  // owns one random mirror micro-facet; the ones aligned between sun and
+  // camera flash sun-glow white, so the field twinkles as the run moves.
+  // Fades by ~45 units (distant cells go sub-pixel), damped where a groove
+  // has broken the sparkling crust. Known simplification: ignores cast
+  // shadows (parked in IDEAS.md).
+  vec2 cell = floor(vSnowWorld.xz * 28.0);
+  vec3 cellHash = fract(sin(vec3(
+    dot(cell, vec2(127.1, 311.7)),
+    dot(cell, vec2(269.5, 183.3)),
+    dot(cell, vec2(419.2, 371.9)))) * 43758.5453);
+  vec3 facet = normalize(vec3(cellHash.x - 0.5, 0.65, cellHash.y - 0.5));
+  vec3 toCamera = normalize(cameraPosition - vSnowWorld);
+  float flash = pow(max(dot(facet, normalize(toCamera + sunDir)), 0.0), 64.0);
+  float gate = step(0.78, cellHash.z);
+  float fade = 1.0 - smoothstep(16.0, 45.0, length(cameraPosition - vSnowWorld));
+  float crust = 1.0 - 0.7 * snowCarveCore(snowCarve(vSnowWorld.xz));
+  // Sun-glow tinted (#FFF4DA) — the bible's brightest value.
+  // sparkleGain fades the twinkle out at night (slope-vis verdict #2).
+  reflectedLight.directSpecular += vec3(1.0, 0.957, 0.855) * (flash * gate * fade * crust * 1.6 * sparkleGain);
+}`,
+        );
+  };
+  // Every compile of this material is the same program — share it.
+  material.customProgramCacheKey = () => "realism-snow";
+  return material;
+}
+
+// The shadow-casting side of the displacement: the sun's depth pass
+// renders the snow through this material, so dunes and groove walls really
+// occlude the light (self-shadowed hollows) instead of only drawing darker.
+export function createSnowDepthMaterial(
+  carveTexture: THREE.Texture,
+): THREE.MeshDepthMaterial {
+  const snow = getSnowTextures();
+  const material = new THREE.MeshDepthMaterial({
+    depthPacking: THREE.RGBADepthPacking,
+  });
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.duneMap = { value: snow.dune };
+    shader.uniforms.grainMap = { value: snow.grain };
+    shader.uniforms.carveMap = { value: carveTexture };
+    shader.vertexShader =
+      SNOW_HEIGHT_GLSL +
+      shader.vertexShader.replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+${SNOW_DISPLACE_GLSL}`,
+      );
+  };
+  material.customProgramCacheKey = () => "realism-snow-depth";
+  return material;
+}
+
+// ---------------------------------------------------------------------------
+// The trail carve map: a single-channel height render-target riding the
+// snowfield window as a ring buffer along z (texture v = -z/length with
+// wrap, so grooves persist in place as the window slides past). Rows are
+// reclaimed (cleared) as they re-enter at the leading edge — ~160 units
+// downhill of the skier, fully swallowed by the haze. Stamping happens on
+// the GPU: one soft capsule brush per ski per grounded frame, MAX-blended
+// so overlapping strokes merge instead of double-carving, drawn three
+// times a window apart so strokes crossing the ring seam land on both
+// ends. Round 1 painted colored strokes on a canvas and re-uploaded ~4 MB
+// every frame; this writes a few uniforms and lets the snow shader read
+// real depth back out.
+
+interface TrailPen {
+  /** Last stamped ski position in ring space (x, -z), or null = pen up. */
+  curr: THREE.Vector2 | null;
+}
+
+interface TrailStamp {
+  readonly mesh: THREE.Mesh;
+  readonly material: THREE.ShaderMaterial;
+}
+
+export interface SnowTrail {
+  readonly renderer: THREE.WebGLRenderer;
+  readonly target: THREE.WebGLRenderTarget;
+  readonly scene: THREE.Scene;
+  readonly camera: THREE.OrthographicCamera;
+  /** One brush per ski, times three ring-seam copies. */
+  readonly stamps: ReadonlyArray<
+    readonly [TrailStamp, TrailStamp, TrailStamp]
+  >;
+  readonly pens: [TrailPen, TrailPen];
+  /** Furthest-downhill z whose rows have been reclaimed so far. */
+  leadingZ: number | null;
+}
+
+// The brush: a quad the vertex shader stretches along the stamped segment
+// (endpoints arrive as uniforms — the geometry never changes), and a
+// fragment writing soft capsule coverage: 1 on the ski line feathering to
+// 0 at BRUSH_OUT. The snow shader maps that coverage onto the groove
+// profile, so the brush only ever encodes "how carved", never a color.
+const BRUSH_VERTEX = `
+uniform vec2 segA;
+uniform vec2 segB;
+uniform float ringOffset;
+varying vec2 vBrushPos;
+void main() {
+  vec2 seg = segB - segA;
+  float len = length(seg);
+  vec2 along = len > 1e-5 ? seg / len : vec2(0.0, 1.0);
+  vec2 across = vec2(-along.y, along.x);
+  vec2 p = (segA + segB) * 0.5
+    + along * position.x * (len + ${(BRUSH_OUT * 2).toFixed(3)})
+    + across * position.y * ${(BRUSH_OUT * 2).toFixed(3)};
+  vBrushPos = p;
+  gl_Position = projectionMatrix * viewMatrix * vec4(p.x, p.y + ringOffset, 0.0, 1.0);
+}
+`;
+const BRUSH_FRAGMENT = `
+uniform vec2 segA;
+uniform vec2 segB;
+varying vec2 vBrushPos;
+void main() {
+  vec2 seg = segB - segA;
+  vec2 toP = vBrushPos - segA;
+  float t = clamp(dot(toP, seg) / max(dot(seg, seg), 1e-9), 0.0, 1.0);
+  float d = distance(toP, seg * t);
+  gl_FragColor = vec4(1.0 - smoothstep(${BRUSH_IN.toFixed(3)}, ${BRUSH_OUT.toFixed(3)}, d), 0.0, 0.0, 1.0);
+}
+`;
+
+export function createSnowTrail(renderer: THREE.WebGLRenderer): SnowTrail {
+  const target = new THREE.WebGLRenderTarget(
+    CARVE_TEX_WIDTH,
+    CARVE_TEX_HEIGHT,
+    {
+      format: THREE.RedFormat, // height only — one byte per texel
+      type: THREE.UnsignedByteType,
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      depthBuffer: false,
+    },
+  );
+  target.texture.wrapS = THREE.ClampToEdgeWrapping;
+  target.texture.wrapT = THREE.RepeatWrapping; // the ring dimension
+  const scene = new THREE.Scene();
+  // Ring space: x across the carve strip, y = -worldZ wrapped into one
+  // window length — downhill grows y, matching the texture's v axis.
+  const camera = new THREE.OrthographicCamera(
+    -CARVE_HALF_WIDTH,
+    CARVE_HALF_WIDTH,
+    SNOWFIELD_LENGTH,
+    0,
+    -1,
+    1,
+  );
+  const quad = new THREE.PlaneGeometry(1, 1);
+  const makeStamp = (): TrailStamp => {
+    const material = new THREE.ShaderMaterial({
+      vertexShader: BRUSH_VERTEX,
+      fragmentShader: BRUSH_FRAGMENT,
+      uniforms: {
+        segA: { value: new THREE.Vector2() },
+        segB: { value: new THREE.Vector2() },
+        ringOffset: { value: 0 },
+      },
+      // MAX blending: re-stamping carved snow keeps the deeper carve.
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.MaxEquation,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneFactor,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+    });
+    const mesh = new THREE.Mesh(quad, material);
+    mesh.visible = false;
+    mesh.frustumCulled = false; // the vertex shader places it, not .position
+    scene.add(mesh);
+    return { mesh, material };
+  };
+  const stamps = [
+    [makeStamp(), makeStamp(), makeStamp()],
+    [makeStamp(), makeStamp(), makeStamp()],
+  ] as const;
+  return {
+    renderer,
+    target,
+    scene,
+    camera,
+    stamps,
+    pens: [{ curr: null }, { curr: null }],
+    leadingZ: null,
+  };
+}
+
+const fract = (v: number): number => v - Math.floor(v);
+// World z → ring row in carve-map pixels.
+const ringRowPx = (z: number): number =>
+  fract(-z / SNOWFIELD_LENGTH) * CARVE_TEX_HEIGHT;
+
+const scratchClearColor = new THREE.Color();
+
+// Called every frame from syncEnvironment. Reclaims ring rows entering the
+// window, then stamps one brush segment per ski while the skis are down.
+export function updateSnowTrail(
+  trail: SnowTrail,
+  anchor: THREE.Vector3,
+  input: SnowTrailInput,
+): void {
+  const { renderer, target } = trail;
+
+  // Reclaim: rows newly entering at the leading (downhill, haze-hidden)
+  // edge still hold grooves from one ring-wrap ago — wipe them. When the
+  // window recedes a little (a respawn), leadingZ stays put: the rows
+  // re-entering uphill hold the *previous pass's* real grooves, which is
+  // exactly what should still be on the snow there. A jump bigger than the
+  // whole window in EITHER direction gets a full clear — after e.g. a
+  // fresh run from the top, the surviving rows would be one-wrap-stale
+  // grooves at wrong world positions (a bug round 1 shipped with, fixed
+  // here: it only cleared on downhill jumps).
+  let fullClear = false;
+  const scissors: Array<readonly [number, number]> = [];
+  const lead = anchor.z - SNOWFIELD_LEAD - SNOWFIELD_LENGTH / 2;
+  if (
+    trail.leadingZ === null ||
+    Math.abs(trail.leadingZ - lead) > SNOWFIELD_LENGTH
+  ) {
+    fullClear = true;
+    trail.leadingZ = lead;
+  } else if (lead < trail.leadingZ) {
+    const spanPx = Math.min(
+      CARVE_TEX_HEIGHT,
+      Math.ceil(
+        ((trail.leadingZ - lead) / SNOWFIELD_LENGTH) * CARVE_TEX_HEIGHT,
+      ) + 2,
+    );
+    const startPx =
+      (((Math.floor(ringRowPx(trail.leadingZ)) - 1) % CARVE_TEX_HEIGHT) +
+        CARVE_TEX_HEIGHT) %
+      CARVE_TEX_HEIGHT;
+    if (startPx + spanPx <= CARVE_TEX_HEIGHT) {
+      scissors.push([startPx, spanPx]);
+    } else {
+      scissors.push(
+        [startPx, CARVE_TEX_HEIGHT - startPx],
+        [0, spanPx - (CARVE_TEX_HEIGHT - startPx)],
+      );
+    }
+    trail.leadingZ = lead;
+  }
+
+  // The pens: one per ski, at the stance offset perpendicular to the
+  // heading. With travel = (sin h, -cos h) in xz (the sim's convention),
+  // perpendicular is (cos h, sin h).
+  let anyStamp = false;
+  for (const copies of trail.stamps) {
+    for (const stamp of copies) stamp.mesh.visible = false;
+  }
+  if (!input.grounded) {
+    // Pen up: airborne or crashed. The groove break is the jump, visibly.
+    for (const pen of trail.pens) pen.curr = null;
+  } else {
+    const perpX = Math.cos(input.heading);
+    const perpZ = Math.sin(input.heading);
+    for (const [i, side] of [-1, 1].entries()) {
+      const pen = trail.pens[i]!;
+      const pos = new THREE.Vector2(
+        anchor.x + perpX * side * SKI_STANCE,
+        -(anchor.z + perpZ * side * SKI_STANCE),
+      );
+      if (pen.curr === null || pen.curr.distanceTo(pos) > 4) {
+        pen.curr = pos; // touchdown, or a teleport (respawn safety net)
+      } else if (pen.curr.distanceTo(pos) > 0.012) {
+        // Stamp the segment at its ring position and one window either
+        // way, so a stroke crossing the seam paints both ends.
+        const base = Math.floor(pos.y / SNOWFIELD_LENGTH) * SNOWFIELD_LENGTH;
+        for (const [k, offset] of [
+          -base,
+          -base + SNOWFIELD_LENGTH,
+          -base - SNOWFIELD_LENGTH,
+        ].entries()) {
+          const stamp = trail.stamps[i]![k]!;
+          stamp.mesh.visible = true;
+          (stamp.material.uniforms.segA!.value as THREE.Vector2).copy(
+            pen.curr,
+          );
+          (stamp.material.uniforms.segB!.value as THREE.Vector2).copy(pos);
+          stamp.material.uniforms.ringOffset!.value = offset;
+        }
+        pen.curr = pos;
+        anyStamp = true;
+      } // else: standing still — don't restamp in place
+    }
+  }
+
+  if (!fullClear && scissors.length === 0 && !anyStamp) return;
+
+  // The GPU pass: clears first, then the stamps — restoring renderer state
+  // for the main render that follows this sync.
+  const prevTarget = renderer.getRenderTarget();
+  const prevAutoClear = renderer.autoClear;
+  renderer.getClearColor(scratchClearColor);
+  const prevAlpha = renderer.getClearAlpha();
+  renderer.setRenderTarget(target);
+  renderer.setClearColor(0x000000, 1);
+  if (fullClear) renderer.clear(true, false, false);
+  for (const [y, h] of scissors) {
+    renderer.setScissor(0, y, CARVE_TEX_WIDTH, h);
+    renderer.setScissorTest(true);
+    renderer.clear(true, false, false);
+  }
+  renderer.setScissorTest(false);
+  if (anyStamp) {
+    renderer.autoClear = false;
+    renderer.render(trail.scene, trail.camera);
+    renderer.autoClear = prevAutoClear;
+  }
+  renderer.setClearColor(scratchClearColor, prevAlpha);
+  renderer.setRenderTarget(prevTarget);
+}
+
+// ---------------------------------------------------------------------------
+// VISUAL EFFECTS — loose snow (slope-vis, 2026-07-23). Two particle systems,
+// both DESIGN.md "speed is visible" / "snow remembers" callouts and the
+// carve-spray idea parked in IDEAS.md:
+//
+//   1. SPRAY — the rooster tail kicked off the skis. Emits from the two ski
+//      contacts while grounded and moving, more the faster you go and the
+//      harder you carve; particles fly up-and-back, fall under gravity, and
+//      fade. The carved groove is the snow that *stays*; this is the snow
+//      that *flies*.
+//   2. FLURRIES — loose flakes drifting past the camera. Gusty (long calm
+//      stretches, the occasional swelling patch) and stronger when zoomed in
+//      — a flake right by the lens sells "you're down in it". Recycled in a
+//      world-axis box that rides the camera, drifting relative to it so they
+//      streak past as the run picks up speed.
+//
+// Both stay inside slope-visuals territory: no seam change. The skier's
+// speed is read from the anchor's frame-to-frame motion (mechanics already
+// moves it), and dt comes from an internal clock — nothing new crosses from
+// skiRender.ts. All procedural: one soft-dot canvas, no image files.
+
+// Spray tuning — a fine billowing powder plume (director reference, 2026-07-23:
+// snowboard/ski powder sprays). The look is a *cloud*, so the numbers are
+// "many, tiny, faint, slow": thousands of small low-alpha grains that expand
+// and hang like real powder rather than a few ballistic blobs. Speeds are
+// world units/sec; the sim cruises ~8, boosts ~16 (BASE_SPEED / BOOST_SPEED).
+//
+// VISIBILITY PASS (slope-vis, 2026-07-23 — director: "hard to see, especially
+// in the sun"). White powder over sunlit-white snow has no contrast, and it
+// only gets worse toward the sun glow (the brightest thing on screen). Two
+// levers, per the parked look-pass note (push count + alpha before size):
+// the plume was cooled toward snow-shadow blue and made denser (higher rate +
+// peak alpha). Grain size is left alone — enlarging it read as "orbs" last pass.
+// SHADOW PASS (2026-07-23 — director: the cool tint read in the sun but vanished
+// in shadow, blue powder on blue snow). The single cool tint became a per-grain
+// TWO-TONE mix of both snow values — see SPRAY_COLOR_SUN / SPRAY_COLOR_SHADOW.
+const SPRAY_MAX = 4000; // big pool — headroom for the raised rate + carve boost
+const SPRAY_MIN_SPEED = 2.5; // below this the skis just glide — no kick-up
+const SPRAY_FULL_SPEED = 14; // spray saturates around here
+const SPRAY_BASE_RATE = 2200; // grains/sec at full spray, both skis
+const SPRAY_LIFE = 0.7; // seconds — powder hangs before it settles
+const SPRAY_LIFE_VAR = 0.3;
+// Powder is light: weak gravity, strong air drag, so the plume decelerates
+// into a floating billow instead of arcing like thrown sand.
+const SPRAY_GRAVITY = 2.6;
+const SPRAY_DRAG = 2.2; // per-second velocity damping (air resistance)
+const SPRAY_TURB = 2.0; // random roil that keeps the cloud from looking rigid
+const SPRAY_GROW = 2.4; // each grain expands to ~this× as it billows out
+const SPRAY_PEAK_ALPHA = 0.52; // faint per grain — density builds the body
+// TWO-TONE PLUME (slope-vis, 2026-07-23 — director verdict: the old flat blue
+// "looks good in the sun, hard to see in shadows"). A single flat tint is stuck
+// between the two snow values and loses against whichever it matches: cool blue
+// reads on sunlit-white snow but vanishes on shadow-blue snow (which renders as
+// exactly this color by the bible's lighting). Fix: mix both snow values per
+// grain — bright sunlit-white #F8F5EF (palette #1) and cool shadow-blue #D3DFF0
+// (palette #2) — so the plume always carries a value that breaks against
+// whichever snow it flies over. Both are palette colors; no new hue, no bible
+// change. Flurries keep the material's white uniform (their aColor stays white).
+const SPRAY_COLOR_SUN = new THREE.Vector3(0xf8 / 255, 0xf5 / 255, 0xef / 255);
+const SPRAY_COLOR_SHADOW = new THREE.Vector3(0xd3 / 255, 0xdf / 255, 0xf0 / 255);
+const SPRAY_SHADOW_FRAC = 0.5; // share of grains that take the cool shadow tone
+// A respawn teleports the anchor a whole run in one frame — that reads as an
+// absurd speed. Anything past this is a jump, not skiing: emit nothing.
+const SPRAY_TELEPORT_SPEED = 40;
+
+// Flurry tuning. The recycle box is world-axis-aligned and centered on the
+// camera, so flakes surround it no matter which way the look points.
+const FLURRY_MAX = 300;
+const FLURRY_HALF_X = 9;
+const FLURRY_HALF_Z = 9;
+const FLURRY_UP = 5;
+const FLURRY_DOWN = 4;
+const FLURRY_FALL = 0.7; // world units/sec of gentle settling
+const FLURRY_WIND_X = 0.5;
+
+// Lens splash tuning (slope-vis, 2026-07-23 — director: "there's no splash in
+// the camera to make it feel immersive"). A 2D overlay canvas over the WebGL
+// canvas: soft snow splats that hit the "lens" while you carve at speed, slide
+// down, melt out, and fade — the you're-down-in-it read the 3D flurries can't
+// give (they're always at least a near-plane away). Pure screen space, keyed
+// off the same speed/carve signals as the spray, so no seam crosses. The
+// overlay is pointer-events:none (camera clicks pass through) and mirrors the
+// ski canvas's visibility so nothing lingers over the lobby.
+const LENS_SPLAT_MAX = 130; // hard cap on live splats (bounds fill cost)
+const LENS_SPLAT_RATE = 28; // splats/sec at full carve, before the closeness gate
+// Most splats are now small detailed *flake* stickers; a `big` one is instead a
+// soft round "direct hit" smear. The mix (many small flakes + a few soft hits)
+// is the director's 2026-07-24 course-correct — smaller, detailed, sticky.
+const LENS_BIG_CHANCE = 0.16; // fraction that are the bigger soft "direct hits"
+const LENS_LIFE = 1.1; // seconds a splat clings before it's fully melted off
+const LENS_LIFE_VAR = 0.7;
+const LENS_SLIDE = 26; // px/sec a splat drips down the lens (low — it sticks)
+const LENS_MELT = 22; // px/sec a splat spreads as it melts
+// Cool-white, same snow-shadow family as the plume — a splat is that powder
+// hitting glass. Kept subtly translucent so it never blocks the play read.
+const LENS_TINT = "233, 240, 250";
+const LENS_PEAK_ALPHA = 0.6; // per-splat opacity ceiling (2026-07-24 make-it-read pass)
+// Under a hard sustained carve, snow cakes the *edges* of the lens — a soft
+// white vignette that eases in with the splat intensity and lingers as it
+// decays, reading as "buried in it" the way discrete blobs alone can't. Center
+// stays clear so the play read is never blocked. (slope-vis 2026-07-24.)
+const LENS_FROST_PEAK_ALPHA = 0.2; // corner opacity at full, sustained carve
+const LENS_FROST_ATTACK = 5.5; // per-sec ease-up toward the current intensity
+const LENS_FROST_DECAY = 2.2; // per-sec ease-down when the carve lets up
+
+// Both systems draw as soft round sprites through this one shader. Point size
+// is world-radius attenuated to pixels; a near-camera fade keeps a flake from
+// ever splatting full-screen across the lens (only flurries get that close —
+// spray always sits out at the skier). Fog is applied manually (a plain
+// ShaderMaterial gets none of three's auto-fog): spray melts into the haze at
+// a far zoom, flurries never do (they live right at the camera).
+const PARTICLE_VERT = `
+attribute float aSize;
+attribute float aAlpha;
+attribute vec3 aColor;
+uniform float sizeScale;
+uniform float fogNear;
+uniform float fogFar;
+varying float vAlpha;
+varying float vFog;
+varying vec3 vColor;
+void main() {
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  float dist = max(-mv.z, 0.001);
+  gl_PointSize = clamp(aSize * sizeScale / dist, 1.0, 140.0);
+  gl_Position = projectionMatrix * mv;
+  // Fade points hugging the lens (< ~1.3 units) so a flake never flashes the
+  // whole screen white; spray is always farther out, so it's untouched.
+  vAlpha = aAlpha * smoothstep(0.15, 1.3, dist);
+  vFog = 1.0 - smoothstep(fogNear, fogFar, dist);
+  vColor = aColor;
+}
+`;
+const PARTICLE_FRAG = `
+uniform sampler2D map;
+uniform vec3 color;
+uniform float globalAlpha;
+varying float vAlpha;
+varying float vFog;
+varying vec3 vColor;
+void main() {
+  float a = texture2D(map, gl_PointCoord).a * vAlpha * vFog * globalAlpha;
+  if (a < 0.01) discard;
+  // Per-grain tint (vColor) times the material's global tint (color). Flurries
+  // keep aColor = white and lean on the uniform; the spray plume carries its
+  // two-tone (sun-white / shadow-blue) per grain so it reads on either snow.
+  gl_FragColor = vec4(color * vColor, a);
+}
+`;
+
+let particleDot: THREE.CanvasTexture | null = null;
+
+// The soft dot both systems sprite: white, full-ish core feathering to zero.
+// Only its alpha is used, so colorspace is irrelevant here.
+function getParticleDot(): THREE.CanvasTexture {
+  if (particleDot) return particleDot;
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const g = ctx.createRadialGradient(
+    size / 2, size / 2, 0, size / 2, size / 2, size / 2,
+  );
+  // A soft wispy falloff with NO flat core — a hard core read as an "orb"
+  // (director callout). Each grain is faint; the powder plume's body comes
+  // from thousands of them overlapping, the way real spray builds volume.
+  g.addColorStop(0, "rgba(255,255,255,0.85)");
+  g.addColorStop(0.25, "rgba(255,255,255,0.5)");
+  g.addColorStop(0.55, "rgba(255,255,255,0.18)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  particleDot = new THREE.CanvasTexture(canvas);
+  return particleDot;
+}
+
+// World-radius → pixels: half the viewport height over tan(halfFov). The
+// camera's fov is the renderer default 50°; recomputed on resize below.
+function particleSizeScale(): number {
+  return (0.5 * window.innerHeight) / Math.tan((50 * Math.PI) / 180 / 2);
+}
+
+function createSnowParticleMaterial(opts: {
+  fogNear: number;
+  fogFar: number;
+}): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      map: { value: getParticleDot() },
+      // Sunlit snow #F8F5EF as straight sRGB components: a plain ShaderMaterial
+      // writes gl_FragColor verbatim to the sRGB framebuffer (three appends no
+      // output-encoding to custom shaders), so these land as the palette color.
+      color: { value: new THREE.Vector3(0xf8 / 255, 0xf5 / 255, 0xef / 255) },
+      sizeScale: { value: particleSizeScale() },
+      fogNear: { value: opts.fogNear },
+      fogFar: { value: opts.fogFar },
+      globalAlpha: { value: 1 },
+    },
+    vertexShader: PARTICLE_VERT,
+    fragmentShader: PARTICLE_FRAG,
+    transparent: true,
+    depthWrite: false, // soft snow blends over the scene; depth-test still on
+  });
+}
+
+interface SpraySystem {
+  readonly points: THREE.Points;
+  readonly positions: Float32Array;
+  readonly sizes: Float32Array; // the DISPLAYED size (grows over life)
+  readonly spawnSize: Float32Array; // the size at birth, before billowing
+  readonly alphas: Float32Array;
+  readonly colors: Float32Array; // 3 per particle — the two-tone plume grain
+  readonly vel: Float32Array; // 3 per particle
+  readonly life: Float32Array;
+  readonly maxLife: Float32Array;
+  cursor: number;
+  emitAccum: number; // fractional particles carried between frames
+}
+
+interface FlurrySystem {
+  readonly points: THREE.Points;
+  readonly positions: Float32Array;
+  readonly offset: Float32Array; // 3 per flake, camera-relative, world axes
+  readonly material: THREE.ShaderMaterial;
+}
+
+// One splat stuck to the lens: screen position (CSS px), current radius, how far
+// through its melt it is, its drip velocity, and — for flakes — a fixed birth
+// rotation and sprite variant so each clump sits at a natural random angle on
+// the glass and no two read alike.
+interface LensSplat {
+  x: number;
+  y: number;
+  r: number;
+  vy: number; // downward drip, px/sec
+  grow: number; // melt spread, px/sec added to r
+  life: number;
+  maxLife: number;
+  alpha0: number;
+  rot: number; // birth rotation, radians (flakes only; blobs ignore it)
+  sprite: number; // index into flakeSprites (flakes only; blobs ignore it)
+  flake: boolean; // true = detailed snow-clump sprite, false = soft round direct hit
+}
+
+interface LensSplashSystem {
+  readonly canvas: HTMLCanvasElement;
+  readonly ctx: CanvasRenderingContext2D;
+  readonly splats: LensSplat[];
+  readonly flakeSprites: HTMLCanvasElement[]; // pre-rendered snow-clump variants, drawn scaled+rotated
+  emitAccum: number;
+  frost: number; // 0..1 smoothed edge-cake level (eases with carve intensity)
+  wasDrawn: boolean; // last frame left ink on the canvas (so we clear once)
+}
+
+let spray: SpraySystem | null = null;
+let flurry: FlurrySystem | null = null;
+let lensSplash: LensSplashSystem | null = null;
+
+// Per-frame skier/camera memory (module-level, like decorState/snowTextures).
+const effectsClock = new THREE.Clock();
+const prevAnchor = new THREE.Vector3();
+let haveAnchor = false;
+const prevCamPos = new THREE.Vector3();
+let haveCam = false;
+let flurryTime = 0;
+
+export function createSnowEffects(scene: THREE.Scene): void {
+  // --- Spray: an empty pool, filled as the skis carve ---
+  const sPos = new Float32Array(SPRAY_MAX * 3);
+  const sSize = new Float32Array(SPRAY_MAX);
+  const sAlpha = new Float32Array(SPRAY_MAX); // starts all-0 = nothing drawn
+  const sColor = new Float32Array(SPRAY_MAX * 3); // per-grain two-tone
+  const sGeo = new THREE.BufferGeometry();
+  sGeo.setAttribute(
+    "position",
+    new THREE.BufferAttribute(sPos, 3).setUsage(THREE.DynamicDrawUsage),
+  );
+  sGeo.setAttribute(
+    "aSize",
+    new THREE.BufferAttribute(sSize, 1).setUsage(THREE.DynamicDrawUsage),
+  );
+  sGeo.setAttribute(
+    "aAlpha",
+    new THREE.BufferAttribute(sAlpha, 1).setUsage(THREE.DynamicDrawUsage),
+  );
+  sGeo.setAttribute(
+    "aColor",
+    new THREE.BufferAttribute(sColor, 3).setUsage(THREE.DynamicDrawUsage),
+  );
+  const sMat = createSnowParticleMaterial({ fogNear: 45, fogFar: 150 });
+  // The plume's color is per-grain (two-tone sun-white / shadow-blue, set at
+  // emit), so the material's global tint stays neutral white and just passes
+  // the grain color through. See SPRAY_COLOR_SUN / SPRAY_COLOR_SHADOW.
+  sMat.uniforms.color!.value.set(1, 1, 1);
+  const sPoints = new THREE.Points(sGeo, sMat);
+  sPoints.frustumCulled = false; // the shader places points; bounds are stale
+  sPoints.renderOrder = 3;
+  scene.add(sPoints);
+  spray = {
+    points: sPoints,
+    positions: sPos,
+    sizes: sSize,
+    spawnSize: new Float32Array(SPRAY_MAX),
+    alphas: sAlpha,
+    colors: sColor,
+    vel: new Float32Array(SPRAY_MAX * 3),
+    life: new Float32Array(SPRAY_MAX),
+    maxLife: new Float32Array(SPRAY_MAX),
+    cursor: 0,
+    emitAccum: 0,
+  };
+
+  // --- Flurries: pre-scattered in the recycle box (seeded, though they drift
+  // immediately, so the seed only fixes the very first frame) ---
+  const random = makeRandom(20260723);
+  const fPos = new Float32Array(FLURRY_MAX * 3);
+  const fSize = new Float32Array(FLURRY_MAX);
+  const fAlpha = new Float32Array(FLURRY_MAX);
+  const fColor = new Float32Array(FLURRY_MAX * 3); // all white — see below
+  const fOff = new Float32Array(FLURRY_MAX * 3);
+  for (let i = 0; i < FLURRY_MAX; i++) {
+    fOff[i * 3] = (random() * 2 - 1) * FLURRY_HALF_X;
+    fOff[i * 3 + 1] = -FLURRY_DOWN + random() * (FLURRY_UP + FLURRY_DOWN);
+    fOff[i * 3 + 2] = (random() * 2 - 1) * FLURRY_HALF_Z;
+    fSize[i] = 0.02 + random() * 0.05;
+    fAlpha[i] = 0.4 + random() * 0.6; // per-flake base, scaled by the gust
+    // Flurries carry no per-grain tint — aColor = white so the fragment shader
+    // (color * vColor) falls through to the material's #F8F5EF sunlit-white.
+    fColor[i * 3] = 1;
+    fColor[i * 3 + 1] = 1;
+    fColor[i * 3 + 2] = 1;
+  }
+  const fGeo = new THREE.BufferGeometry();
+  fGeo.setAttribute(
+    "position",
+    new THREE.BufferAttribute(fPos, 3).setUsage(THREE.DynamicDrawUsage),
+  );
+  fGeo.setAttribute("aSize", new THREE.BufferAttribute(fSize, 1));
+  fGeo.setAttribute("aAlpha", new THREE.BufferAttribute(fAlpha, 1));
+  fGeo.setAttribute("aColor", new THREE.BufferAttribute(fColor, 3));
+  // Fog off (near/far far past anything): flurries live at the lens.
+  const fMat = createSnowParticleMaterial({ fogNear: 9000, fogFar: 10000 });
+  fMat.uniforms.globalAlpha!.value = 0; // the gust brings them in
+  const fPoints = new THREE.Points(fGeo, fMat);
+  fPoints.frustumCulled = false;
+  fPoints.renderOrder = 4;
+  scene.add(fPoints);
+  flurry = { points: fPoints, positions: fPos, offset: fOff, material: fMat };
+
+  window.addEventListener("resize", () => {
+    const s = particleSizeScale();
+    sMat.uniforms.sizeScale!.value = s;
+    fMat.uniforms.sizeScale!.value = s;
+  });
+}
+
+function smoothstep01(a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+// Wrap v into [lo, hi) — the flurry recycle, so a flake leaving one face of
+// the box re-enters the opposite one.
+function wrapRange(v: number, lo: number, hi: number): number {
+  const r = hi - lo;
+  return lo + (((v - lo) % r) + r) % r;
+}
+
+// Called every frame from syncEnvironment. Derives the skier's world speed
+// from the anchor's motion (no seam field needed), then drives both systems.
+export function updateSnowEffects(
+  anchor: THREE.Vector3,
+  camera: THREE.Camera,
+  trailInput?: SnowTrailInput,
+): void {
+  const dt = Math.min(0.05, effectsClock.getDelta()); // clamp tab-refocus jumps
+  if (dt <= 0) return;
+
+  let speed = 0;
+  let velX = 0;
+  let velZ = 0;
+  if (haveAnchor) {
+    velX = (anchor.x - prevAnchor.x) / dt;
+    velZ = (anchor.z - prevAnchor.z) / dt;
+    speed = Math.hypot(velX, velZ);
+    if (speed > SPRAY_TELEPORT_SPEED) {
+      speed = 0; // a respawn/teleport, not a run — don't spray a burst
+      velX = 0;
+      velZ = 0;
+    }
+  }
+  prevAnchor.copy(anchor);
+  haveAnchor = true;
+
+  if (spray) updateSpray(dt, anchor, speed, velX, velZ, trailInput);
+  if (flurry) updateFlurries(dt, camera, anchor);
+  if (lensSplash) {
+    // Same signals the spray uses: how fast, how hard the carve, and how close
+    // the camera is (immersion is a close-camera thing — zoomed out, snow on
+    // the lens makes no sense, so the far view barely splats). Grounded only.
+    const grounded = trailInput?.grounded ?? false;
+    let intensity = 0;
+    let carveSide = 0;
+    if (grounded && speed > SPRAY_MIN_SPEED) {
+      const speedF = Math.min(
+        1,
+        (speed - SPRAY_MIN_SPEED) / (SPRAY_FULL_SPEED - SPRAY_MIN_SPEED),
+      );
+      const sideF = speed > 0.01 ? Math.min(1, Math.abs(velX) / speed) : 0;
+      const dist = camera.position.distanceTo(anchor);
+      const closeness = 1 - smoothstep01(10, 34, dist);
+      intensity = speedF * (0.4 + 0.6 * sideF) * closeness;
+      carveSide = velX >= 0 ? 1 : -1;
+    }
+    updateLensSplash(dt, intensity, carveSide);
+  }
+}
+
+function updateSpray(
+  dt: number,
+  anchor: THREE.Vector3,
+  speed: number,
+  velX: number,
+  velZ: number,
+  trailInput?: SnowTrailInput,
+): void {
+  const s = spray!;
+  const grounded = trailInput?.grounded ?? false;
+  const heading = trailInput?.heading ?? 0;
+
+  if (grounded && speed > SPRAY_MIN_SPEED) {
+    const speedF = Math.min(
+      1,
+      (speed - SPRAY_MIN_SPEED) / (SPRAY_FULL_SPEED - SPRAY_MIN_SPEED),
+    );
+    // How sideways the motion is: a hard carve throws its velocity across the
+    // fall line, which both fans the spray wider and kicks up more of it.
+    const sideF = speed > 0.01 ? Math.min(1, Math.abs(velX) / speed) : 0;
+    const inv = 1 / Math.max(speed, 0.001);
+    const tx = velX * inv; // travel direction (unit, xz)
+    const tz = velZ * inv;
+    const px = -tz; // across the travel direction
+    const pz = tx;
+    // The two ski contacts, offset perpendicular to the heading like the
+    // trail pens do.
+    const perpX = Math.cos(heading);
+    const perpZ = Math.sin(heading);
+
+    // The ski axis (which way the skis point) — spray kicks off the edge
+    // *along the ski*, so grains are spread down the ski toward the tail, not
+    // bunched at a point under the boots.
+    const skiFwdX = Math.sin(heading);
+    const skiFwdZ = -Math.cos(heading);
+
+    s.emitAccum += SPRAY_BASE_RATE * speedF * (1 + 1.4 * sideF) * dt;
+    let n = Math.floor(s.emitAccum);
+    s.emitAccum -= n;
+    while (n-- > 0) {
+      const ski = Math.random() < 0.5 ? -1 : 1;
+      emitSprayParticle(
+        anchor, ski, perpX, perpZ, skiFwdX, skiFwdZ, tx, tz, px, pz, speedF, sideF,
+      );
+    }
+  }
+
+  // Integrate the live grains and write their attributes. Powder physics:
+  // weak gravity, strong air drag, and a little turbulence, so each grain
+  // decelerates and floats — the plume billows and hangs. Each grain also
+  // expands (SPRAY_GROW) and thins (alpha → 0) as it ages, so the cloud
+  // swells and dissipates like real spray instead of vanishing as dots.
+  const { positions, vel, life, maxLife, sizes, spawnSize, alphas } = s;
+  const drag = Math.max(0, 1 - SPRAY_DRAG * dt);
+  for (let i = 0; i < SPRAY_MAX; i++) {
+    if (life[i]! <= 0) {
+      if (alphas[i] !== 0) alphas[i] = 0;
+      continue;
+    }
+    life[i]! -= dt;
+    if (life[i]! <= 0) {
+      alphas[i] = 0;
+      continue;
+    }
+    vel[i * 3]! = vel[i * 3]! * drag + (Math.random() - 0.5) * SPRAY_TURB * dt;
+    vel[i * 3 + 1]! = vel[i * 3 + 1]! * drag - SPRAY_GRAVITY * dt;
+    vel[i * 3 + 2]! =
+      vel[i * 3 + 2]! * drag + (Math.random() - 0.5) * SPRAY_TURB * dt;
+    positions[i * 3]! += vel[i * 3]! * dt;
+    positions[i * 3 + 1]! += vel[i * 3 + 1]! * dt;
+    positions[i * 3 + 2]! += vel[i * 3 + 2]! * dt;
+    const t = life[i]! / maxLife[i]!; // 1 at birth → 0 at death
+    // Billow out: small at birth, expanding toward SPRAY_GROW× as it ages.
+    sizes[i] = spawnSize[i]! * (1 + SPRAY_GROW * (1 - t));
+    // Densest just off the edge, thinning as it drifts and spreads.
+    alphas[i] = SPRAY_PEAK_ALPHA * Math.min(1, t * 1.5);
+  }
+  s.points.geometry.attributes.position!.needsUpdate = true;
+  s.points.geometry.attributes.aSize!.needsUpdate = true;
+  s.points.geometry.attributes.aAlpha!.needsUpdate = true;
+  s.points.geometry.attributes.aColor!.needsUpdate = true;
+}
+
+function emitSprayParticle(
+  anchor: THREE.Vector3,
+  ski: number,
+  perpX: number, // across the stance (ski-to-ski)
+  perpZ: number,
+  skiFwdX: number, // along the ski (nose direction)
+  skiFwdZ: number,
+  tx: number, // travel direction (unit)
+  tz: number,
+  px: number, // across the travel direction
+  pz: number,
+  speedF: number,
+  sideF: number,
+): void {
+  const s = spray!;
+  const i = s.cursor;
+  s.cursor = (s.cursor + 1) % SPRAY_MAX;
+  const r = Math.random;
+  // ORIGIN: the ski edge, on the snow. Start at the ski's stance offset, then
+  // slide down the ski toward the tail (where it carves and throws snow) and
+  // a touch onto its outer edge — so the plume rises off the skis, not the
+  // boots (director callout).
+  const alongTail = 0.05 + r() * 0.75; // metres back down the ski
+  const outEdge = r() * 0.12; // onto the outer edge
+  const px0 =
+    anchor.x + perpX * ski * (SKI_STANCE + outEdge) - skiFwdX * alongTail;
+  const pz0 =
+    anchor.z + perpZ * ski * (SKI_STANCE + outEdge) - skiFwdZ * alongTail;
+  s.positions[i * 3] = px0 + (r() - 0.5) * 0.05;
+  s.positions[i * 3 + 1] = 0.0 + r() * 0.03; // at the snow, not boot height
+  s.positions[i * 3 + 2] = pz0 + (r() - 0.5) * 0.05;
+  // VELOCITY: a fountain off the edge — up and back (against travel), fanned
+  // across it. Modest launch speeds; drag turns them into a hanging billow.
+  const back = (0.8 + 1.4 * r()) * (0.4 + 0.6 * speedF);
+  const up = 1.6 + 2.2 * r();
+  const fan = (0.4 + 2.0 * sideF) * r() * (r() < 0.5 ? 1 : -1);
+  s.vel[i * 3] = -tx * back + px * fan + (r() - 0.5) * 0.8;
+  s.vel[i * 3 + 1] = up;
+  s.vel[i * 3 + 2] = -tz * back + pz * fan + (r() - 0.5) * 0.8;
+  const ml = SPRAY_LIFE + (r() - 0.5) * SPRAY_LIFE_VAR;
+  s.life[i] = ml;
+  s.maxLife[i] = ml;
+  // Fine grains — the mist comes from thousands overlapping, not from size.
+  s.spawnSize[i] = 0.025 + r() * 0.035 + speedF * 0.02;
+  s.sizes[i] = s.spawnSize[i]!;
+  s.alphas[i] = SPRAY_PEAK_ALPHA;
+  // Two-tone: each grain is randomly one of the two snow values, so the plume
+  // always carries a value that breaks against whichever snow it flies over.
+  const tone = r() < SPRAY_SHADOW_FRAC ? SPRAY_COLOR_SHADOW : SPRAY_COLOR_SUN;
+  s.colors[i * 3] = tone.x;
+  s.colors[i * 3 + 1] = tone.y;
+  s.colors[i * 3 + 2] = tone.z;
+}
+
+function updateFlurries(
+  dt: number,
+  camera: THREE.Camera,
+  anchor: THREE.Vector3,
+): void {
+  const f = flurry!;
+  flurryTime += dt;
+  // Gust: two slow, out-of-phase sines; the negative half is dead calm, the
+  // positive half squared into an occasional swelling patch.
+  const raw =
+    0.6 * Math.sin(flurryTime * 0.19) +
+    0.4 * Math.sin(flurryTime * 0.41 + 1.7);
+  const gust = Math.pow(Math.max(0, raw), 2);
+  const camPos = camera.position;
+  // Zoom read: the camera orbits the skier, so its distance to the anchor IS
+  // the zoom radius. Close = zoomed in = flurries lean in hard.
+  const dist = camPos.distanceTo(anchor);
+  const closeness = 1 - smoothstep01(8, 30, dist);
+  const globalAlpha = (0.06 + 0.94 * gust) * (0.3 + 0.7 * closeness);
+  f.material.uniforms.globalAlpha!.value = globalAlpha;
+
+  // Camera velocity, so flakes drift *relative* to it and streak past as the
+  // run speeds up. Clamp out the respawn/first-frame teleport.
+  let cvx = 0;
+  let cvy = 0;
+  let cvz = 0;
+  if (haveCam) {
+    cvx = (camPos.x - prevCamPos.x) / dt;
+    cvy = (camPos.y - prevCamPos.y) / dt;
+    cvz = (camPos.z - prevCamPos.z) / dt;
+    if (Math.hypot(cvx, cvy, cvz) > 60) {
+      cvx = 0;
+      cvy = 0;
+      cvz = 0;
+    }
+  }
+  prevCamPos.copy(camPos);
+  haveCam = true;
+
+  // Snow's own drift (gentle fall + wind) minus the camera's motion.
+  const rvx = (FLURRY_WIND_X - cvx) * dt;
+  const rvy = (-FLURRY_FALL - cvy) * dt;
+  const rvz = -cvz * dt;
+  const { offset, positions } = f;
+  for (let i = 0; i < FLURRY_MAX; i++) {
+    const ox = wrapRange(offset[i * 3]! + rvx, -FLURRY_HALF_X, FLURRY_HALF_X);
+    const oy = wrapRange(offset[i * 3 + 1]! + rvy, -FLURRY_DOWN, FLURRY_UP);
+    const oz = wrapRange(offset[i * 3 + 2]! + rvz, -FLURRY_HALF_Z, FLURRY_HALF_Z);
+    offset[i * 3] = ox;
+    offset[i * 3 + 1] = oy;
+    offset[i * 3 + 2] = oz;
+    positions[i * 3] = camPos.x + ox;
+    positions[i * 3 + 1] = camPos.y + oy;
+    positions[i * 3 + 2] = camPos.z + oz;
+  }
+  f.points.geometry.attributes.position!.needsUpdate = true;
+}
+
+// The lens-splash overlay: a 2D canvas laid over the WebGL canvas (a sibling
+// in the same container). pointer-events:none so camera clicks pass straight
+// through; z-index left default so the body-level HUD still paints on top. A
+// MutationObserver mirrors the ski canvas's `display` (main.ts toggles it on
+// scene switch) so a mid-melt splat never freezes over the lobby.
+export function createLensSplash(renderer: THREE.WebGLRenderer): void {
+  const gl = renderer.domElement;
+  const parent = gl.parentElement;
+  if (!parent) return; // no DOM to overlay (e.g. headless) — spray still works
+  const canvas = document.createElement("canvas");
+  const style = canvas.style;
+  style.position = "absolute";
+  style.left = "0";
+  style.top = "0";
+  style.width = "100%";
+  style.height = "100%";
+  style.pointerEvents = "none";
+  style.display = gl.style.display; // start matched to the ski canvas
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  parent.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    parent.removeChild(canvas);
+    return;
+  }
+  lensSplash = {
+    canvas,
+    ctx,
+    splats: [],
+    flakeSprites: makeSnowSprites(),
+    emitAccum: 0,
+    frost: 0,
+    wasDrawn: false,
+  };
+
+  // Follow the ski canvas in and out (main.ts sets display:none in the lobby).
+  // Clear on hide so no splat is frozen on-screen behind the lobby.
+  const observer = new MutationObserver(() => {
+    canvas.style.display = gl.style.display;
+    if (gl.style.display === "none" && lensSplash) {
+      lensSplash.splats.length = 0;
+      lensSplash.frost = 0;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      lensSplash.wasDrawn = false;
+    }
+  });
+  observer.observe(gl, { attributes: true, attributeFilter: ["style"] });
+
+  window.addEventListener("resize", () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  });
+}
+
+// Pre-render a small set of naturalistic snow-clump sprites once at setup. Each
+// small flake splat then `drawImage`s one (scaled + rotated), so the detail
+// costs no per-frame pathing — just a blit. The director's 2026-07-24 verdict
+// killed the six-arm crystal ("tacky … I wanted actual snow particles"): snow on
+// glass is *irregular and asymmetric* — packed-powder clumps and scattered fine
+// grains, no symmetry, no geometric star. Each variant is a handful of soft
+// overlapping blobs at jittered offsets (the wet packed clump) plus a scatter of
+// tiny grains around it (the fine powder), painted in the cool LENS_TINT
+// snow-white so it stays bible-legal (the read is shape/edge + grain, not a new
+// colour). 4 variants so a screenful doesn't read repetitive. Alpha lives in the
+// sprite; per-splat fade rides globalAlpha at draw time.
+const LENS_SPRITE_VARIANTS = 4;
+
+function makeSnowSprites(): HTMLCanvasElement[] {
+  const out: HTMLCanvasElement[] = [];
+  for (let v = 0; v < LENS_SPRITE_VARIANTS; v++) out.push(makeSnowClump());
+  return out;
+}
+
+function makeSnowClump(): HTMLCanvasElement {
+  const S = 64;
+  const c = document.createElement("canvas");
+  c.width = S;
+  c.height = S;
+  const g = c.getContext("2d")!;
+  const cx = S / 2;
+  const cy = S / 2;
+  // The packed-powder core: 3–5 soft blobs at jittered offsets and sizes. The
+  // overlap builds one asymmetric clump with a feathered, non-circular edge —
+  // never a clean disc, never symmetric.
+  const blobs = 3 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < blobs; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const dist = Math.random() * S * 0.17;
+    const bx = cx + Math.cos(ang) * dist;
+    const by = cy + Math.sin(ang) * dist;
+    const br = S * (0.15 + Math.random() * 0.17);
+    const a = 0.34 + Math.random() * 0.24;
+    const rg = g.createRadialGradient(bx, by, 0, bx, by, br);
+    rg.addColorStop(0, `rgba(${LENS_TINT}, ${a})`);
+    rg.addColorStop(0.6, `rgba(${LENS_TINT}, ${a * 0.4})`);
+    rg.addColorStop(1, `rgba(${LENS_TINT}, 0)`);
+    g.fillStyle = rg;
+    g.fillRect(0, 0, S, S);
+  }
+  // Scattered fine grains around and over the clump — the flung-powder speckle.
+  // Denser toward the center (pow bias), each a tiny soft dot at varied alpha.
+  const grains = 12 + Math.floor(Math.random() * 10);
+  for (let i = 0; i < grains; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const dist = Math.pow(Math.random(), 0.7) * S * 0.44;
+    const gx = cx + Math.cos(ang) * dist;
+    const gy = cy + Math.sin(ang) * dist;
+    const gr = S * (0.014 + Math.random() * 0.04);
+    const a = 0.35 + Math.random() * 0.5;
+    const rg = g.createRadialGradient(gx, gy, 0, gx, gy, gr);
+    rg.addColorStop(0, `rgba(${LENS_TINT}, ${a})`);
+    rg.addColorStop(0.65, `rgba(${LENS_TINT}, ${a * 0.5})`);
+    rg.addColorStop(1, `rgba(${LENS_TINT}, 0)`);
+    g.fillStyle = rg;
+    g.beginPath();
+    g.arc(gx, gy, gr, 0, Math.PI * 2);
+    g.fill();
+  }
+  return c;
+}
+
+// Drive the lens splash. `intensity` is 0..1 (how hard snow is flying at the
+// lens right now — speed × carve × how close the camera is), `carveSide` biases
+// where the splats land toward the direction the spray is thrown.
+function updateLensSplash(
+  dt: number,
+  intensity: number,
+  carveSide: number,
+): void {
+  const ls = lensSplash!;
+  const { ctx, canvas, splats } = ls;
+  const w = canvas.width;
+  const h = canvas.height;
+  const minDim = Math.min(w, h);
+
+  // Ease the edge-frost toward the current carve intensity — quick to cake on,
+  // slower to melt off — so a sustained hard carve grows a white rim on the lens.
+  const frostTarget = Math.min(1, intensity);
+  const frostRate = frostTarget > ls.frost ? LENS_FROST_ATTACK : LENS_FROST_DECAY;
+  ls.frost += (frostTarget - ls.frost) * Math.min(1, frostRate * dt);
+  if (ls.frost < 0.002) ls.frost = 0;
+
+  // Emit — accumulate fractional splats so a low rate still lands them.
+  if (intensity > 0.02 && splats.length < LENS_SPLAT_MAX) {
+    ls.emitAccum += LENS_SPLAT_RATE * intensity * dt;
+    let n = Math.floor(ls.emitAccum);
+    ls.emitAccum -= n;
+    while (n-- > 0 && splats.length < LENS_SPLAT_MAX) {
+      // A `big` splat is a soft round "direct hit"; the rest are small detailed
+      // flake stickers (the 2026-07-24 smaller/detailed/sticky direction).
+      const big = Math.random() < LENS_BIG_CHANCE;
+      // Triangular spread, center-weighted, nudged toward the carve side —
+      // that's where the plume is thrown across the fall line.
+      const tri = Math.random() + Math.random() - 1;
+      const x = w * 0.5 + tri * w * 0.42 + carveSide * w * 0.1 * Math.random();
+      // Spray erupts low and rises into frame: land splats across the lower
+      // band, then let them drip further down as they melt.
+      const y = h * (0.4 + Math.random() * 0.55);
+      // Smaller than the make-it-read pass: each flake should read as a *flake*,
+      // not a screen-covering blob — the "reads at speed" now comes from detail,
+      // count, and how long they cling, not from size.
+      const base = (0.013 + Math.random() * 0.026) * minDim;
+      splats.push({
+        x,
+        y,
+        r: big ? base * 2.2 : base,
+        vy: LENS_SLIDE * (0.5 + Math.random()) * (big ? 1 : 0.7),
+        // Flakes barely spread (they cling and melt in place); soft hits smear.
+        grow: big ? LENS_MELT * (0.6 + Math.random()) * 1.4 : LENS_MELT * 0.25,
+        life: (big ? LENS_LIFE * 1.4 : LENS_LIFE) +
+          (Math.random() - 0.5) * LENS_LIFE_VAR,
+        maxLife: 0, // set below
+        alpha0: (big ? LENS_PEAK_ALPHA : LENS_PEAK_ALPHA * 0.9) *
+          (0.6 + Math.random() * 0.4),
+        rot: Math.random() * Math.PI * 2,
+        sprite: (Math.random() * LENS_SPRITE_VARIANTS) | 0,
+        flake: !big,
+      });
+      const s = splats[splats.length - 1]!;
+      s.maxLife = s.life;
+    }
+  }
+
+  // Integrate + reap.
+  for (let i = splats.length - 1; i >= 0; i--) {
+    const s = splats[i]!;
+    s.life -= dt;
+    if (s.life <= 0) {
+      splats.splice(i, 1);
+      continue;
+    }
+    s.y += s.vy * dt;
+    s.r += s.grow * dt;
+  }
+
+  // Draw. Skip the clear+repaint entirely when nothing's on screen and nothing
+  // was last frame (idle glide costs zero fill — the frost also has to be gone).
+  const drawFrost = ls.frost > 0.01;
+  if (splats.length === 0 && !drawFrost) {
+    if (ls.wasDrawn) {
+      ctx.clearRect(0, 0, w, h);
+      ls.wasDrawn = false;
+    }
+    return;
+  }
+  ctx.clearRect(0, 0, w, h);
+
+  // Edge-frost vignette first (behind the blobs): a soft white rim that packs
+  // the lens corners under heavy carve. Center stays fully clear so it never
+  // blocks the play read; only the periphery caches snow.
+  if (drawFrost) {
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    const outer = Math.hypot(w, h) * 0.5;
+    const a = ls.frost * LENS_FROST_PEAK_ALPHA;
+    const fg = ctx.createRadialGradient(cx, cy, outer * 0.45, cx, cy, outer);
+    fg.addColorStop(0, `rgba(${LENS_TINT}, 0)`);
+    fg.addColorStop(0.75, `rgba(${LENS_TINT}, ${a * 0.35})`);
+    fg.addColorStop(1, `rgba(${LENS_TINT}, ${a})`);
+    ctx.fillStyle = fg;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  for (const s of splats) {
+    const t = s.life / s.maxLife; // 1 at birth → 0 at death
+    const age = 1 - t; // 0 at birth → 1 at death
+    // Gentle appear as it hits, then a slow melt — `pow(t, 0.5)` holds the flake
+    // near-full for most of its (now longer) life and eases it off at the end,
+    // the "sticks to the glass then melts slowly" read the director asked for.
+    const alpha = s.alpha0 * Math.min(1, age * 12) * Math.sqrt(t);
+    if (alpha <= 0.003) continue;
+    if (s.flake) {
+      // Naturalistic snow clump: blit its pre-rendered variant, rotated to its
+      // birth angle and scaled to the current radius. Cheap (no per-frame
+      // pathing) and it clings without drip-squash — a clump sits, it doesn't
+      // run. A slight stretch along the local axis (rotated per-flake) gives each
+      // one a faint directional smear, so it reads as snow flung at an angle onto
+      // the glass rather than a centred dot.
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(s.x, s.y);
+      ctx.rotate(s.rot);
+      ctx.scale(1.28, 0.82);
+      const sprite = ls.flakeSprites[s.sprite] ?? ls.flakeSprites[0]!;
+      ctx.drawImage(sprite, -s.r, -s.r, s.r * 2, s.r * 2);
+      ctx.restore();
+      continue;
+    }
+    // Soft round "direct hit": a melty smear. Slight vertical squash so it drips
+    // rather than stays a clean disc.
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.scale(1, 1.25);
+    // Build the gradient in this SAME local space the arc is drawn in (center
+    // at 0,0). Canvas gradients are transformed by the CTM at paint time, so an
+    // absolute-coord gradient built before the translate landed its center off
+    // the arc — every splat then sampled only the transparent tail and drew
+    // nothing (the "still no screen splat" bug, 2026-07-23).
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s.r);
+    g.addColorStop(0, `rgba(${LENS_TINT}, ${alpha})`);
+    g.addColorStop(0.5, `rgba(${LENS_TINT}, ${alpha * 0.5})`);
+    g.addColorStop(1, `rgba(${LENS_TINT}, 0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, s.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ls.wasDrawn = true;
+}
+

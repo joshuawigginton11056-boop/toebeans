@@ -28,6 +28,13 @@
       "runtimeArgs": ["vite", "--port", "5303", "--strictPort"],
       "cwd": "C:\\Users\\joshu\\Toebeans-slope-visuals\\client",
       "port": 5303
+    },
+    {
+      "name": "toebeans-mountain-graphics",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5306", "--strictPort"],
+      "cwd": "C:\\Users\\joshu\\Toebeans-mountain-graphics\\client",
+      "port": 5306
     }
   ]
 }
