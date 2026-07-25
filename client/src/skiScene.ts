@@ -27,13 +27,17 @@ import {
 import {
   applyGlowPhase,
   applyMistPhase,
+  applyRayPhase,
   createGlowField,
   createMistField,
+  createRayField,
   updateGlowField,
   updateMistField,
+  updateRayField,
   updateSlopeDecor,
   type GlowField,
   type MistField,
+  type RayField,
 } from "./forestGraphics";
 // Preserve the public API: these now live in the feature files but stay
 // importable from skiScene.ts so skiRender.ts / main.ts need no change.
@@ -208,6 +212,7 @@ export interface SlopeEnvironment {
   // Enchanted-night lighting (fades in with the night phase; see GLOW section).
   readonly glow: GlowField; // scattered glowing props + their snow pools
   readonly mist: MistField; // drifting cool haze banks along the treeline
+  readonly rays: RayField; // moonlight shafts breaking through the canopy
 }
 
 // What the snow needs from the sim each frame to carve ski trails —
@@ -274,8 +279,11 @@ const currentDiscDir = SUN_BILLBOARD_DIRECTION.clone();
 // there is only ever one slope environment.
 let bloomComposer: EffectComposer | null = null;
 let bloomPass: UnrealBloomPass | null = null;
-// Peak strength at full night — deliberately strong per the director's call.
-const BLOOM_STRENGTH = 1.5;
+// Peak strength at full night — deliberately strong per the director's call,
+// pushed 1.5 → 2.2 on the "increase the bloom of the glowing plants" ask
+// (2026-07-25), paired with the brighter GLOW_EMISSIVE (forestGraphics.ts) so
+// the mushroom caps bleed a bigger halo. Look-pass knob.
+const BLOOM_STRENGTH = 2.2;
 // Halo spread. Wide enough to feel like a glow, not a sharp ring.
 const BLOOM_RADIUS = 0.7;
 // Only clearly-bright (emissive > 1 in linear) pixels bloom; the near-black
@@ -338,6 +346,10 @@ function applyTimeOfDay(t: number): void {
   // Ground mist leads the glow slightly (dusk fog rolling in before the
   // props light up); applyMistPhase (forest) gates itself on the phase.
   applyMistPhase(env.mist, k);
+
+  // Moonlight shafts come in with the glow; applyRayPhase (forest) gates itself
+  // on the phase. Their bright tops feed the same night bloom as the props.
+  applyRayPhase(env.rays, k);
 }
 
 /** Jump straight to a time of day (0 = dawn, 1 = full night). */
@@ -472,6 +484,11 @@ export function createEnvironment(
   const mist = createMistField();
   scene.add(mist.group);
 
+  // Enchanted-night moonlight: the god-ray shafts through the canopy. Off by
+  // day; faded in with the night phase (with the glow). Bloom haloes their tops.
+  const rays = createRayField();
+  scene.add(rays.group);
+
   const environment: SlopeEnvironment = {
     sun,
     ambient,
@@ -482,6 +499,7 @@ export function createEnvironment(
     trail,
     glow,
     mist,
+    rays,
   };
 
   // Day and night endpoints for the time-of-day lerp. Day mirrors exactly
@@ -620,6 +638,9 @@ export function syncEnvironment(
   // The haze banks ride the same window and drift on their own clock. Also a
   // cheap no-op by day (mistFactor 0, nothing placed).
   updateMistField(environment.mist, anchor.z);
+  // The moonlight shafts ride the same window and shimmer on their own clock.
+  // Cheap no-op by day (rayFactor 0, nothing placed).
+  updateRayField(environment.rays, anchor.z);
   environment.skyDome.position.copy(camera.position);
   environment.stars.position.copy(camera.position);
   // The disc direction is the current time-of-day's (lerped in applyTimeOfDay)

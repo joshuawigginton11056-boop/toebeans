@@ -171,14 +171,24 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   great").** **Bloom BUILT (slope-vis 2026-07-24, awaiting look-pass):** a
   full-scene `UnrealBloomPass` (EffectComposer in `skiScene.ts`, drawn via
   `renderSlope`) night-gated on `glowFactor` — strength 0 by day (composer
-  bypassed, daylight untouched), pushed strong (1.5) at full night. The night
-  scene is crushed near-black so only the emissive glow caps clear the luminance
-  threshold (0.55) — the full-scene bloom is naturally selective to the glowing
-  plants; mist/pools sit below it and don't smear. Still to do (verdict-ordered):
-  the **light shaft / moonlight rays** (the other half of the env look), general
-  decor/spray darkening, real MegaKit glow props, realistic fireflies, the
-  auto-transition, night audio. ⚠ amends the bible's "bright only" rule
-  (DESIGN.md).
+  bypassed, daylight untouched). **Bloom pushed harder (slope-vis 2026-07-25,
+  director "increase the bloom of the glowing plants"):** `BLOOM_STRENGTH`
+  1.5→2.2 and cap `GLOW_EMISSIVE` 2.2→3.5, so the caps clear the 0.55 luminance
+  threshold by more and bleed a bigger halo. The night scene is crushed
+  near-black so the full-scene bloom stays naturally selective to the glow;
+  mist/pools sit below threshold and don't smear. **Moonlight rays BUILT
+  (slope-vis 2026-07-25, awaiting look-pass):** the other half of the env look —
+  `RayField` in `forestGraphics.ts` scatters god-ray shafts (crossed additive
+  gradient quads, base-pivoted on the snow, ~32u tall, leaning ~31° down-lane
+  along the moonlight) with a soft landing pool; a few central hero beams over
+  the lane (ref photo 2) plus flank beams past the treeline, night-gated
+  (`rayFactor`, in with the glow) and slow-shimmering. The gradient fades to
+  nothing at the base on purpose so a lane beam never washes the driving
+  surface. Bloom haloes the bright tops for free. Knobs: `RAY_ONSET`,
+  `RAY_CELL`/`RAY_DENSITY`, `RAY_CENTRAL_CHANCE`, `RAY_COLOR`. Still to do
+  (verdict-ordered): general decor/spray darkening, real MegaKit glow props,
+  realistic fireflies, the auto-transition, night audio. ⚠ amends the bible's
+  "bright only" rule (DESIGN.md).
 - **Loose snow:** ski-trail spray, screen flurries, and a lens splat of
   naturalistic snow-clump particles (director-approved).
 - **Camera:** free zoom, fixed angle, pointer-lock mouse look.

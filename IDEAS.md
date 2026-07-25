@@ -259,11 +259,15 @@ The cross-session split:
 
 ## (slope-vis) NIGHT → the enchanted forest — director redirect (2026-07-24)
 
-> **⏭ START HERE NEXT SESSION (slope-vis, handoff 2026-07-24):** the environmental
-> night look is underway from Josh's reference photos. **Ground mist is BUILT and
-> DIRECTOR-APPROVED** ("looks great") — `MistField` in `skiScene.ts`, see chunk #0
-> below. **Next up: the light shaft / moonlight rays** (the other half of #0 — the
-> bright misty central shaft from ref photo 2), then **bloom** (#1). Also already
+> **⏭ START HERE NEXT SESSION (slope-vis, handoff 2026-07-25):** the environmental
+> night look is nearly complete from Josh's reference photos. **Ground mist**
+> (DIRECTOR-APPROVED "looks great"), **bloom** (built, pushed STRONGER 2026-07-25),
+> and now the **moonlight rays / light shafts** are all BUILT (`RayField` in
+> `forestGraphics.ts` — god-ray shafts, central hero beams + flank beams, ref
+> photo 2). All three await Josh's composited look-pass together. **Next up:**
+> real MegaKit glow props (swap the code-built mushrooms), realistic CC0
+> fireflies, then the sunset→dark auto-transition that finally surfaces all this
+> on the default URL (see the branching-map section). Also already
 > settled: darkness values are the base (Josh: "feels right"); the **glow ramp is
 > signed off** — G1 `#5FE9D0` cyan, G2 `#8CF08A` moss, G3 `#B98CF0` violet, G4
 > `#F0C06A` warm lantern (DESIGN.md, `GLOW` in `skiScene.ts`); **sourcing = MegaKit
@@ -300,11 +304,12 @@ The cross-session split:
 >    trees are **dark silhouettes** in an enchanted world; the glow is **around**
 >    them, never *in the wood*. This item is dead — its replacement is the
 >    **environmental night look** (#0 below).
-> 4. **Bloom must be STRONGER for glowing plants.** When bloom lands (next
->    chunk), crank it — the director wants "a greater bloom for glowing plants";
->    the caps/plants should really bleed halo, not just brighten. `GLOW_EMISSIVE`
->    is already pushed >1 to give bloom headroom; tune the bloom strength/radius/
->    threshold high and re-check.
+> 4. **Bloom must be STRONGER for glowing plants. ✅ DONE (slope-vis 2026-07-25,
+>    "increase the bloom of the glowing plants" — awaiting look-pass.)**
+>    `BLOOM_STRENGTH` 1.5→2.2 (`skiScene.ts`) and `GLOW_EMISSIVE` 2.2→3.5
+>    (`forestGraphics.ts`) — brighter caps clear the 0.55 threshold by more, so
+>    each mushroom bleeds a bigger halo. Both are named look-pass knobs; push
+>    further (or widen `BLOOM_RADIUS` 0.7) if Josh wants even more.
 >
 > **↳ This work's concrete home (director, 2026-07-24):** the enchanted forest
 > *is* the branching map's forest segment; the priority is the **summit → forest
@@ -335,11 +340,20 @@ The cross-session split:
 >      glow). Additive → only lifts the near-black floor into glow-haze, never
 >      darkens the crushed ambient (per "don't crush further"). Tuning knobs:
 >      `MIST_CELL`/`MIST_DENSITY`/`MIST_COLOR`/`MIST_ONSET` + per-bank opacities.
->    - **⏭ NEXT (still #0): the light shaft / moonlight rays** — the other half
->      of the env look, most prominent in ref photo 2 (the bright misty central
->      shaft). Faked additive god-ray cone(s) angled from a canopy gap onto the
->      lane, night-gated the same way. Then bloom (#1) makes both the mist and
->      the glow props actually bleed halo.
+>    - **✅ Moonlight rays / light shafts BUILT (slope-vis 2026-07-25 — awaiting
+>      look-pass).** The other half of the env look, most prominent in ref photo 2.
+>      `RayField` in `forestGraphics.ts`: each shaft = two crossed additive
+>      gradient quads (soft top-bright → transparent-at-base, feathered sides),
+>      base-pivoted on the snow, ~32u tall, leaning ~31° down-lane along the
+>      moonlight (`RAY_DIR`), with a soft additive landing pool. A few **central
+>      hero beams** rake over the lane (baseShaft 0.3) plus sparser **flank
+>      beams** past the treeline (~0.18); scattered in the same recycling window
+>      as the decor/glow/mist, night-gated (`rayFactor`, in with the glow) and
+>      slow-shimmering. The gradient fades to nothing at the base ON PURPOSE so a
+>      lane beam never washes the driving surface (the night-readability rule).
+>      Bloom haloes the bright tops for free. Knobs: `RAY_ONSET`,
+>      `RAY_CELL`/`RAY_DENSITY`, `RAY_CENTRAL_CHANCE`, `RAY_COLOR`, per-shaft
+>      size/opacity in `makeRayShaft`.
 > 1. **✅ Bloom BUILT (slope-vis 2026-07-24, awaiting look-pass)** — the halo
 >    that makes emissive read as *glowing*, tuned STRONG (verdict #4). Done as
 >    planned: `skiScene.ts` owns an `EffectComposer` (RenderPass →
