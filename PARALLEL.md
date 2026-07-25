@@ -19,10 +19,10 @@ lobby. Still three sessions.)*
 **mountain-graphics** (terrain, snow, sky, lighting, hazard/checkpoint
 mesh styles) and **forest-graphics** (trees, decor scatter, glow props,
 mist, treelines). Slope-visuals narrows to the character rig + audio +
-asset tools. **This split is PENDING a code change** — see "The scenery
-split" below; until `skiScene.ts` is actually carved into
-`mountainGraphics.ts` + `forestGraphics.ts`, the two new sessions share
-`skiScene.ts` as shared territory.)*
+asset tools. **This split LANDED 2026-07-25** (slope-vis carved it) — see "The
+scenery split" below; `skiScene.ts` is now the shared core and
+`mountainGraphics.ts` / `forestGraphics.ts` are the two sessions' owned
+files.)*
 
 ## Who works where
 
@@ -83,19 +83,22 @@ the slope:
   enchanted-night glow props + snow pools, drifting mist banks)
 - the tree/plant/decor GLBs in `assets/slope/`
 
-> **The scenery split (PENDING — do this before mountain/forest do real
-> work).** Today all of the above still lives in one 3050-line
-> `client/src/skiScene.ts`, and mountain and forest are *not* a clean cut:
-> both halves lean on one shared core — `PALETTE`, `solveSnowLights`,
-> `applyTimeOfDay`/`setTimeOfDay`, and the `createEnvironment` build. The
-> split therefore produces **three** files, not two: a shared
-> `skiScene.ts` (the palette + lighting/day-night core, still imported by
-> both) plus `mountainGraphics.ts` and `forestGraphics.ts`. Until that
-> carve lands on master, **mountain-graphics and forest-graphics treat
-> `skiScene.ts` as shared territory** (small, additive, localized edits;
-> expect conflicts). Who carves it and when is Josh's call — see the note
-> he'll leave here / the handoff prompt. Nobody splits it while another
-> session has uncommitted changes in it.
+> **The scenery split (LANDED 2026-07-25, slope-vis).** The old 3299-line
+> `client/src/skiScene.ts` was carved into **three** files: a shared
+> `skiScene.ts` — the palette + `solveSnowLights` + the `applyTimeOfDay`/
+> `setTimeOfDay` day-night engine + the `createEnvironment`/`syncEnvironment`/
+> `renderSlope` orchestration, imported by both halves — plus
+> `mountainGraphics.ts` (ground + sky) and `forestGraphics.ts` (trees + glow +
+> mist), each owned by its session per the table above. The carve was
+> behavior-preserving (moved code byte-identical bar the added `export`s; the
+> rewired glow/mist/snow-fade seams verified equivalent) and the public API is
+> unchanged (re-exported from `skiScene.ts`), so `skiRender.ts`/`main.ts`
+> needed no edit. **`skiScene.ts` is now the shared core** — the same
+> small/additive/localized etiquette as the other shared-territory files
+> applies to it; mountain and forest each own their own feature file outright.
+> NOTE: the ownership table lists "day/night lighting solve, palette" under
+> mountain-graphics, but those in fact live in the shared core (per this
+> split) — treat the core as their home.
 
 **The mechanics↔visuals seam.** `skiRender.ts` computes *numbers* from
 `SkiState` and passes them across the seam — to `skierModel.ts` via

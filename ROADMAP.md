@@ -246,6 +246,16 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   (palette-recolor OBJ/GLB → bible palette). Every asset licensed in
   [assets/CREDITS.md](assets/CREDITS.md). Furniture models sit in `assets/bedroom/`
   as the future unlock pool (currently unused in-game).
+- **(slope-vis) Scenery split landed (2026-07-25):** the 3299-line `skiScene.ts`
+  was carved into three files so mountain-graphics and forest-graphics can work
+  side by side — a shared core (`skiScene.ts`: palette, snow-light solve, the
+  day/night engine, `createEnvironment`/`syncEnvironment`/`renderSlope`
+  orchestration) plus `mountainGraphics.ts` (ground + sky + snow shader/FX +
+  hazard/checkpoint meshes) and `forestGraphics.ts` (decor scatter, glow props,
+  mist, painted detail). Behavior-preserving: moved code is byte-identical bar
+  the added `export`s; the rewired glow/mist/snow-fade seams are equivalent. The
+  public API is unchanged (re-exported), so `skiRender.ts`/`main.ts` needed no
+  edit. See PARALLEL.md file-ownership; this closes the "scenery split (PENDING)".
 
 ---
 
