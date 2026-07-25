@@ -245,6 +245,29 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   falls off ("cast on"), and trees away from any cluster stay dark silhouettes.
   Verified live at night: amber/green/violet pools light the adjacent trunks,
   distant trees still dark. Knobs: `GLOW_LIGHT_INTENSITY`, `GLOW_LIGHT_RANGE`.
+  **Ground-mist distance fade (forest-graphics 2026-07-25, "fog should float like
+  real fog, not a sharp line where it stops"):** the additive `MistField` banks
+  held constant opacity out to `DECOR_AHEAD` (170m) — past the fog's far=150m —
+  then stopped dead; perspective crushes those far cells into a thin horizon strip
+  and additive blending sums them into a bright WALL with a hard top edge that ends
+  abruptly. Added a forward-distance falloff (`MIST_FADE_START` 50m full →
+  `MIST_FADE_END` 130m gone, smoothstep) in `updateMistField` (`forestGraphics.ts`)
+  so the mist thins into the distance and dissolves; near/mid haze stays full.
+  Removed the mist wall — verified in-forest at night with bloom quieted.
+  **⚠ FOG STILL NOT RESOLVED — sharp lines remain (Josh, 2026-07-25, with
+  screenshot).** The mist fade fixed ONE contributor; a SECOND, different artifact
+  remains: discrete **horizontal steps/terraces across the fogged night snow** in
+  the mid-ground (center/center-right of the night-forest view), where brightness
+  jumps in stripes instead of grading smoothly. This is NOT the mist — likely the
+  fog/lighting gradient **posterizing** on the low-contrast night snow (8-bit
+  banding), or the snow's own distance-fog / height stepping, or terrain LOD seams.
+  **A fresh session must DIAGNOSE this properly first — do not assume it's the mist
+  again** (the prior pass over-anchored on the mist and declared victory under
+  flattering conditions: bloom off + an open-lane camera). Repro: slope, debug key
+  **N** cycles to full night; the `UnrealBloomPass` blows out the bright
+  clearing/snow-caps, so drop `BLOOM_STRENGTH` to read the horizon, then zoom the
+  stepped region. Likely fix once identified: dither the fog output, smooth the snow
+  distance-fog, or match the snow's fog color/curve to `scene.fog`.
   Still to do (verdict-ordered): general decor/spray darkening, real MegaKit glow
   props, realistic fireflies, the auto-transition, night audio. ⚠ amends the bible's
   "bright only" rule (DESIGN.md).
@@ -336,6 +359,12 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 ## Open — still to resolve
 
 ### M2 remaining
+- [ ] **Night fog still shows sharp horizontal banding (Josh, 2026-07-25, screenshot).**
+      The additive-mist wall was fixed (distance fade), but discrete horizontal
+      steps/terraces remain across the fogged night snow in the mid-ground — a
+      *different* artifact (likely fog-gradient posterization on low-contrast night
+      snow, snow distance-fog stepping, or terrain LOD). DIAGNOSE before fixing; do
+      not re-assume the mist. Full context + repro under Ski slope → night look.
 - [ ] **Second hazard: tree limbs + the `crouch` control.** Crouch is deliberately
       unbuilt until there's a limb to duck under; build them together.
 - [ ] **"Fling more" snow:** bigger plume + lens boost on hard carves, and a
