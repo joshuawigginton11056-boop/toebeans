@@ -132,7 +132,14 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   `SLOPE_SPEED_GAIN` (1.5) amplifies the coupling so the whole graded mountain skis
   faster — steeps really move, even the mellow forest out-paces the flat baseline;
   `GRADE_TOP_SPEED` raised 22→28. Both are live-build LOOK-PASS knobs; the Overlook
-  stays a hard no-op. Detour *content* (animal world, bird, penguin/ice castles) and
+  stays a hard no-op. **Forest speed, round 2 (slope-mech, 2026-07-25 — director "my
+  speed still feels extremely slow through the forest"):** the forest/lake plateau in
+  `GRADE_PROFILE` jumped 0.33→0.42 (from *below* the 0.35 reference to above it), so the
+  forest stops being a mellow-slow zone and becomes a fast glide that carries momentum
+  through the trees — cruise ~11.3→14.4 u/s (+27%), ~84% of the summit instead of 66%;
+  hold-W ~21.6. Steeps (0.5) stay clearly above it so "steeper = faster" still reads.
+  Side effect for slope-vis: the mountain is ~19% taller (total drop ~282 vs ~238) — a
+  genuinely steeper forest, rendered from `routeHeightAt`. Detour *content* (animal world, bird, penguin/ice castles) and
   per-route hazard balancing (§5) come after; §7's open reconciliations remain the
   director's.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
@@ -220,6 +227,18 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   at the treeline not over the lane (`RAY_CENTRAL_CHANCE` 0.32→0.12). Verified: a
   few soft angled shafts breaking through the canopy, no spotlights. Knobs:
   `RAY_ONSET`, `RAY_CELL`/`RAY_DENSITY`, `RAY_CENTRAL_CHANCE`, `RAY_COLOR`, `RAY_DIR`.
+  **Glow now CASTS light on the trees (forest-graphics 2026-07-25, "the bloom
+  should glow on the trees"):** the mushroom clusters were pure emissive + a
+  *faked* additive snow disc, casting zero real light, so a trunk beside a
+  glowing cap stayed dead black. Each cluster now carries a real hue-matched
+  `PointLight` (`GLOW_LIGHT_INTENSITY`/`GLOW_LIGHT_RANGE` in `forestGraphics.ts`,
+  no shadows, intensity rides `glowLightFactor` = the eased night factor) so the
+  glow spills onto the nearest trunks + ground and that lit bark clears the bloom
+  threshold — the bloom haloes the tree where the glow touches it. Deliberately
+  NOT the self-emissive trunk rejected 2026-07-24: real light = a hotspot that
+  falls off ("cast on"), and trees away from any cluster stay dark silhouettes.
+  Verified live at night: amber/green/violet pools light the adjacent trunks,
+  distant trees still dark. Knobs: `GLOW_LIGHT_INTENSITY`, `GLOW_LIGHT_RANGE`.
   Still to do (verdict-ordered): general decor/spray darkening, real MegaKit glow
   props, realistic fireflies, the auto-transition, night audio. ⚠ amends the bible's
   "bright only" rule (DESIGN.md).
