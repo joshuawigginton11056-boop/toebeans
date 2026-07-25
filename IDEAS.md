@@ -9,31 +9,40 @@ Director look-pass on the real-terrain build. **Redirect: stop branching. Build 
 solid mountain with a SINGLE trail going down toward the forest — no forks, no
 switching over to other areas — and make the path smooth, not jerky.**
 
-**Status (2026-07-24):** the speed-drop bug (item 2) is **DONE and shipped to master**.
-**Remaining — the next chunk = the smooth single trail (items 1 + 3).** Item 3 (drift-right)
-is subsumed by item 1: build the single continuous trail and the +x drift goes away. Trail
-scope is settled — it **ends at the back of the forest** (Josh, so he can gauge forest size).
-Coordinate with slope-vis on the terrain seam (`addBranchTerrain` → one continuous surface).
+**Status (2026-07-24):** the speed-drop bug (item 2) is **DONE and shipped**. The **smooth
+single trail centerline + routing (items 1 + 3) is DONE (slope-mech, 2026-07-24)** — see
+below. **Remaining = ONE piece: the seamless terrain SURFACE.** The trail is currently two
+per-segment placeholder meshes (summit + forest-road) meeting at a seam; the next chunk
+(Josh split it off) merges them into one continuous dressed mountain surface — coordinate
+with slope-vis on that (`addBranchTerrain` → one surface; slope-vis re-skins).
 
-**1. One trail, no switching, NOT jerky.** The run still rides the branching segment
-graph — each segment is a constant-curvature arc whose curvature SIGN FLIPS at every
-seam (summit turns −0.24 toward −x, then forest-road turns +0.24 toward +x, …), so the
-path *kinks* at the boundaries. That's "the jerky path from the gray blocks." Kill it:
-- Route the played run down a SINGLE continuous, smooth centerline summit → forest —
-  one gentle line (or straight), **no per-segment curvature discontinuities**, no
-  detour peel-offs. (Reshape `SEGMENT_SHAPES` in `client/src/slopePath.ts` and/or route
-  a single path; a continuous-curvature centerline like the Overlook's `BENDS`
-  integrator is the smooth model, not per-segment constant arcs meeting at kinks.)
-- Disable the forks for now — the `trigger`s in `shared/src/route.ts`
-  (summit→forest-tree, lake→water, yeti→ledge) — and don't route/render the detour
-  corridors. The branching graph can STAY in route.ts (still tested), just not be the
-  active played path.
-- The terrain must read as ONE solid mountain down that trail, not overlapping
-  per-segment ribbons (`addBranchTerrain` in `skiRender.ts` currently builds one mesh
-  per segment; for a single trail it's one continuous surface).
-- **ANSWERED (Josh, 2026-07-24):** the trail **ends at the back of the forest** — forest
-  is the bottom, so he can get a feel for how big the forest should be. Build the single
-  trail as summit → (through) → back of the forest.
+**Update (2026-07-25, "extend past the forest," Josh):** the trail now continues past the
+forest into the **frozen lake** (`SINGLE_TRAIL` = summit → forest-road → lake) — its first
+hazard, the lake gap, rides the played run. `TRAIL_LINE` is now a chain of per-area lobes
+(append one to grow the trail). See the ROADMAP entry. The seamless-surface merge above is
+still its own pending chunk; it now covers three trail meshes, not two.
+
+**1. One trail, no switching, NOT jerky. ✅ DONE (slope-mech, 2026-07-24).** The played run
+now rides ONE continuous-curvature centerline summit → the back of the forest — no seam
+kink, no drift, no forks.
+- **Smooth centerline:** `TRAIL_LINE` in `client/src/slopePath.ts` — a gentle S whose
+  heading is a full sine period over the 240-unit trail (built like the Overlook's `BENDS`
+  integrator), so curvature is continuous EVERYWHERE (the old per-segment constant arcs
+  flipped curvature sign at each seam — the "jerky") AND both heading and lateral return
+  to ~0 at the forest (∫ heading = 0), killing the drift. `segmentCenterline` samples it
+  for the trail segments; the parked branching arcs are untouched. Peak lean ~10 units —
+  `TRAIL_AMPLITUDE` is the LOOK-PASS KNOB (raise/lower or → 0 for straighter).
+- **Forks parked:** new `SkiState.singleTrail` flag (set by `createSingleTrailSkiState`,
+  what "Hit the slopes" now loads). When set, `stepSkiing` walks `route.ts`'s `SINGLE_TRAIL`
+  (summit → forest-road) instead of the fork graph and never arms a trigger. The §4
+  branching graph STAYS in route.ts, still proven by the same-clock tests (they use the
+  unflagged `createBranchingSkiState`).
+- **Ends at the back of the forest:** `singleTrailNext("forest-road")` is null, so the
+  trail's end opens into the flat runout (no finish line yet) — you coast off, don't win.
+  `addBranchTerrain` builds only the two trail segments + the runout, no detour corridors,
+  no fork-marker rocks.
+- **NOTE the terrain is still one mesh PER segment** (summit + forest-road) — the seamless
+  single-surface merge is the remaining piece above.
 
 **2. Speed instantly drops at the forest. ✅ FIXED (slope-mech, 2026-07-24).** Reshaped
 `GRADE_PROFILE` (route.ts) into an ease-out: steep grade shed high on the summit
@@ -44,16 +53,17 @@ Numeric trace through the real sim: forest-window worst decel dropped to 0.27 u/
 not the felt ratio — it's the secondary knob if Josh wants it gentler still). route.test.ts
 pins the ease-out. **Josh: feel-test on the live build — the grade shape is a look-pass knob.**
 
-**3. Character drifts right at the forest.** The forest-road corridor curves toward +x
-(`SEGMENT_SHAPES.forest-road.turn = +0.24`) = screen-right drift. The single-trail
-straight/gentle-line redirect (item 1) removes it; if any curve stays, keep it gentle
-and symmetric so the run tracks straight down the fall line toward the forest.
+**3. Character drifts right at the forest. ✅ DONE (subsumed by item 1, 2026-07-24).** The
+old +x drift was the `forest-road` arc's `turn = +0.24`. The single smooth `TRAIL_LINE` is
+a symmetric S returning heading AND lateral to ~0 at the forest, so the run tracks the fall
+line with no net drift.
 
-Touch points: `shared/src/route.ts` (grade profile + graph/triggers),
-`client/src/slopePath.ts` (`SEGMENT_SHAPES`, centerline), `client/src/skiRender.ts`
-(`addBranchTerrain`), `shared/src/skiing.ts` (`SLOPE_SPEED_GAIN`, fork trigger logic).
-The branching architecture below is now PARKED for the played path — keep it, don't
-delete it, but the active run is one non-branching trail until Josh says otherwise.
+Touch points (as built): `shared/src/route.ts` (`SINGLE_TRAIL` + `singleTrailNext`),
+`shared/src/skiing.ts` (`singleTrail` flag, `createSingleTrailSkiState`, trail routing +
+parked triggers), `client/src/slopePath.ts` (`TRAIL_LINE` + `segmentCenterline`),
+`client/src/skiRender.ts` (`addBranchTerrain` scoped to the trail), `client/src/main.ts`
+(loads the single trail). The branching architecture below stays PARKED for the played
+path — kept and still tested, not the active run until Josh reopens the map.
 
 ## (slope-vis) The music bed is a placeholder — pick the real direction (2026-07-24)
 

@@ -32,6 +32,7 @@ import {
   routeDistanceOf,
   routeGradeAt,
   routeHeightAt,
+  SINGLE_TRAIL,
   type Segment,
 } from "@toebeans/shared";
 
@@ -420,11 +421,90 @@ export const SEGMENT_PLACEMENTS: Readonly<Record<string, SegmentPlacement>> = ((
   return out;
 })();
 
+// The single played trail's smooth centerline (slope-mech, 2026-07-24 redirect —
+// IDEAS.md START HERE). The branching corridors above are per-segment CONSTANT-
+// curvature arcs whose curvature sign FLIPS at each seam (summit −0.24 then
+// forest-road +0.24 …) — the "jerky" path. The active run instead rides ONE
+// continuous-curvature line summit → forest → the frozen lake: a gentle weave
+// whose curvature is smooth EVERYWHERE (no seam kink).
+//
+// Built as a chain of LOBES, one per area on the trail — each a full sine over the
+// area's own route span, so heading AND lateral return to ~0 at the area's end:
+// every area finishes ON the fall line (∫ heading over a full period is 0), no net
+// drift — the old forest drift-right fix, generalized so it holds at each area, not
+// just the trail's end. Lobes meet at heading 0 (continuous position + tangent);
+// keeping curvature continuous across a seam too just wants the next lobe's
+// amplitude/span ratio near the previous one's (amp·2π/span matches) — the lake's
+// gentle −0.06/100 nearly matches the summit-forest −0.14/240, so the seam
+// curvature step is ~1e-4 rad/unit (imperceptible). Extend the trail = append a
+// lobe here AND its id to route.ts's SINGLE_TRAIL. Keyed to ROUTE distance (summit
+// 0..120, forest-road 120..240, lake 240..340) so every trail segment samples one
+// shared line; y still comes from the shared grade profile (segmentGroundY).
+interface TrailLobe {
+  /** Route distance the lobe starts / ends at. */
+  readonly from: number;
+  readonly to: number;
+  /** Peak heading off the fall line, radians (negative leans LEFT first). A gentle
+   * per-area LOOK-PASS KNOB — raise for a bolder curve, → 0 for near-straight. */
+  readonly amplitude: number;
+}
+const TRAIL_LOBES: readonly TrailLobe[] = [
+  { from: 0, to: 240, amplitude: -0.14 }, // summit + forest: the approved gentle S
+  { from: 240, to: 340, amplitude: -0.06 }, // the frozen lake: a mellow continuing weave
+];
+const TRAIL_ROUTE_LEN = TRAIL_LOBES[TRAIL_LOBES.length - 1]!.to; // summit→forest→lake
+// Heading at a route distance: the lobe covering it, as a full sine over its span
+// (0 at both ends → the lobes chain at heading 0). Past the last lobe: the fall
+// line (0), so the runout extends straight downhill.
+const trailHeadingAt = (s: number): number => {
+  for (const lobe of TRAIL_LOBES) {
+    if (s <= lobe.to) {
+      const u = (Math.max(s, lobe.from) - lobe.from) / (lobe.to - lobe.from);
+      return lobe.amplitude * Math.sin(2 * Math.PI * u);
+    }
+  }
+  return 0;
+};
+const TRAIL_LINE: Centerline = (() => {
+  const step = STEP;
+  const n = Math.ceil(TRAIL_ROUTE_LEN / step) + 1;
+  const xs = new Float64Array(n);
+  const zs = new Float64Array(n);
+  const headings = new Float64Array(n);
+  let x = 0;
+  let z = 0;
+  headings[0] = trailHeadingAt(0);
+  for (let i = 1; i < n; i++) {
+    const h0 = trailHeadingAt((i - 1) * step);
+    const h1 = trailHeadingAt(i * step);
+    // Tangent (downhill) = (sin H, −cos H); trapezoid it into position, same as
+    // buildCenterline — arc-length parameterized, so travel ≈ route distance.
+    x += 0.5 * (Math.sin(h0) + Math.sin(h1)) * step;
+    z += 0.5 * (-Math.cos(h0) - Math.cos(h1)) * step;
+    xs[i] = x;
+    zs[i] = z;
+    headings[i] = h1;
+  }
+  return { step, xs, zs, headings };
+})();
+
 /** The centerline point (world x/z + tangent) at a distance down a segment.
- * Unknown segment ("main") → the Overlook's global road, so it's unchanged. */
+ * Unknown segment ("main") → the Overlook's global road, so it's unchanged. The
+ * single played trail (summit, forest-road, lake) rides the one smooth TRAIL_LINE
+ * above instead of its per-segment arc — killing the seam kink and the drift; the
+ * parked branching segments keep their constant-curvature arc placement. */
 export function segmentCenterline(segmentId: string, distance: number): SlopePoint {
   const p = SEGMENT_PLACEMENTS[segmentId];
   if (!p) return slopeCenterline(distance);
+  if (SINGLE_TRAIL.includes(segmentId)) {
+    const c = centerlineAt(TRAIL_LINE, routeDistanceOf(segmentId, distance));
+    return {
+      x: c.x,
+      z: c.z,
+      y: segmentGroundY(segmentId, distance),
+      heading: c.heading,
+    };
+  }
   const arc = advanceArc(p.originX, p.originZ, p.entryHeading, p.curvature, distance);
   return {
     x: arc.x,

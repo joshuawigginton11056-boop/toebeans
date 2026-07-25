@@ -80,13 +80,22 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   segment's end opens into a flat runout — you coast off the mountain rather than
   winning + auto-returning to the lobby (leave by forfeiting). The Overlook still
   finishes at 800.
-  **⚠ REDIRECT (director look-pass, 2026-07-24 — NEXT, slope-mech):** the branching
-  is being PARKED for the played path. The per-segment constant-curvature arcs kink at
-  their seams (curvature sign flips) — "jerky" — and the forks aren't wanted yet.
-  Target: **one solid mountain, a SINGLE smooth trail summit → forest, no switching to
-  other areas.** Two forest bugs to fix with it (speed instantly drops; character drifts
-  right). Full spec in the START HERE banner atop IDEAS.md. The branching graph stays in
-  `route.ts` (tested), just isn't the active run.
+  **⚠ REDIRECT (director look-pass, 2026-07-24 — slope-mech):** the branching is PARKED
+  for the played path. Target: **one solid mountain, a SINGLE smooth trail summit →
+  forest, no switching to other areas.**
+  **✅ SMOOTH SINGLE TRAIL LANDED (slope-mech, 2026-07-24):** the played run rides ONE
+  continuous-curvature centerline summit → the back of the forest — `TRAIL_LINE` in
+  `slopePath.ts` (a gentle S, heading a full sine period, so curvature never jumps at a
+  seam and both heading + lateral return to ~0 at the forest: no kink, no drift). Forks
+  are parked behind a new `SkiState.singleTrail` flag (`createSingleTrailSkiState` is what
+  "Hit the slopes" loads); `stepSkiing` walks `route.ts`'s `SINGLE_TRAIL` (summit →
+  forest-road) and never arms a trigger. The trail ends at the back of the forest into the
+  flat runout (`singleTrailNext` → null). `addBranchTerrain` builds only the two trail
+  segments + runout. The §4 branching graph stays in `route.ts`, still proven by the
+  same-clock tests (they use the unflagged `createBranchingSkiState`). 159 tests.
+  **Both forest bugs fixed:** speed-drop (earlier) and drift-right (subsumed by the trail).
+  **Remaining piece (next chunk, Josh split it off):** merge the two per-segment
+  placeholder meshes into ONE seamless dressed surface — coordinate with slope-vis.
   **(slope-mech) speed-drop bug FIXED (2026-07-24):** the summit→forest grade shed no
   longer slams in at the forest mouth. `GRADE_PROFILE` (route.ts) was reshaped into an
   **ease-out** — the grade drops steeply high on the summit (`[60, 0.36]`, where bleeding
@@ -343,6 +352,22 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
         branching map is the default slope now (`main.ts`), `?overlook=1` keeps the
         old flat Overlook reachable. A proper slope-select menu (if the Overlook
         earns a permanent spot as onboarding) is a later lobby polish, not required.
+      - **(slope-mech) — trail extended past the forest into the FROZEN LAKE ✅
+        (2026-07-25, "extend past the forest," Josh):** the single played trail is
+        now summit → forest → the frozen lake (`SINGLE_TRAIL` += `lake`); it ends at
+        the back of the lake, coasting into the runout (still no finish line). This
+        brings the trail's **first hazard**: the lake's `lake-gap` chasm + its
+        checkpoint now ride the played run (design §4 — "all three routes learn the
+        jump here"), so the summit→forest ride stays gentle and the lake is where
+        you first jump. The lake's own fork (into `water`) stays parked with the
+        other forks. Presentation: `TRAIL_LINE` (slopePath.ts) refactored to
+        per-area **lobes** — each a full-sine S that returns to the fall line at the
+        area's end (no drift, generalized), with a gentle lake lobe tuned for a
+        near-zero seam-curvature step; the terrain builder + chasm/checkpoint
+        rendering follow `SINGLE_TRAIL` automatically. **Look-pass knobs (Josh, live
+        build):** each lobe's `amplitude` in `TRAIL_LOBES`; the grade through the
+        lake (`GRADE_PROFILE` in route.ts). 159 tests. **Next area = append one lobe
+        + one `SINGLE_TRAIL` id.**
 - [ ] **Night → the enchanted forest (director redirect 2026-07-24).** First
       moonlit night was too bright; new target is an *extremely dark* forest with
       a few moonlight rays, lit by **glowing emissive assets** (mushrooms/crystals/

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BRANCH_SEGMENTS,
+  LATERAL_LIMIT,
   routeDistanceOf,
   routeHeightAt,
 } from "@toebeans/shared";
@@ -182,23 +183,78 @@ describe("slopePath — the branching map's shaped (curved) corridors", () => {
   });
 
   it("actually turns — the heading changes across a curved segment", () => {
-    const h0 = segmentCenterline("lake", 0).heading;
-    const h1 = segmentCenterline("lake", lengthOf("lake")).heading;
+    // A still-parked branching arc (water) — `lake` now rides the single trail's
+    // smooth line, which returns to the fall line at its end (no net turn), so it's
+    // no longer the right example of a big per-segment arc.
+    const h0 = segmentCenterline("water", 0).heading;
+    const h1 = segmentCenterline("water", lengthOf("water")).heading;
     expect(Math.abs(h1 - h0)).toBeGreaterThan(0.1);
   });
 
-  it("flows smoothly along the spine — no kink or gap at the seams", () => {
-    // Each road segment inherits its start from the previous segment's exit, so
-    // both the heading AND the world point are continuous across every spine
-    // seam (the S reads as one carved line, not doglegged boxes).
-    const spine = ["summit", "forest-road", "lake", "yeti", "cave", "cliff"];
-    for (let i = 1; i < spine.length; i++) {
-      const exitPrev = segmentCenterline(spine[i - 1]!, lengthOf(spine[i - 1]!));
-      const entryCur = segmentCenterline(spine[i]!, 0);
-      expect(entryCur.heading).toBeCloseTo(exitPrev.heading, 6);
-      expect(entryCur.x).toBeCloseTo(exitPrev.x, 6);
-      expect(entryCur.z).toBeCloseTo(exitPrev.z, 6);
+  it("the single played trail is ONE smooth continuous line — no seam kink, no drift (2026-07-24 redirect)", () => {
+    // The redirect (IDEAS.md START HERE): the played run rides one continuous-
+    // curvature line summit → forest → the frozen lake, not the old per-segment
+    // constant-curvature arcs whose curvature SIGN FLIPPED at the seam (the "jerky"
+    // path). Sample the trail continuously across BOTH internal seams
+    // (summit→forest-road AND forest-road→lake) and pin THREE things the old arcs
+    // couldn't all give at once.
+    const trail = ["summit", "forest-road", "lake"];
+    const trailLen = trail.reduce((s, id) => s + lengthOf(id), 0); // 340
+
+    // A helper: the world point at a ROUTE distance down the trail (which segment,
+    // which local distance), so we can sample right across the internal seams.
+    const at = (routeD: number) => {
+      let id = "summit";
+      let acc = 0;
+      for (const seg of trail) {
+        if (routeD < acc + lengthOf(seg) || seg === trail[trail.length - 1]) {
+          id = seg;
+          break;
+        }
+        acc += lengthOf(seg);
+      }
+      return segmentCenterline(id, routeD - acc);
+    };
+
+    // 1) Position + heading continuous at each seam: the segment END and the next
+    // segment START are the same route distance, so both sample the one line at the
+    // same point — identical world position and heading, no gap, no dogleg.
+    for (const [a, b] of [
+      ["summit", "forest-road"],
+      ["forest-road", "lake"],
+    ] as const) {
+      const aEnd = segmentCenterline(a, lengthOf(a));
+      const bStart = segmentCenterline(b, 0);
+      expect(bStart.x).toBeCloseTo(aEnd.x, 6);
+      expect(bStart.z).toBeCloseTo(aEnd.z, 6);
+      expect(bStart.heading).toBeCloseTo(aEnd.heading, 6);
     }
+
+    // 2) CURVATURE continuous everywhere — the real no-kink fix. The old arcs jumped
+    // curvature from summit's −0.002 to forest-road's +0.002 (a ~0.004 rad/unit
+    // step) at the seam; the smooth line's curvature never jumps, at either seam.
+    // Second difference of heading between adjacent unit steps stays tiny across the
+    // whole trail (the lake lobe's amplitude is tuned so its seam step is ~1e-4).
+    let maxCurvatureJump = 0;
+    let prevK = 0;
+    for (let d = 1; d <= trailLen; d++) {
+      const k = at(d).heading - at(d - 1).heading; // curvature over this unit step
+      if (d > 1) maxCurvatureJump = Math.max(maxCurvatureJump, Math.abs(k - prevK));
+      prevK = k;
+    }
+    expect(maxCurvatureJump).toBeLessThan(1e-3);
+
+    // 3) No net drift: heading AND lateral come back to ~0 at the back of the lake
+    // (∫ heading over each lobe's full sine period is 0), so the run tracks the fall
+    // line — the old forest drift-right is gone, and it holds at the lake's end too.
+    // The peak excursion mid-trail stays gentle.
+    const end = at(trailLen);
+    expect(end.heading).toBeCloseTo(0, 3);
+    expect(Math.abs(end.x)).toBeLessThan(0.5);
+    let peakLateral = 0;
+    for (let d = 0; d <= trailLen; d++) peakLateral = Math.max(peakLateral, Math.abs(at(d).x));
+    expect(peakLateral).toBeGreaterThan(2); // a real, visible curve (not dead straight)
+    expect(peakLateral).toBeLessThan(LATERAL_LIMIT); // …but stays a gentle lean
   });
 
   it("maps lateral onto the corridor normal, perpendicular to the tangent", () => {
