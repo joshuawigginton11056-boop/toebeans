@@ -262,9 +262,19 @@ const GLOW_ONSET = 0.55;
 // (director: "lower the brightness of the plants themselves"). The halo is now
 // grown the right way instead — in the core bloom pass (bigger BLOOM_RADIUS +
 // lower BLOOM_THRESHOLD), not by over-driving the emissive. Look-pass knob.
-const GLOW_EMISSIVE = 2.0;
-// Peak opacity of a prop's additive snow pool at full night.
-const POOL_ALPHA = 0.55;
+// Dropped 2.0 → 1.4 (2026-07-25, "separate the glow from the brightness"): at
+// 2.0 the cap core clipped to pure white and bloom then bled *white*, not the
+// hue. Kept above 1 so it still clears the bloom threshold and haloes — but low
+// enough that the core stays coloured, so the glow reads as its hue, not a
+// white-hot dot.
+const GLOW_EMISSIVE = 1.4;
+// Peak opacity of a prop's additive snow pool at full night. Cut 0.55 → 0.22
+// (2026-07-25, "separate the glow from the brightness"): additive at 0.55 laid a
+// bright disc on the snow that, once the new cast light lit the SAME ground,
+// saturated all channels to white and bloomed into a white ball. The real cast
+// light now does the ground pooling; this additive disc is back to a faint
+// coloured wash that tints the snow without clipping it.
+const POOL_ALPHA = 0.22;
 
 // The glow props actually CAST light now (forest-graphics, 2026-07-25: "the
 // bloom should glow on the trees"). Each mushroom cluster carries a real,
@@ -277,10 +287,13 @@ const POOL_ALPHA = 0.55;
 // only ever touched the flat ground; this is what finally reaches the vertical
 // trunks the pool never could. Look-pass knobs:
 //   INTENSITY — bright enough that the near bark blooms, dim enough to stay a
-//     spill of light, not a floodlight.
+//     spill of light, not a floodlight. Cut 6 → 2.4 (2026-07-25, "separate the
+//     glow from the brightness"): at 6 the light seared the ground right under
+//     the cluster to white on top of the additive pool. It now colours the near
+//     trunks without blowing out the snow it stands on.
 //   RANGE — short, so it pools on the closest trunks and dies before it becomes
 //     an even wash of the whole treeline.
-const GLOW_LIGHT_INTENSITY = 6;
+const GLOW_LIGHT_INTENSITY = 2.4;
 const GLOW_LIGHT_RANGE = 8;
 // Set by applyGlowPhase (the eased night factor), read by updateGlowField to
 // scale every live cluster's cast light — off by day, full at night.
@@ -426,7 +439,10 @@ function makeGlowCluster(h: number, rand: () => number): THREE.Group {
     GLOW_LIGHT_RANGE,
     2,
   );
-  light.position.set(0, 0.55, 0);
+  // Lifted to ~trunk-mid height (0.55 → 1.1) so the light rakes the trunk SIDES
+  // instead of dumping a tight hotspot on the snow right below it — part of
+  // separating the coloured glow from the white ground-blowout (2026-07-25).
+  light.position.set(0, 1.1, 0);
   light.castShadow = false;
   cluster.add(light);
 
