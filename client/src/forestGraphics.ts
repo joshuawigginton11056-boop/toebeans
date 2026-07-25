@@ -266,6 +266,26 @@ const GLOW_EMISSIVE = 2.0;
 // Peak opacity of a prop's additive snow pool at full night.
 const POOL_ALPHA = 0.55;
 
+// The glow props actually CAST light now (forest-graphics, 2026-07-25: "the
+// bloom should glow on the trees"). Each mushroom cluster carries a real,
+// hue-matched PointLight, so the environmental glow spills onto the nearby dark
+// trunks — the reference-photo read of light *landing on* the wood — and the
+// lit bark near a cap clears the bloom threshold, so the core bloom pass haloes
+// the tree exactly where the glow touches it. This is NOT the self-emissive
+// trunk the director rejected 2026-07-24: a real light has a hotspot that falls
+// off, which reads as "cast on," not "the wood glows." The additive snow pool
+// only ever touched the flat ground; this is what finally reaches the vertical
+// trunks the pool never could. Look-pass knobs:
+//   INTENSITY — bright enough that the near bark blooms, dim enough to stay a
+//     spill of light, not a floodlight.
+//   RANGE — short, so it pools on the closest trunks and dies before it becomes
+//     an even wash of the whole treeline.
+const GLOW_LIGHT_INTENSITY = 6;
+const GLOW_LIGHT_RANGE = 8;
+// Set by applyGlowPhase (the eased night factor), read by updateGlowField to
+// scale every live cluster's cast light — off by day, full at night.
+let glowLightFactor = 0;
+
 // NOTE (director verdict, 2026-07-24): self-glowing tree trunks are OUT. Two
 // passes shipped — a flat emissive up the whole trunk (verdict #3), then a
 // base-bright vertical gradient textured by the bark (ref-photo revision) — and
@@ -393,6 +413,23 @@ function makeGlowCluster(h: number, rand: () => number): THREE.Group {
     shroom.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
     cluster.add(shroom);
   }
+
+  // The real cast light (see the GLOW_LIGHT note): one hue-matched PointLight
+  // at the cluster centre, lifted to cap height so it rakes the trunk sides
+  // rather than only the ground. Intensity starts at 0 and is driven each frame
+  // from glowLightFactor in updateGlowField (clones can't share the template's
+  // reference, so it's re-found and cached there). No shadows — a soft ambient
+  // spill, and shadow-casting a dozen live lights would be far too costly.
+  const light = new THREE.PointLight(
+    new THREE.Color(GLOW_HUES[h]!),
+    0,
+    GLOW_LIGHT_RANGE,
+    2,
+  );
+  light.position.set(0, 0.55, 0);
+  light.castShadow = false;
+  cluster.add(light);
+
   return cluster;
 }
 
@@ -444,9 +481,19 @@ export function updateGlowField(field: GlowField, anchorZ: number): void {
       copy.position.set(side * x, 0, -(cell + 0.1 + jitter) * GLOW_CELL);
       copy.rotation.y = random() * Math.PI * 2;
       copy.scale.setScalar(0.85 + random() * 0.6);
+      // Cache this clone's cast light so the per-frame factor loop below can
+      // scale it without traversing (clone() gave it a fresh PointLight).
+      copy.userData.glowLight = copy.getObjectByProperty("isPointLight", true);
       group.add(copy);
       placed.set(key, copy);
     }
+  }
+  // Drive every live cluster's cast light off the eased night factor, so the
+  // glow that spills onto the trunks fades in and out exactly with the props.
+  for (const object of placed.values()) {
+    if (object === EMPTY_CELL) continue;
+    const light = object.userData.glowLight as THREE.PointLight | undefined;
+    if (light) light.intensity = GLOW_LIGHT_INTENSITY * glowLightFactor;
   }
   for (const [key, object] of placed) {
     if (live.has(key)) continue;
@@ -470,6 +517,9 @@ export function applyGlowPhase(env: SlopeEnvironment, phase: number): number {
   const on = factor > 0.01;
   env.glow.group.visible = on;
   const ease = on ? factor * factor : 0; // slow start so glow blooms late
+  // The cast light rides the same eased factor; updateGlowField reads this each
+  // frame so a stale value can't leave a light on after the group hides.
+  glowLightFactor = ease;
   if (on) {
     for (const cap of glowCapMaterials) cap.emissiveIntensity = GLOW_EMISSIVE * ease;
     for (const pool of glowPoolMaterials) pool.opacity = POOL_ALPHA * ease;
