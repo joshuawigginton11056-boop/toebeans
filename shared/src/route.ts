@@ -318,11 +318,31 @@ export const REFERENCE_GRADE = 0.35;
 // is ~19% taller now (total drop ~282 vs ~238) — a genuinely steeper forest, which the world
 // geometry (routeHeightAt) renders. Tuning knob: nudge the 0.42 plateau if the trees still
 // read slow (up) or start to feel out of control (down).
+//
+// FOREST SPEED, ROUND 3 (slope-mech, 2026-07-25 follow-up: "it stays at base speed
+// not recognizing my w or shift key"). Round 2's 0.42 STILL read as a slow zone
+// because the forest was graded MELLOWER than the 0.5 summit plunge: coming off the
+// plunge you decelerate into the trees no matter what you hold (a hold-W run shed
+// ~25.7 → 21.6 u/s crossing in; a boosted run is pinned at the GRADE_TOP_SPEED cap
+// through both, so the number never budges) — which reads as "the forest ignores my
+// keys and sits at one speed." The keys ARE live (the sim folds up/boost into the
+// target); the felt deadness was the mellow grade + the cap, not a dropped input.
+// Fix: stop making the forest mellower than the summit at all. The post-plunge grade
+// now eases from 0.5 only to 0.48 and HOLDS 0.48 flat across the forest + lake, so the
+// plunge's momentum carries straight through the trees instead of bleeding off — the
+// forest skis as fast as the summit (cruise ~16.5 u/s, hold-W ~24.7). "Steeper =
+// faster" now lives entirely in the *lower* pitch (0.5 at 560) and the flag ease; the
+// upper mountain is one sustained fast pitch by design (Josh's repeated call:
+// forest-not-slow beats a visible summit↔forest grade step). Consequence, flagged for
+// slope-vis: the upper mountain is a touch taller/steeper again (routeHeightAt renders
+// it). KNOBS: nudge the 0.48 plateau if the trees still read slow (up) / out of control
+// (down); if BOOST specifically should out-run cruise on the fast stretches rather than
+// sitting at the shared 28 ceiling, raise GRADE_TOP_SPEED in skiing.ts (its own call).
 const GRADE_PROFILE: readonly (readonly [number, number])[] = [
   [0, 0.5], // steep summit plunge (~26.6°, just under the camera's ~27°)
-  [60, 0.45], // shed the plunge's extreme up high — steep grade drop, expected here
-  [180, 0.42], // ease out onto the forest — a fast glide now, not a mellow-slow zone
-  [340, 0.42], // …holds across the forest + frozen lake (carries momentum through the trees)
+  [60, 0.48], // ease the plunge's extreme off — but only to 0.48, so speed barely sheds
+  [180, 0.48], // the forest skis as fast as the summit — momentum carries through the trees
+  [340, 0.48], // …holds flat across the forest + frozen lake (no mellow-slow zone anymore)
   [460, 0.43], // building back up through the mid detours (parked map; trims total drop)
   [560, 0.5], // the steep lower pitch (ice valley / cliff run-in)
   [640, 0.42], // ease a touch for the flag

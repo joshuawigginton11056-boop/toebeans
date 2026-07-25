@@ -8,15 +8,19 @@ import {
 } from "./route";
 
 describe("route — the descent's grade profile (steepness → speed)", () => {
-  it("varies the grade: steep summit + lower pitch, faster-than-before forest/lake", () => {
+  it("keeps the forest as fast as the summit; 'steeper = faster' lives in the lower pitch", () => {
     const summit = routeGradeAt(0);
-    const forest = routeGradeAt(230); // the forest/lake glide (a fast stretch since 2026-07-25)
+    const forest = routeGradeAt(230); // the forest/lake glide — a fast stretch since round 3
     const lower = routeGradeAt(560); // the steep lower pitch
-    // The steeps stay clearly steeper than the forest so "steeper = faster" still reads;
-    // the margin relaxed 0.1 → 0.05 when the forest was raised to carry speed through the
-    // trees (director look-pass: "extremely slow through the forest") — see route.ts.
-    expect(summit).toBeGreaterThan(forest + 0.05);
-    expect(lower).toBeGreaterThan(forest + 0.05);
+    // Round 3 (slope-mech, 2026-07-25, "it stays at base speed not recognizing my w or
+    // shift key"): the forest no longer skis mellower than the summit — the plunge's
+    // momentum carries flat through the trees. So the forest sits right at the summit's
+    // pitch (a decidedly fast glide), not stepped down below it into a slow zone.
+    expect(forest).toBeGreaterThan(REFERENCE_GRADE + 0.1); // decidedly fast, not mellow
+    expect(summit - forest).toBeLessThan(0.05); // no slow-zone step down into the trees
+    // "Steeper = faster" now reads in the LOWER pitch (the cliff run-in), which stays at
+    // least as steep as the already-fast upper mountain.
+    expect(lower).toBeGreaterThanOrEqual(forest);
     // Every zone stays under the camera's ~27° framing (tan ≈ 0.51) and above a
     // gentle floor — the grade is always a real, look-down descent.
     for (const d of [0, 120, 230, 340, 460, 560, 640]) {
