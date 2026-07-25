@@ -188,12 +188,21 @@ const BACKDROP_SEG_R = 20; // radial resolution across the (shallow) band
 // default; the player's look-up control reveals more. Noted in IDEAS.md.)
 const BACKDROP_PEAK_MAX = 15; // tallest peak height (world units above y=0)
 const BACKDROP_CROSS_AMP = 2.5; // radial rolling-ridge amplitude (the mid rolls)
-// Haze: how far out the aerial-perspective pink fade runs, and its ceiling.
-// Gentle — the range must stay legible against the dawn-pink horizon band, not
-// dissolve into it.
+// Aerial dawn haze: a pink band hugging the HORIZON, keyed on height — not on
+// distance as it was. The old distance key left the near mountain FEET (at
+// R≈R_INNER) almost unhazed, so they stayed cool-blue and butted against the
+// dawn-pink ground fog with a hard seam — the "why is the pink just sitting
+// below the fog?" callout: the range's blue base was covering the sky's pink
+// horizon band. Now the feet melt to exactly the fog color and the range rises
+// OUT of the pink; only the peaks climb clear of the band and stay legibly
+// blue/white against the sky. (2026-07-25, sky fix.)
+const BACKDROP_HAZE_TOP = 9; // world height (y) where the pink band fades to clear
+const BACKDROP_HAZE_FOOT = 1.0; // haze at y≈0 — 1.0 = exactly the ground-fog pink
+// A gentle distance term on top, so the far ridges still sit a touch deeper in
+// the haze than the near foothills at the same height.
 const BACKDROP_HAZE_NEAR = 168;
-const BACKDROP_HAZE_FAR = 214;
-const BACKDROP_HAZE_MAX = 0.2; // far bases this pink; peaks less (below)
+const BACKDROP_HAZE_FAR = 210;
+const BACKDROP_HAZE_DIST = 0.12;
 
 // Build the mountain ring. Deterministic: all randomness is seeded phases baked
 // once here, so the skyline is identical every load (seeded-scatter convention).
@@ -360,18 +369,19 @@ export function createMountainBackdrop(): THREE.Group {
       rockCol.copy(rock).multiplyScalar(1.5 + 1.1 * t); // slate, lightened & shaded
       scratch.lerp(rockCol, Math.min(1, rockAmt) * 0.55);
     }
-    // Aerial haze: stronger with distance, eased back on the high peaks so they
-    // stay legible against the sky (real far peaks catch light above the murk).
-    const hazeAmt =
-      smooth(
-        Math.min(
-          1,
-          Math.max(0, (R - BACKDROP_HAZE_NEAR) /
-            (BACKDROP_HAZE_FAR - BACKDROP_HAZE_NEAR)),
-        ),
-      ) *
-      BACKDROP_HAZE_MAX *
-      (1 - 0.45 * alt);
+    // Aerial haze: a horizontal pink band. Strong at the foot (y≈0, melting the
+    // range into the dawn-pink ground fog + sky horizon), fading to clear by
+    // BACKDROP_HAZE_TOP so the peaks emerge legible; plus a gentle distance term
+    // so far ridges sit a little deeper in the haze than near foothills.
+    const band = 1 - smooth(Math.min(1, y / BACKDROP_HAZE_TOP));
+    const dist = smooth(
+      Math.min(
+        1,
+        Math.max(0, (R - BACKDROP_HAZE_NEAR) /
+          (BACKDROP_HAZE_FAR - BACKDROP_HAZE_NEAR)),
+      ),
+    );
+    const hazeAmt = Math.min(1, band * BACKDROP_HAZE_FOOT + dist * BACKDROP_HAZE_DIST);
     scratch.lerp(haze, hazeAmt);
     colorArr[k * 3] = scratch.r;
     colorArr[k * 3 + 1] = scratch.g;
