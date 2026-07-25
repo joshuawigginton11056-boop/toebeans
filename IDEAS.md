@@ -10,6 +10,28 @@ land here instead of in code.
 build. It reads as a cool-blue-shadowed / white-lit snowy range on the horizon,
 in the dawn palette, prominent at the open summit and softening behind the forest.
 
+**Landed (mountain, 2026-07-25) — the GROUND half of Josh's summit callout:** the
+open run was a flat, featureless pink wash because the skier rides the *plain-shaded*
+`addBranchTerrain` placeholder while the pretty realism-snow window sits stranded ~290u
+below (welded to y=0). Fix: (a) DRESS `addBranchTerrain` with the realism snow material
+(`createTerrainSnowMaterial` — dune/lump relief + palette lit/shadow shading + sparkle,
+no carve), so the whole open run reads as sculpted powder with a lit/shadow side to every
+roll; (b) pull the distance fog back (`35→150` ⇒ `80→300` in `skiScene.ts`) so the run is
+visible dropping away instead of hitting a pink curtain a few metres out. The forest still
+reads great (arguably richer — the fine snow grain now shows). **Open follow-ups from this:**
+- **You still can't see ALL the way down (Josh's exact words).** The residual central pink
+  is the steep fall-line *brow*: the run drops away faster than the ~18–27° follow-camera
+  looks down, so the near surface falls below the view ray and the far descent hazes out.
+  The real lever is **camera pitch** (look further down) — the same slope-mech seam as
+  follow-up #1 below. A graphics-only fog/relief pass can't reveal what the camera angle
+  hides. **Needs Josh's call on raising/tilting the camera.**
+- **Ski-trail carving no longer shows on the branch run** — the carve target rides the
+  stranded y=0 window, not the dressed terrain. Was already true before this change (trails
+  were carving into the buried window). To restore: either make the window sit+tilt to the
+  grade (the original parked task) so it overlays the terrain, or move carving onto the
+  dressed terrain surface. Also: at the flat *runout* (y≈0) the window and terrain finally
+  coincide — watch for z-fighting there (looked clean in testing, but it's the one overlap).
+
 **Open follow-ups (mountain), in priority order:**
 1. **The camera fights drama — needs Josh's call.** The follow-camera looks ~18°
    DOWN the fall line, so only a ~7° strip of sky sits above the horizon. A distant

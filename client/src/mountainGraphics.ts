@@ -1025,6 +1025,45 @@ normal = normalize((viewMatrix * vec4(snowNormal(vSnowWorld.xz), 0.0)).xyz);`,
   return material;
 }
 
+// A carve map that carves NOTHING — a 1×1 black texel. Feeding this to
+// createSnowMaterial makes snowCarve() return 0 everywhere, so the material
+// collapses to pure dune + lump snow: relief, palette lit/shadow shading,
+// form-shading and sparkle, but no ski grooves. Used to DRESS the real
+// descending mountain surface (addBranchTerrain, slope-mech's geometry) —
+// see createTerrainSnowMaterial. Trails stay exclusive to the moving snow
+// window, whose carve target rides the skier.
+let zeroCarveTexture: THREE.DataTexture | null = null;
+function getZeroCarveTexture(): THREE.DataTexture {
+  if (zeroCarveTexture) return zeroCarveTexture;
+  zeroCarveTexture = new THREE.DataTexture(
+    new Uint8Array([0, 0, 0, 255]),
+    1,
+    1,
+  );
+  zeroCarveTexture.needsUpdate = true;
+  return zeroCarveTexture;
+}
+
+// DRESS THE REAL MOUNTAIN (mountain-graphics, 2026-07-25). The branching
+// run descends ~290 units from summit to flag, but the realism-snow window
+// is welded to y=0 (syncEnvironment only tracks the anchor's z), so on the
+// descent the window sits far below and the skier actually rides the bare,
+// plain-shaded placeholder surface `addBranchTerrain` builds — a flat,
+// pink-hazed wash on the open summit (the forest only reads because its
+// trees cast form-giving shadows). This gives that ride surface the SAME
+// snow look as the window: world-pinned dune + lump relief displaced in,
+// finite-difference fragment normals so every roll shows a lit and a
+// snow-shadow-blue side, and the sparkle pass — so the open slope reads as
+// sculpted powder you can see dropping away, not a flat plate. One shared
+// material across every terrain segment (they all sample the same
+// world-space dune field, so the relief is continuous across seams).
+let terrainSnowMaterial: THREE.MeshStandardMaterial | null = null;
+export function createTerrainSnowMaterial(): THREE.MeshStandardMaterial {
+  if (terrainSnowMaterial) return terrainSnowMaterial;
+  terrainSnowMaterial = createSnowMaterial(getZeroCarveTexture());
+  return terrainSnowMaterial;
+}
+
 // The shadow-casting side of the displacement: the sun's depth pass
 // renders the snow through this material, so dunes and groove walls really
 // occlude the light (self-shadowed hollows) instead of only drawing darker.
