@@ -130,7 +130,277 @@ export function createSkyDome(): THREE.Mesh {
   );
   dome.renderOrder = -1; // paint the sky first; everything else draws over it
   repaintSkyDome(dome, new THREE.Color(PALETTE.dawnPink), new THREE.Color(PALETTE.skyBlue));
+  // The distant peak vista rides ALONG with the dome (a child), so it inherits
+  // the dome's per-frame recenter on the camera (syncEnvironment) for free —
+  // no core edit, and the range always sits on the horizon like real far
+  // mountains. See createMountainBackdrop.
+  dome.add(createMountainBackdrop());
   return dome;
+}
+
+// ---------------------------------------------------------------------------
+// THE STARTING MOUNTAIN — a distant alpine peak vista (mountain-graphics,
+// 2026-07-25). Josh's callout (IDEAS.md): the open summit before the forest is
+// the game's weakest view — a flat, pink-hazed, featureless wash — because it
+// has no distant relief and no shadow-casters, while the forest reads rich off
+// its tree shadows. The fix is TERRAIN, not snow: give the summit a real peak +
+// rolling ridges rising behind the run so the eye has depth and form to read.
+//
+// This builds a full 360° ring of mountains centered on the camera (it's a
+// child of the sky dome, so it recenters on the camera every frame like a
+// skybox layer — always on the horizon, never reached). The ring is REAL 3D
+// terrain, not a painted silhouette: a graded heightfield (foothills near,
+// rising to jagged peaks far) whose own normals catch the scene's low dawn sun,
+// so every roll gets a lit and a shadow side — the relief the flat open snow
+// was missing. It's lit by the same solved sun/ambient as the slope (a plain
+// MeshStandardMaterial), so its snow reads exactly on-palette; rock is exposed
+// on the steep high faces (deep-slate #chasmDark, the bible's rock value), and
+// a baked vertical haze melts the bases into the dawn-pink fog band while the
+// peaks stay legible against the sky. Everything is inside the camera's 200u
+// far plane and seeded (no Math.random) so the skyline never shifts between
+// loads.
+//
+// SKY IS OUT OF SCOPE (Josh, this session): the reference is bright midday but
+// the game defaults to pink dawn, and whether the summit brightens is his next
+// call — so this touches only terrain, keeping the established dawn mood.
+
+// The ring's radial band: foothills at the inner edge rising to peaks at the
+// outer. Outer stays inside the camera's far=200 plane (skiRender.ts) so the
+// tallest peaks never clip. Inner sits past where the snow window's haze fully
+// takes over, so the bases hide in the fog and only the peaks rise clear.
+// The band sits as a distinct rim JUST BEYOND the snow window's fogged far edge
+// (~160–175u downhill of the camera) so the flat snow never occludes it and the
+// mountains never poke up through the snow plane mid-distance. It's shallow in
+// depth by necessity — the camera's far plane is 200 (skiRender.ts) — but a
+// distant range reads as its skyline, and the haze gradient + rolling ridges
+// carry the depth. Everything stays inside far=200: max vertex distance is
+// sqrt(R_OUTER² + maxHeight²) ≈ sqrt(184² + 66²) ≈ 195.
+const BACKDROP_R_INNER = 170;
+const BACKDROP_R_OUTER = 184;
+const BACKDROP_SEG_A = 240; // angular resolution around the full circle
+const BACKDROP_SEG_R = 20; // radial resolution across the (shallow) band
+// Peak height is tuned to the follow-camera, which looks ~18° DOWN the fall
+// line: the sky band above the horizon is only ~7° tall, so a distant range at
+// ~180u reads best with tops around +5° (≈17u above the eye) — enough to clear
+// the haze and stand against the sky, without shooting past the top of the
+// frame into a flat cut-off wall. (This is why the range reads as a horizon
+// ridge, not a towering peak — the down-camera can't frame a tall peak by
+// default; the player's look-up control reveals more. Noted in IDEAS.md.)
+const BACKDROP_PEAK_MAX = 15; // tallest peak height (world units above y=0)
+const BACKDROP_CROSS_AMP = 2.5; // radial rolling-ridge amplitude (the mid rolls)
+// Haze: how far out the aerial-perspective pink fade runs, and its ceiling.
+// Gentle — the range must stay legible against the dawn-pink horizon band, not
+// dissolve into it.
+const BACKDROP_HAZE_NEAR = 168;
+const BACKDROP_HAZE_FAR = 214;
+const BACKDROP_HAZE_MAX = 0.2; // far bases this pink; peaks less (below)
+
+// Build the mountain ring. Deterministic: all randomness is seeded phases baked
+// once here, so the skyline is identical every load (seeded-scatter convention).
+export function createMountainBackdrop(): THREE.Group {
+  const rand = makeRandom(0x51e2a);
+  // Skyline octaves — integer angular frequencies so the profile is periodic
+  // around the full ring (no seam), amplitudes falling off for a fractal edge.
+  const octaves = [
+    { f: 2, a: 0.5 },
+    { f: 3, a: 0.34 },
+    { f: 5, a: 0.22 },
+    { f: 8, a: 0.14 },
+    { f: 13, a: 0.09 },
+    { f: 21, a: 0.055 },
+  ].map((o) => ({ ...o, p: rand() * Math.PI * 2 }));
+  const ampSum = octaves.reduce((s, o) => s + o.a, 0);
+  // 0..1 skyline height at an angle — the fractal peak profile.
+  const skyline = (theta: number): number => {
+    let n = 0;
+    for (const o of octaves) n += o.a * Math.sin(o.f * theta + o.p);
+    // Normalize to 0..1, then bias with a soft power so peaks stay sharp and
+    // the valleys between ridges sit low (a broad rolling range, not a wall).
+    const t = 0.5 + 0.5 * (n / ampSum);
+    return Math.pow(t, 1.6); // sharper: peaks stay pointed, valleys sink low
+  };
+  // A couple of hero massifs standing tall in the downhill view (theta≈0 is
+  // straight down-lane, -z). Gaussian bumps so one dominant peak and a shoulder
+  // rise where the camera looks as the run begins.
+  const heroes = [
+    { at: 0.12, w: 0.5, h: 0.32 },
+    { at: -0.55, w: 0.7, h: 0.22 },
+    { at: 0.85, w: 0.8, h: 0.18 },
+  ];
+  const hero = (theta: number): number => {
+    // Wrap the angular delta into [-π, π] so bumps near theta=0 read from both
+    // sides of the seam.
+    let h = 0;
+    for (const g of heroes) {
+      let d = theta - g.at;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      h += g.h * Math.exp(-(d * d) / (2 * g.w * g.w));
+    }
+    return h;
+  };
+  // Radial rolling ridges — undulation ACROSS the band (near→far), phase-shifted
+  // by angle, so the range reads as several receding ridgelines each with its
+  // own lit/shadow face, not one smooth slope.
+  const pr1 = rand() * Math.PI * 2;
+  const pr2 = rand() * Math.PI * 2;
+  const cross = (theta: number, u: number): number =>
+    Math.sin(u * Math.PI * 3.0 + theta * 6 + pr1) * 0.6 +
+    Math.sin(u * Math.PI * 5.0 - theta * 9 + pr2) * 0.4;
+
+  const smooth = (x: number): number => x * x * (3 - 2 * x);
+  // Azimuth envelope: the range is TALL in the downhill-front arc (theta≈0,
+  // where the camera looks as the run begins) and sinks to low foothills toward
+  // the sides and behind. Without this the ring's side walls — close at radius
+  // R_INNER and caught by the camera's wide (~90°) horizontal FOV — loomed as
+  // dark masses in the top corners of the frame. It also reads naturally: you
+  // descend toward the big peaks. (The front arc is fixed to world -z, which is
+  // the camera's facing at the summit start; it drifts as the trail curves, by
+  // which point the forest canopy has taken over the frame anyway.)
+  const azEnv = (theta: number): number => {
+    const c = 0.5 + 0.5 * Math.cos(theta); // 1 downhill-front … 0 behind
+    return 0.26 + 0.74 * Math.pow(c, 3.0);
+  };
+  // Height at (angle, radial fraction u∈[0,1]): rises from ~0 at the near edge
+  // to full peaks far, shaped by the skyline + hero bumps and the azimuth
+  // envelope, with the rolling cross-ridges layered on.
+  const heightAt = (theta: number, u: number): number => {
+    const rise = smooth(Math.min(1, u * 1.08)); // near foothills → far peaks
+    const env = azEnv(theta);
+    const base = BACKDROP_PEAK_MAX * rise * env * (0.32 + 0.68 * skyline(theta));
+    const heroH = BACKDROP_PEAK_MAX * rise * env * hero(theta);
+    const rolls = BACKDROP_CROSS_AMP * u * cross(theta, u) * env;
+    return base + heroH + rolls;
+  };
+
+  const cols = BACKDROP_SEG_A + 1; // +1 duplicate seam column so it closes clean
+  const rows = BACKDROP_SEG_R + 1;
+  const positions = new Float32Array(cols * rows * 3);
+  const radii = new Float32Array(cols * rows); // cache for haze coloring
+  const heights = new Float32Array(cols * rows);
+  for (let i = 0; i < rows; i++) {
+    const u = i / (rows - 1);
+    const R = BACKDROP_R_INNER + u * (BACKDROP_R_OUTER - BACKDROP_R_INNER);
+    for (let j = 0; j < cols; j++) {
+      const theta = (j / BACKDROP_SEG_A) * Math.PI * 2;
+      const y = heightAt(theta, u);
+      const k = i * cols + j;
+      // theta=0 → straight downhill (-z), where the camera looks at the start.
+      positions[k * 3] = R * Math.sin(theta);
+      positions[k * 3 + 1] = y;
+      positions[k * 3 + 2] = -R * Math.cos(theta);
+      radii[k] = R;
+      heights[k] = y;
+    }
+  }
+
+  const index = new Uint32Array((cols - 1) * (rows - 1) * 6);
+  let ptr = 0;
+  for (let i = 0; i < rows - 1; i++) {
+    for (let j = 0; j < cols - 1; j++) {
+      const a = i * cols + j;
+      const b = a + 1;
+      const c = a + cols;
+      const d = c + 1;
+      // Wind so normals face inward/up toward the camera at the ring center.
+      index[ptr++] = a;
+      index[ptr++] = c;
+      index[ptr++] = b;
+      index[ptr++] = b;
+      index[ptr++] = c;
+      index[ptr++] = d;
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setIndex(new THREE.BufferAttribute(index, 1));
+  geometry.computeVertexNormals();
+
+  // Per-vertex color, fully BAKED and UNLIT (see the material note below). Each
+  // vertex gets: a snow/rock albedo by altitude, a baked directional shade so
+  // every roll shows a lit and a shadow side, then an aerial haze toward dawn
+  // pink that melts the far bases into the horizon fog.
+  const normals = geometry.attributes.normal!;
+  const colorArr = new Float32Array(cols * rows * 3);
+  // The two snow values ARE the shading: cool blue in shadow (#snowShadow),
+  // warm white in light (#sunlitSnow) — the same trick the scene's own snow
+  // lighting uses. Baking colored form (blue↔white) instead of a grey multiply
+  // is what makes the range read: the blue shadow sides are complementary to the
+  // pink dawn sky and pop, where a grey range just washed into it.
+  const snowLit = new THREE.Color(PALETTE.sunlitSnow);
+  const snowShade = new THREE.Color(PALETTE.snowShadow);
+  const rock = new THREE.Color(PALETTE.chasmDark);
+  const rockCol = new THREE.Color();
+  const haze = new THREE.Color(PALETTE.dawnPink);
+  const scratch = new THREE.Color();
+  // The baked light: mostly overhead, tipped toward the sun's front-left so the
+  // caps and shoulders catch light and the flanks fall into shadow. This is a
+  // deliberate matte-painting cheat, NOT the scene sun: the real sun sits
+  // downhill and BACKLIT this camera-facing range into a flat grey murk. Baking
+  // a legible front-key here is why the material is unlit.
+  const bakeLight = new THREE.Vector3(-0.28, 0.92, 0.42).normalize();
+  const nrm = new THREE.Vector3();
+  for (let k = 0; k < cols * rows; k++) {
+    const y = heights[k]!;
+    const R = radii[k]!;
+    const alt = Math.min(1, y / BACKDROP_PEAK_MAX); // 0 base … 1 summit
+    const steep = 1 - normals.getY(k); // 0 flat-up … ~1 vertical face
+    // Baked half-lambert off the baked light → t in 0..1 (shadow…lit).
+    nrm.set(normals.getX(k), normals.getY(k), normals.getZ(k));
+    const hl = 0.5 + 0.5 * nrm.dot(bakeLight);
+    const t = smooth(Math.min(1, Math.max(0, (hl - 0.15) / 0.7)));
+    // Snow: cool-blue shadow → warm-white lit. Coloured form, on-palette.
+    scratch.copy(snowShade).lerp(snowLit, t);
+    // Exposed rock only near the very summits (a distant range is too gently
+    // sloped for steepness alone), itself shaded so it isn't a flat black tip.
+    const rockAmt =
+      smooth(Math.min(1, Math.max(0, (alt - 0.6) * 2.0))) *
+      (0.55 + 0.45 * smooth(Math.min(1, Math.max(0, (steep - 0.12) * 3.5))));
+    if (rockAmt > 0.001) {
+      rockCol.copy(rock).multiplyScalar(1.5 + 1.1 * t); // slate, lightened & shaded
+      scratch.lerp(rockCol, Math.min(1, rockAmt) * 0.55);
+    }
+    // Aerial haze: stronger with distance, eased back on the high peaks so they
+    // stay legible against the sky (real far peaks catch light above the murk).
+    const hazeAmt =
+      smooth(
+        Math.min(
+          1,
+          Math.max(0, (R - BACKDROP_HAZE_NEAR) /
+            (BACKDROP_HAZE_FAR - BACKDROP_HAZE_NEAR)),
+        ),
+      ) *
+      BACKDROP_HAZE_MAX *
+      (1 - 0.45 * alt);
+    scratch.lerp(haze, hazeAmt);
+    colorArr[k * 3] = scratch.r;
+    colorArr[k * 3 + 1] = scratch.g;
+    colorArr[k * 3 + 2] = scratch.b;
+  }
+  geometry.setAttribute("color", new THREE.BufferAttribute(colorArr, 3));
+
+  // UNLIT (MeshBasicMaterial): the range is far outside the ±55 shadow camera
+  // and, lit by the scene sun, its camera-facing slopes were BACKLIT into a flat
+  // grey wall. Baking the shade (above) and drawing it unlit gives a crisp,
+  // fully-controlled matte range instead. fog:false for the same reason the sky
+  // dome runs it — the peaks sit past the fog's 150u far plane and three's fog
+  // would crush them flat pink. DoubleSide so the camera (at the ring's center)
+  // always sees the inner faces regardless of winding.
+  // NOTE (mountain): being unlit, this does NOT respond to the day/night engine
+  // — fine for the dawn default this session targets (Josh deferred the sky /
+  // time-of-day question). Flagged in IDEAS.md to tint it with the phase later.
+  const material = new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    fog: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.frustumCulled = false; // always wrapped around the camera
+  mesh.receiveShadow = false;
+  mesh.castShadow = false;
+  const group = new THREE.Group();
+  group.add(mesh);
+  return group;
 }
 
 // Rewrite the dome's vertex colors for a horizon/zenith pair. Called on

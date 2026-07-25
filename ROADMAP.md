@@ -141,9 +141,20 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   **coarse dune form-shading** (mountain, 2026-07-25): the big wind-dunes get a
   self-cast blue (#2) shade on their sun-away faces so their form reads on open,
   shadowless ground — the summit, which has no trees to rake the shadows the
-  forest snow reads by. In-palette, mood-untouched. (A down-payment; the summit
-  still reads flat because it's an empty flat corridor — see the starting-mountain
-  item in IDEAS.md.)
+  forest snow reads by. In-palette, mood-untouched.
+- **Starting-mountain backdrop** (mountain, 2026-07-25): the empty summit horizon
+  now carries a **distant snowy peak vista** — `createMountainBackdrop`
+  (`mountainGraphics.ts`), a 360° procedural mountain ring parented to the sky
+  dome so it recenters on the camera like a skybox layer (always on the horizon,
+  never reached, inside the 200u far plane). Real graded heightfield (foothills →
+  peaks), coloured **unlit + baked** — snow shaded cool-blue-shadow↔warm-white-lit
+  (the palette's two snow values), slate rock on the summits, vertical dawn-pink
+  aerial haze; an azimuth envelope keeps it tall toward the downhill-front and low
+  at the sides so the ring's near walls don't loom in the wide FOV. Verified live
+  at the summit + through the forest. **KNOWN LIMIT:** the follow-camera looks ~18°
+  DOWN the fall line, so the sky band above the horizon is only ~7° — the range
+  reads as a horizon ridge, not the towering reference peak. Making it dramatic is
+  entangled with the summit **brightness/sky decision Josh deferred** (see IDEAS).
 - **Lighting/haze:** warm sun, palette-exact blue shadows, dawn-pink fog, sun disc.
   Now on a **`timeOfDay` phase** (`skiScene.ts`): 0 = that dawn (a verified no-op),
   1 = night, cycled by the debug key **N**. A first **moonlit night** was built
