@@ -686,6 +686,26 @@ roughnessFactor = mix(1.0, roughnessFactor, sparkleGain);`,
   float hollow = clamp(-(snowDune(vSnowWorld.xz) + snowLump(vSnowWorld.xz)) * 2.2, 0.0, 1.0);
   float ao = clamp(hollow * 0.45 + core * 0.4 + smoothstep(0.03, 0.35, carve) * 0.15, 0.0, 1.0);
   diffuseColor.rgb *= mix(vec3(1.0), vec3(0.851, 0.912, 1.0), ao);
+  // Coarse dune form-shading (mountain-graphics, 2026-07-25): reveal the big
+  // wind-dune forms on open, shadowless ground — the starting summit, where
+  // there are no trees to cast the shadows the forest snow reads by. The
+  // palette-solved lights already tilt-shade these dunes, but the soft
+  // #1<->#2 range is too gentle to register without cast shadows, so the open
+  // field washes flat. This nudges the sun-away face of each big dune further
+  // toward snow-shadow blue (#2) — mixing toward #2, never past it, so it
+  // stays inside the palette floor. A coarse (dune-scale) sample normal keeps
+  // it sculpting the big forms without disturbing the fine grain mottling.
+  {
+    vec2 wp = vSnowWorld.xz;
+    float dh = 0.4;
+    float fx0 = snowDune(wp - vec2(dh, 0.0)) + snowLump(wp - vec2(dh, 0.0));
+    float fx1 = snowDune(wp + vec2(dh, 0.0)) + snowLump(wp + vec2(dh, 0.0));
+    float fz0 = snowDune(wp - vec2(0.0, dh)) + snowLump(wp - vec2(0.0, dh));
+    float fz1 = snowDune(wp + vec2(0.0, dh)) + snowLump(wp + vec2(0.0, dh));
+    vec3 coarseN = normalize(vec3(fx0 - fx1, 2.0 * dh, fz0 - fz1));
+    float formShade = smoothstep(0.5, 0.12, dot(coarseN, sunDir));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.827, 0.875, 0.941), formShade * 0.32);
+  }
 }`,
         )
         .replace(

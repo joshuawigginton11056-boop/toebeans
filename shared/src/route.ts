@@ -302,21 +302,30 @@ export const REFERENCE_GRADE = 0.35;
 //
 // KEEP THE FOREST'S SPEED (slope-mech, 2026-07-25 director look-pass: "in the forest
 // speed drops off"). The old floor 0.28 was mellow enough that a hold-W run shed ~4 u/s
-// (18.5 → 14.4) crossing into the forest — a felt "brakes on." Raised to 0.33: the
-// forest still reads as the mountain leveling out (it stays below the 0.5 summit/lower
-// pitch, so "steeper = faster" holds where it matters) but the summit→forest cruise
-// drop is now ~1.5 u/s — you carry your speed into the trees instead of losing it. Still
-// under the REFERENCE_GRADE (0.35) at the frozen lake so the coupling reads as a genuine
-// mellow stretch, not flat. (Secondary knob if it wants even less drop: raise the plateau
-// toward 0.35, or lower SLOPE_SPEED_GAIN in skiing.ts — it scales the absolute decel.)
+// (18.5 → 14.4) crossing into the forest — a felt "brakes on." First raised to 0.33.
+//
+// FOREST SPEED, ROUND 2 (slope-mech, 2026-07-25 same-day follow-up: "my speed still feels
+// extremely slow through the forest"). 0.33 (factor 0.33/0.35 ≈ 0.94) still left the forest
+// BELOW the reference — a genuine slow zone: cruise ~11.3 u/s against the summit's ~17, so
+// after the plunge the trees felt like a crawl. The prior nudges (0.26→0.28→0.33) only
+// inched it because speed IS grade here — a mellow-graded forest is a slow forest, full stop.
+// So this pass stops treating the forest as the slow zone: the plateau jumps to 0.42, ABOVE
+// the reference (factor 1.2 → cruise ~14.4 u/s, ~84% of the summit instead of 66%). The
+// forest now CARRIES momentum through the trees rather than shedding it. "Steeper = faster"
+// still reads where it matters — the 0.5 summit/lower pitch stay clearly steeper than the
+// 0.42 forest — but the forest is no longer a mellow-slow stretch; it's a fast glide that's
+// just a touch less steep than the plunges. Consequence, flagged for slope-vis: the mountain
+// is ~19% taller now (total drop ~282 vs ~238) — a genuinely steeper forest, which the world
+// geometry (routeHeightAt) renders. Tuning knob: nudge the 0.42 plateau if the trees still
+// read slow (up) or start to feel out of control (down).
 const GRADE_PROFILE: readonly (readonly [number, number])[] = [
   [0, 0.5], // steep summit plunge (~26.6°, just under the camera's ~27°)
-  [60, 0.37], // shed most of the plunge up high — steep grade drop, expected here
-  [180, 0.33], // ease out onto the forest — mellower, but it KEEPS its speed (see below)
-  [340, 0.33], // …holds across the forest + frozen lake
-  [460, 0.34], // building back up through the mid detours (parked map; trims total drop)
+  [60, 0.45], // shed the plunge's extreme up high — steep grade drop, expected here
+  [180, 0.42], // ease out onto the forest — a fast glide now, not a mellow-slow zone
+  [340, 0.42], // …holds across the forest + frozen lake (carries momentum through the trees)
+  [460, 0.43], // building back up through the mid detours (parked map; trims total drop)
   [560, 0.5], // the steep lower pitch (ice valley / cliff run-in)
-  [640, 0.38], // ease a touch for the flag
+  [640, 0.42], // ease a touch for the flag
 ];
 
 function gradeProfileAt(routeDistance: number): number {
