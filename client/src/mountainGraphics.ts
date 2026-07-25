@@ -35,15 +35,27 @@ export const SNOWFIELD_LENGTH = 220;
 // snow lies ahead, where the camera looks.
 export const SNOWFIELD_LEAD = 50;
 
-// The snow's view-dependent sparkle (its uniform is created in
-// createSnowMaterial) dims as the light goes — verdict #2. The holder lives
-// here; the core day/night engine calls setSnowNightFade each phase change.
-// 1 by day -> NIGHT_SPARKLE_GAIN at full night (a faint moonlit shimmer, not
-// dead matte).
-let snowSparkleGain: { value: number } | null = null;
-const NIGHT_SPARKLE_GAIN = 0.12;
+// The snow's view-dependent sparkle dims as the light goes — verdict #2. The
+// core day/night engine calls setSnowNightFade each phase change; 1 by day ->
+// NIGHT_SPARKLE_GAIN at full night (a faint moonlit glint, not dead matte).
+//
+// This is a PERSISTENT shared uniform, deliberately created at module scope and
+// handed to the material's shader on every compile (createSnowMaterial). It
+// used to be a holder captured *inside* onBeforeCompile ("snowSparkleGain =
+// shader.uniforms.sparkleGain"), which is the bug behind the never-fixed "night
+// snow sparkle still too bright" note (forest-graphics, 2026-07-25): three.js
+// builds a FRESH shader.uniforms on every recompile, so the captured holder
+// went stale and setSnowNightFade updated a uniform nothing was rendering with
+// — the twinkle stayed at full day gain all night. Sharing one uniform object
+// across every compile makes the fade actually take.
+const snowSparkleUniform = { value: 1 };
+// Faded hard at night: against the near-black enchanted forest even a faint
+// additive-white twinkle pops as a busy shimmering carpet. 0.12 → 0.045: a
+// barely-there moonlit glint, not a field of static. (NB: mountain-graphics'
+// snow material; flagged in ROADMAP for that session.)
+const NIGHT_SPARKLE_GAIN = 0.045;
 export function setSnowNightFade(phase: number): void {
-  if (snowSparkleGain) snowSparkleGain.value = 1 - (1 - NIGHT_SPARKLE_GAIN) * phase;
+  snowSparkleUniform.value = 1 - (1 - NIGHT_SPARKLE_GAIN) * phase;
 }
 
 // The snow is displaced geometry now, and these flat markers used to sit
@@ -629,10 +641,11 @@ export function createSnowMaterial(
     // slope-vis (verdict #2, 2026-07-24): the glitter below is a light-
     // independent additive flash, so it stayed just as bright once the scene
     // went near-black — the director's "snow sparkle too bright at night".
-    // A phase gain fades it out with the night; driven from applyTimeOfDay.
-    const sparkleGain = { value: 1 };
-    shader.uniforms.sparkleGain = sparkleGain;
-    snowSparkleGain = sparkleGain;
+    // A phase gain fades it out with the night; driven from applyTimeOfDay via
+    // setSnowNightFade. It MUST be the module-scope shared uniform (not a fresh
+    // per-compile object) so the fade survives shader recompiles — see the note
+    // on snowSparkleUniform above.
+    shader.uniforms.sparkleGain = snowSparkleUniform;
     shader.vertexShader =
       SNOW_HEIGHT_GLSL +
       "varying vec3 vSnowWorld;\n" +
@@ -647,6 +660,18 @@ vSnowWorld = vec3(snowW.x, snowW.y + snowH, snowW.z);`,
       SNOW_NORMAL_GLSL +
       "varying vec3 vSnowWorld;\nuniform vec3 sunDir;\nuniform float sparkleGain;\n" +
       shader.fragmentShader
+        .replace(
+          "#include <roughnessmap_fragment>",
+          `#include <roughnessmap_fragment>
+// Night: fade the near-mirror sparkle flecks toward matte (forest-graphics
+// look-pass, 2026-07-25). The roughness map's shiny flecks are what the moon
+// key's specular blazes off — a busy bright sparkle carpet the earlier
+// additive-glitter fade (sparkleGain) never touched, because that only dims
+// the extra glitter, not the material's own specular. sparkleGain is ~1 by day
+// (flecks keep their shine, day look untouched) and ~0.045 at full night, so
+// this lifts the flecks to ~matte only as the light goes.
+roughnessFactor = mix(1.0, roughnessFactor, sparkleGain);`,
+        )
         .replace(
           "#include <color_fragment>",
           `#include <color_fragment>

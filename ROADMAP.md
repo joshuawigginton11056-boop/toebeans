@@ -161,8 +161,18 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   props; **cut the fireflies** (too many colors, glued in front of the skier —
   realistic ones come from a CC0 pack later); and next: **stronger bloom**,
   **darken the snow sparkle at night**, and **make the tree trunks glow**.
-  **Session 2 (slope-vis 2026-07-24):** snow sparkle now dims with the phase
-  (`sparkleGain`, done — awaiting look-pass). **Self-glowing tree trunks: tried
+  **Session 2 (slope-vis 2026-07-24):** snow sparkle dims with the phase
+  (`sparkleGain`). **Snow sparkle FIXED (forest-graphics 2026-07-25):** the
+  "still too bright" note had a root cause, not a tuning miss — `setSnowNightFade`
+  updated a `sparkleGain` holder captured *inside* `onBeforeCompile`, which
+  three.js rebuilds on every recompile, so the fade was writing a dead uniform
+  and the twinkle ran at full DAY gain all night. Now a persistent module-scope
+  `snowSparkleUniform` is shared across every compile, so the fade lands; floor
+  dropped `0.12`→`0.045` and the sparkle roughness-map flecks also fade toward
+  matte at night (`roughnessFactor = mix(1.0, roughnessFactor, sparkleGain)`) so
+  the moon key stops blazing them. Result: calm matte moonlit snow with a faint
+  glint, verified in the live forest. (mountain-graphics' `mountainGraphics.ts`,
+  touched cross-territory for this look-pass — small + flagged.) **Self-glowing tree trunks: tried
   twice, REJECTED and REMOVED** (director, 2026-07-24 — "tacky; I don't want the
   trees to glow themselves"): flat wash, then a base-bright bark-textured
   gradient, both cut. New direction from the reference photos: **trees are dark
@@ -177,14 +187,31 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   great").** **Bloom BUILT (slope-vis 2026-07-24, awaiting look-pass):** a
   full-scene `UnrealBloomPass` (EffectComposer in `skiScene.ts`, drawn via
   `renderSlope`) night-gated on `glowFactor` — strength 0 by day (composer
-  bypassed, daylight untouched), pushed strong (1.5) at full night. The night
-  scene is crushed near-black so only the emissive glow caps clear the luminance
-  threshold (0.55) — the full-scene bloom is naturally selective to the glowing
-  plants; mist/pools sit below it and don't smear. Still to do (verdict-ordered):
-  the **light shaft / moonlight rays** (the other half of the env look), general
-  decor/spray darkening, real MegaKit glow props, realistic fireflies, the
-  auto-transition, night audio. ⚠ amends the bible's "bright only" rule
-  (DESIGN.md).
+  bypassed, daylight untouched). **Bloom + plant brightness re-tuned (forest-graphics 2026-07-25,
+  director "the bloom increase just brightened the mushrooms"):** pushing
+  `BLOOM_STRENGTH` 2.2 + `GLOW_EMISSIVE` 3.5 didn't grow the halo, it piled
+  brightness back onto the mushroom bodies. Reverted the source over-drive
+  (`GLOW_EMISSIVE` 3.5→2.0 = dimmer caps, `BLOOM_STRENGTH` 2.2→1.5) and grew the
+  halo the right way instead — `BLOOM_RADIUS` 0.7→0.9, `BLOOM_THRESHOLD`
+  0.55→0.42 — so the dimmer caps still bloom into a soft glow. Verified: soft
+  glowing mushrooms with a real halo, not bright dots. **Fog blend fixed
+  (forest-graphics 2026-07-25, "the fog doesn't blend, there's a line at the
+  bottom"):** night `NIGHT.skyHorizon`/`skyZenith` were dark enough that the
+  partly-fogged bright snow band hit a near-black sky in a value cliff = a hard
+  horizon line. Lifted both (`#1E2740`→`#293651`, `#0B0F1C`→`#121829`, night-only;
+  fog rides the horizon color) so the ground melts into a continuous horizon glow
+  — real aerial-perspective fog, verified open + in-forest. **Moonlight rays
+  re-tuned (forest-graphics 2026-07-25, "too strong / spotlight / straight down /
+  randomly dropped in"):** `RayField` beams were near-vertical + bright with a
+  crisp ground pool = a spotlight read. Now angled (`RAY_DIR` ~31°→~42° off plumb,
+  raking down-lane from the moon), thinner, ~half opacity with the ground pool cut
+  hardest (the biggest spotlight tell), fewer (`RAY_DENSITY` 0.7→0.45) and mostly
+  at the treeline not over the lane (`RAY_CENTRAL_CHANCE` 0.32→0.12). Verified: a
+  few soft angled shafts breaking through the canopy, no spotlights. Knobs:
+  `RAY_ONSET`, `RAY_CELL`/`RAY_DENSITY`, `RAY_CENTRAL_CHANCE`, `RAY_COLOR`, `RAY_DIR`.
+  Still to do (verdict-ordered): general decor/spray darkening, real MegaKit glow
+  props, realistic fireflies, the auto-transition, night audio. ⚠ amends the bible's
+  "bright only" rule (DESIGN.md).
 - **Loose snow:** ski-trail spray, screen flurries, and a lens splat of
   naturalistic snow-clump particles (director-approved).
 - **Camera:** free zoom, fixed angle, pointer-lock mouse look.

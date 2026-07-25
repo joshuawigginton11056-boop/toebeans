@@ -1,11 +1,12 @@
 // forestGraphics.ts — everything growing on and glowing over the slope
 // (forest-graphics session). Split out of skiScene.ts on 2026-07-24 (the
 // scenery carve — see PARALLEL.md): trees, decor scatter, treelines, the
-// painted-detail texturing, the enchanted-night glow props + snow pools, and
-// the drifting mist banks. The shared day/night engine + palette live in the
-// core (skiScene.ts), which imports and drives what this file builds;
-// applyGlowPhase/applyMistPhase are called by the core engine with the raw
-// time-of-day phase and gate themselves.
+// painted-detail texturing, the enchanted-night glow props + snow pools, the
+// drifting mist banks, and the moonlight shafts breaking through the canopy.
+// The shared day/night engine + palette live in the core (skiScene.ts), which
+// imports and drives what this file builds; applyGlowPhase/applyMistPhase/
+// applyRayPhase are called by the core engine with the raw time-of-day phase
+// and gate themselves.
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { LANE_EDGE, makeRandom, type SlopeEnvironment } from "./skiScene";
@@ -255,8 +256,13 @@ const GLOW_HUES = [GLOW.cyan, GLOW.moss, GLOW.violet, GLOW.amber] as const;
 // Glow ramps in only past this phase — mushrooms at golden hour would be wrong.
 const GLOW_ONSET = 0.55;
 // How brightly the emissive caps read at full night (feeds emissiveIntensity;
-// pushed higher than 1 so bloom has something to bleed once it lands).
-const GLOW_EMISSIVE = 2.2;
+// pushed past 1 so bloom has something to bleed). History: 2.2 → 3.5 on the
+// "increase the bloom" call, then back to 2.0 on the follow-up (2026-07-25):
+// the 3.5 bump didn't grow the halo, it just *brightened the mushroom bodies*
+// (director: "lower the brightness of the plants themselves"). The halo is now
+// grown the right way instead — in the core bloom pass (bigger BLOOM_RADIUS +
+// lower BLOOM_THRESHOLD), not by over-driving the emissive. Look-pass knob.
+const GLOW_EMISSIVE = 2.0;
 // Peak opacity of a prop's additive snow pool at full night.
 const POOL_ALPHA = 0.55;
 
@@ -640,6 +646,269 @@ export function applyMistPhase(field: MistField, phase: number): void {
     if (object !== EMPTY_CELL) {
       field.group.remove(object);
       (object as THREE.Sprite).material.dispose();
+    }
+    field.placed.delete(key);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ENCHANTED NIGHT — moonlight shafts (slope-vis 2026-07-25, env look #0)
+//
+// The other half of the environmental night look (director redirect: "only a
+// few rays of moonlight breaking through") and the most prominent element of
+// reference photo 2 — a bright misty shaft raking down through a canopy gap.
+// Faked god-ray cones the cheap, view-stable way: each shaft is two crossed
+// vertical quads wearing a soft top-bright/base-transparent gradient, additive,
+// so from any horizontal angle the camera sees a soft volume of light, not a
+// blade. A soft additive pool marks where the beam lands on the snow. The
+// gradient fades to nothing at the base ON PURPOSE — the bright part lives high
+// in the canopy, so a shaft over the lane never washes out the driving surface
+// where the skier actually is (the recurring night-readability rule). Shafts
+// lean down-lane along the incoming moonlight (RAY_DIR), scatter sparsely with
+// the decor/glow/mist windows, and fade in with the night phase. Nothing here
+// touches the wood — trees stay dark silhouettes (director verdict #3).
+//
+// Tuning knobs (live look-pass): RAY_ONSET, RAY_CELL/RAY_DENSITY,
+// RAY_CENTRAL_CHANCE, RAY_COLOR, and the per-shaft opacity/size ranges in
+// makeRayShaft. Bloom (core, skiScene.ts) haloes the bright shaft tops for free
+// once night lands.
+
+// A cool pale moonlight — a bright value shift of snow-shadow #2 (#D3DFF0)
+// toward the moon disc; stays in the palette's night family, never signal red.
+const RAY_COLOR = 0xbfd4f2;
+// Rays are deep-night moonlight: they come in with the glow (a touch before its
+// GLOW_ONSET 0.55) and ease in slow so they bloom late.
+const RAY_ONSET = 0.5;
+// Sparse — "a few rays," not a forest of beams. One potential shaft per this
+// many metres of run, and even then only RAY_DENSITY of the cells spawn one.
+// Thinned 0.7 → 0.45 on the director's "too strong / randomly dropped in" call
+// (2026-07-25): fewer beams read as real breaks in the canopy, not a lightshow.
+const RAY_CELL = 30;
+const RAY_DENSITY = 0.45;
+// How often a shaft is a central hero beam over the lane (ref photo 2) rather
+// than a treeline-flank shaft. Cut 0.32 → 0.12 (same call): a beam standing
+// straight over the open lane is exactly what read as a "spotlight dropped in."
+// Almost all shafts now rake in from the treeline, filtering past the trunks.
+const RAY_CENTRAL_CHANCE = 0.12;
+
+// Base→top direction of a shaft: angled, leaning down-lane (−z, toward the
+// moon's azimuth) and a touch left, so the beams rake in from the moon rather
+// than dropping straight down. Was near-vertical (−0.15, 1.7, −1) ≈ 30° off
+// plumb, which still read as a spotlight; leaned to ~42° off plumb (director,
+// 2026-07-25: "should be angled from the moon, come around the tree leaves").
+// Still steeper than the moon's own low elevation so the shafts stand up in the
+// canopy instead of lying flat across the snow.
+const RAY_DIR = new THREE.Vector3(-0.25, 1.25, -1.1).normalize();
+const rayQuat = new THREE.Quaternion().setFromUnitVectors(
+  new THREE.Vector3(0, 1, 0),
+  RAY_DIR,
+);
+
+// A soft vertical light-shaft mask: a hint of fade-in at the very top (emerging
+// from the canopy), full through the upper third, easing to transparent at the
+// base, with soft feathered sides. Grayscale; the material's color tints it.
+// Generated once, shared by every shaft.
+function makeRaySprite(): THREE.CanvasTexture {
+  const w = 64;
+  const h = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  // Vertical falloff (canvas top = shaft top).
+  const vert = ctx.createLinearGradient(0, 0, 0, h);
+  vert.addColorStop(0, "rgba(255,255,255,0.55)");
+  vert.addColorStop(0.12, "rgba(255,255,255,0.95)");
+  vert.addColorStop(0.5, "rgba(255,255,255,0.5)");
+  vert.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = vert;
+  ctx.fillRect(0, 0, w, h);
+  // Multiply by a horizontal core so the beam is soft-sided from any angle the
+  // crossed quads present.
+  ctx.globalCompositeOperation = "destination-in";
+  const horiz = ctx.createLinearGradient(0, 0, w, 0);
+  horiz.addColorStop(0, "rgba(255,255,255,0)");
+  horiz.addColorStop(0.5, "rgba(255,255,255,1)");
+  horiz.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = horiz;
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = "source-over";
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+export interface RayField {
+  readonly group: THREE.Group;
+  // Reuses EMPTY_CELL as the "rolled empty" sentinel; live cells hold a shaft
+  // cluster whose userData carries its materials + shimmer params.
+  readonly placed: Map<string, THREE.Object3D>;
+  readonly shaftTex: THREE.CanvasTexture;
+  readonly poolTex: THREE.CanvasTexture;
+}
+
+export function createRayField(): RayField {
+  const group = new THREE.Group();
+  group.visible = false; // off by day; applyRayPhase turns it on at night
+  return {
+    group,
+    placed: new Map(),
+    shaftTex: makeRaySprite(),
+    poolTex: makeGlowSprite(0.4), // reuse the glow-pool sprite for the landing
+  };
+}
+
+// One moonlight shaft: crossed additive quads leaning along RAY_DIR, base
+// pinned to the snow, plus a soft ground pool. Its own materials (few shafts
+// live at once) so each can shimmer on its own phase; disposed on despawn.
+function makeRayShaft(
+  field: RayField,
+  rand: () => number,
+  central: boolean,
+): THREE.Group {
+  const cluster = new THREE.Group();
+  const tint = new THREE.Color(RAY_COLOR);
+  // Narrower than before (director "too strong": 2026-07-25) — a thin raking
+  // ray reads as light through a canopy gap, a wide one reads as a spotlight.
+  const width = central ? 2.5 + rand() * 1.5 : 1.5 + rand() * 1.1;
+  const height = central ? 26 + rand() * 9 : 20 + rand() * 9;
+
+  const shaftMat = new THREE.MeshBasicMaterial({
+    map: field.shaftTex,
+    color: tint,
+    transparent: true,
+    opacity: 0, // set each frame from rayFactor + shimmer
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    fog: true,
+  });
+  // Pivot at the base so the beam plants on the snow (y=0) and towers up.
+  const shaftGeo = new THREE.PlaneGeometry(width, height);
+  shaftGeo.translate(0, height / 2, 0);
+  const shaftGroup = new THREE.Group();
+  shaftGroup.quaternion.copy(rayQuat);
+  for (let i = 0; i < 2; i++) {
+    const quad = new THREE.Mesh(shaftGeo, shaftMat);
+    quad.rotation.y = (i * Math.PI) / 2; // crossed pair reads volumetric
+    quad.renderOrder = 2;
+    shaftGroup.add(quad);
+  }
+  cluster.add(shaftGroup);
+
+  // The pool where the beam meets the snow.
+  const poolMat = new THREE.MeshBasicMaterial({
+    map: field.poolTex,
+    color: tint,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    fog: true,
+  });
+  const poolR = width * (central ? 1.2 : 1.0);
+  const pool = new THREE.Mesh(
+    new THREE.PlaneGeometry(poolR * 2, poolR * 2),
+    poolMat,
+  );
+  pool.rotation.x = -Math.PI / 2;
+  pool.position.y = 0.05;
+  pool.renderOrder = 1;
+  cluster.add(pool);
+
+  cluster.userData = {
+    shaftMat,
+    poolMat,
+    // Roughly halved (director "moon beams too strong", 2026-07-25). The pool
+    // is cut hardest of all: a bright disc directly under a beam is the single
+    // biggest "spotlight" tell, so it's now only a faint kiss of light where
+    // the raking shaft grazes the snow, not a stage spot.
+    baseShaft: central ? 0.15 : 0.08 + rand() * 0.06,
+    basePool: central ? 0.11 : 0.06 + rand() * 0.05,
+    shimmerPhase: rand() * Math.PI * 2,
+    shimmerSpeed: 0.15 + rand() * 0.25,
+  };
+  return cluster;
+}
+
+// Its own clock so the shimmer doesn't consume another layer's delta.
+const rayClock = new THREE.Clock();
+// 0 by day, eased 0..1 through night — set by applyRayPhase, read per frame.
+let rayFactor = 0;
+
+export function updateRayField(field: RayField, anchorZ: number): void {
+  if (rayFactor <= 0.001 && field.placed.size === 0) return;
+  const { group, placed } = field;
+  const t = rayClock.getElapsedTime();
+  const minZ = anchorZ - DECOR_AHEAD;
+  const maxZ = Math.min(anchorZ + DECOR_BEHIND, -4);
+  const live = new Set<string>();
+  const first = Math.floor(-maxZ / RAY_CELL);
+  const last = Math.floor(-minZ / RAY_CELL);
+  for (let cell = first; cell <= last; cell++) {
+    const key = `${cell}`;
+    live.add(key);
+    if (placed.has(key)) continue;
+    const random = makeRandom((0x7a11 ^ Math.imul(cell, 2246822519)) + 131);
+    if (random() > RAY_DENSITY) {
+      placed.set(key, EMPTY_CELL);
+      continue;
+    }
+    const central = random() < RAY_CENTRAL_CHANCE;
+    const side = random() < 0.5 ? -1 : 1;
+    // Central hero beams sit over the lane; flank beams stand just past the
+    // treeline edge, raking in from the side.
+    const x = central
+      ? (random() - 0.5) * LANE_EDGE
+      : side * (LANE_EDGE + 1 + random() * 8);
+    const z = -(cell + 0.1 + random() * 0.8) * RAY_CELL;
+    const cluster = makeRayShaft(field, random, central);
+    cluster.position.set(x, 0, z);
+    group.add(cluster);
+    placed.set(key, cluster);
+  }
+  // Fade + shimmer the live shafts (mist drifting through a beam makes it
+  // breathe; a slow per-shaft sine fakes it cheaply).
+  for (const object of placed.values()) {
+    if (object === EMPTY_CELL) continue;
+    const u = object.userData;
+    const shimmer =
+      0.82 + 0.18 * Math.sin(t * u.shimmerSpeed * 6.283 + u.shimmerPhase);
+    (u.shaftMat as THREE.Material).opacity = u.baseShaft * rayFactor * shimmer;
+    (u.poolMat as THREE.Material).opacity = u.basePool * rayFactor * shimmer;
+  }
+  // Despawn behind the window; free each shaft's geometry + materials.
+  for (const [key, object] of placed) {
+    if (live.has(key)) continue;
+    if (object !== EMPTY_CELL) {
+      group.remove(object);
+      disposeRayCluster(object);
+    }
+    placed.delete(key);
+  }
+}
+
+function disposeRayCluster(cluster: THREE.Object3D): void {
+  cluster.traverse((o) => {
+    if (o instanceof THREE.Mesh) o.geometry.dispose();
+  });
+  const u = cluster.userData;
+  (u.shaftMat as THREE.Material | undefined)?.dispose();
+  (u.poolMat as THREE.Material | undefined)?.dispose();
+}
+
+// Bring the shafts in/out with the night phase; called from applyTimeOfDay.
+// Turning off clears the field so day pays nothing and no stale beams linger.
+export function applyRayPhase(field: RayField, phase: number): void {
+  const raw = Math.min(1, Math.max(0, (phase - RAY_ONSET) / (1 - RAY_ONSET)));
+  rayFactor = raw * raw; // slow start so the beams bloom in late
+  const on = rayFactor > 0.01;
+  field.group.visible = on;
+  if (on) return;
+  for (const [key, object] of field.placed) {
+    if (object !== EMPTY_CELL) {
+      field.group.remove(object);
+      disposeRayCluster(object);
     }
     field.placed.delete(key);
   }

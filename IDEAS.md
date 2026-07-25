@@ -77,7 +77,15 @@ kink, no drift, no forks.
 - **NOTE the terrain is still one mesh PER segment** (summit + forest-road) — the seamless
   single-surface merge is the remaining piece above.
 
-**2. Speed instantly drops at the forest. ✅ FIXED (slope-mech, 2026-07-24).** Reshaped
+**2. Speed instantly drops at the forest. ✅ FIXED (slope-mech, 2026-07-24; re-tuned 2026-07-25).**
+Update (2026-07-25, director look-pass "speed drops off in the forest"): the ease-out
+shape wasn't the issue — the mellow FLOOR was too low (0.28), so a hold-W run still shed
+~4 u/s (18.5 → 14.4) into the forest. Raised the forest/lake plateau to **0.33** (`GRADE_PROFILE`
+in route.ts): the drop is now ~2 u/s (19 → 17), you carry speed into the trees. Still below
+the 0.5 summit/lower pitch (steeper=faster holds) and below REFERENCE 0.35 at the lake.
+`[460]` trimmed to 0.34 to keep the total drop under the height-scale test. Knobs: raise the
+plateau toward 0.35 for even less drop, or lower `SLOPE_SPEED_GAIN`. Original note follows —
+Reshaped
 `GRADE_PROFILE` (route.ts) into an ease-out: steep grade shed high on the summit
 (`[60, 0.36]`) then a gentle leg (`[180, 0.28]`) carrying through the forest mouth (route
 120) — so the decel at the forest is a fraction of the `COAST_DRAG` cap, not pinned to it.
@@ -86,10 +94,15 @@ Numeric trace through the real sim: forest-window worst decel dropped to 0.27 u/
 not the felt ratio — it's the secondary knob if Josh wants it gentler still). route.test.ts
 pins the ease-out. **Josh: feel-test on the live build — the grade shape is a look-pass knob.**
 
-**3. Character drifts right at the forest. ✅ DONE (subsumed by item 1, 2026-07-24).** The
-old +x drift was the `forest-road` arc's `turn = +0.24`. The single smooth `TRAIL_LINE` is
-a symmetric S returning heading AND lateral to ~0 at the forest, so the run tracks the fall
-line with no net drift.
+**3. Character drifts right at the forest. ✅ DONE 2026-07-24; re-fixed 2026-07-25.** The
+old +x drift was the `forest-road` arc's `turn = +0.24`. The single smooth `TRAIL_LINE`
+returned heading AND lateral to ~0 at the forest END — but the summit+forest was ONE
+half-period lobe that leaned ~10.7 units left by the forest mouth, so the WHOLE forest was
+the one-directional rightward RETURN (still read as "slowly drift right," director look-pass
+2026-07-25). Re-fixed: `TRAIL_LOBES` is now ONE lobe PER AREA (summit / forest / lake), each
+a full sine that returns to the fall line at its OWN end — the forest weaves left-then-right
+and settles centered *inside the forest*, no sustained veer. Amplitude ~halved (peak ~2.7
+units, heading ≤4°); amp·2π/span matched across seams so curvature stays continuous.
 
 Touch points (as built): `shared/src/route.ts` (`SINGLE_TRAIL` + `singleTrailNext`),
 `shared/src/skiing.ts` (`singleTrail` flag, `createSingleTrailSkiState`, trail routing +
@@ -292,11 +305,15 @@ The cross-session split:
 
 ## (slope-vis) NIGHT → the enchanted forest — director redirect (2026-07-24)
 
-> **⏭ START HERE NEXT SESSION (slope-vis, handoff 2026-07-24):** the environmental
-> night look is underway from Josh's reference photos. **Ground mist is BUILT and
-> DIRECTOR-APPROVED** ("looks great") — `MistField` in `skiScene.ts`, see chunk #0
-> below. **Next up: the light shaft / moonlight rays** (the other half of #0 — the
-> bright misty central shaft from ref photo 2), then **bloom** (#1). Also already
+> **⏭ START HERE NEXT SESSION (slope-vis, handoff 2026-07-25):** the environmental
+> night look is nearly complete from Josh's reference photos. **Ground mist**
+> (DIRECTOR-APPROVED "looks great"), **bloom** (built, pushed STRONGER 2026-07-25),
+> and now the **moonlight rays / light shafts** are all BUILT (`RayField` in
+> `forestGraphics.ts` — god-ray shafts, central hero beams + flank beams, ref
+> photo 2). All three await Josh's composited look-pass together. **Next up:**
+> real MegaKit glow props (swap the code-built mushrooms), realistic CC0
+> fireflies, then the sunset→dark auto-transition that finally surfaces all this
+> on the default URL (see the branching-map section). Also already
 > settled: darkness values are the base (Josh: "feels right"); the **glow ramp is
 > signed off** — G1 `#5FE9D0` cyan, G2 `#8CF08A` moss, G3 `#B98CF0` violet, G4
 > `#F0C06A` warm lantern (DESIGN.md, `GLOW` in `skiScene.ts`); **sourcing = MegaKit
@@ -314,13 +331,32 @@ The cross-session split:
 >    firefly glow — and scatter it in the world (NOT glued to the camera/skier;
 >    place it in world space near the treeline so the skier passes through it).
 >    Realistic ⇒ warm-white/amber, sparse, blinking — not the rainbow ramp.
-> 2. **Snow sparkle is too bright at night. ✅ BUILT (slope-vis 2026-07-24,
->    session 2 — awaiting look-pass.)** The realism-snow glitter was a
->    *light-independent* additive flash (`reflectedLight.directSpecular +=` in
->    `createSnowMaterial`), so it stayed full-bright once the scene went black.
->    Added a `sparkleGain` uniform that fades with `timeOfDay` down to a faint
->    `NIGHT_SPARKLE_GAIN` (0.12) floor at full night — a bare moonlit shimmer,
->    not dead matte. Set from `applyTimeOfDay`.
+> 2. **Snow sparkle is too bright at night. ⚠ STILL TOO BRIGHT — RE-TUNE (director,
+>    2026-07-25). The first fix undershot.** The realism-snow glitter is a
+>    *light-independent* additive flash (`reflectedLight.directSpecular += white ×
+>    flash × … × 1.6 × sparkleGain` in `createSnowMaterial`, `mountainGraphics.ts`),
+>    so it stayed full-bright once the scene went black. The 2026-07-24 fix added a
+>    `sparkleGain` uniform (`setSnowNightFade`, driven from `applyTimeOfDay`) fading
+>    1 → `NIGHT_SPARKLE_GAIN` **0.12** at full night. **Why it's still bright:** that
+>    0.12 floor was tuned against the *first, brighter* moonlit night, then the night
+>    was crushed to near-black (`NIGHT.snowShadow` #12182B, luminance ~0.01–0.02) in
+>    the darker-forest redirect **and the sparkle floor was never re-tuned for it**. A
+>    lit facet peaks at ~`1.6 × 0.12 ≈ 0.19` linear — ~10× the surrounding snow, so it
+>    reads as hard bright twinkles in a forest meant to be "extremely dark." NOTE it is
+>    **not** the 2026-07-25 bloom bump: 0.19 sits well under the 0.55 bloom threshold,
+>    so bloom doesn't touch it — this is pure sparkle tuning, and predates the rays.
+>    **Fix direction (next session, look-pass value):**
+>    - Drop `NIGHT_SPARKLE_GAIN` hard — try ~0.03, or 0 at deep night (moonlight
+>      doesn't make snow flash the way the sun does); Josh's eye picks the value.
+>    - Better than a flat floor: make the night sparkle *proportional to the crushed
+>      darkness* (scale it with the snow-shadow luminance) and/or **gate it to the moon
+>      key** — multiply by the moon N·L so only the moon-raked lane shimmers faintly and
+>      the near-black flanks go quiet, instead of the whole field twinkling uniformly.
+>    - Latent gap to verify while here: `applyTimeOfDay`'s re-assert at the end of
+>      `createEnvironment` runs `setSnowNightFade` *before* the snow material compiles
+>      (`snowSparkleGain` still null → no-op), so a scene that loads directly into night
+>      would render at gain 1 until the next phase change. Not Josh's path (he cycles
+>      from day via **N**), but worth closing when the auto-transition lands.
 > 3. **Tree trunks glowing: TRIED TWICE, REJECTED, REMOVED (director, 2026-07-24,
 >    session 3).** ~~Self-glowing `PineBark` emissive.~~ Two passes shipped — a
 >    flat wash up the whole trunk (session 2), then a base-bright vertical
@@ -333,11 +369,12 @@ The cross-session split:
 >    trees are **dark silhouettes** in an enchanted world; the glow is **around**
 >    them, never *in the wood*. This item is dead — its replacement is the
 >    **environmental night look** (#0 below).
-> 4. **Bloom must be STRONGER for glowing plants.** When bloom lands (next
->    chunk), crank it — the director wants "a greater bloom for glowing plants";
->    the caps/plants should really bleed halo, not just brighten. `GLOW_EMISSIVE`
->    is already pushed >1 to give bloom headroom; tune the bloom strength/radius/
->    threshold high and re-check.
+> 4. **Bloom must be STRONGER for glowing plants. ✅ DONE (slope-vis 2026-07-25,
+>    "increase the bloom of the glowing plants" — awaiting look-pass.)**
+>    `BLOOM_STRENGTH` 1.5→2.2 (`skiScene.ts`) and `GLOW_EMISSIVE` 2.2→3.5
+>    (`forestGraphics.ts`) — brighter caps clear the 0.55 threshold by more, so
+>    each mushroom bleeds a bigger halo. Both are named look-pass knobs; push
+>    further (or widen `BLOOM_RADIUS` 0.7) if Josh wants even more.
 >
 > **↳ This work's concrete home (director, 2026-07-24):** the enchanted forest
 > *is* the branching map's forest segment; the priority is the **summit → forest
@@ -368,11 +405,20 @@ The cross-session split:
 >      glow). Additive → only lifts the near-black floor into glow-haze, never
 >      darkens the crushed ambient (per "don't crush further"). Tuning knobs:
 >      `MIST_CELL`/`MIST_DENSITY`/`MIST_COLOR`/`MIST_ONSET` + per-bank opacities.
->    - **⏭ NEXT (still #0): the light shaft / moonlight rays** — the other half
->      of the env look, most prominent in ref photo 2 (the bright misty central
->      shaft). Faked additive god-ray cone(s) angled from a canopy gap onto the
->      lane, night-gated the same way. Then bloom (#1) makes both the mist and
->      the glow props actually bleed halo.
+>    - **✅ Moonlight rays / light shafts BUILT (slope-vis 2026-07-25 — awaiting
+>      look-pass).** The other half of the env look, most prominent in ref photo 2.
+>      `RayField` in `forestGraphics.ts`: each shaft = two crossed additive
+>      gradient quads (soft top-bright → transparent-at-base, feathered sides),
+>      base-pivoted on the snow, ~32u tall, leaning ~31° down-lane along the
+>      moonlight (`RAY_DIR`), with a soft additive landing pool. A few **central
+>      hero beams** rake over the lane (baseShaft 0.3) plus sparser **flank
+>      beams** past the treeline (~0.18); scattered in the same recycling window
+>      as the decor/glow/mist, night-gated (`rayFactor`, in with the glow) and
+>      slow-shimmering. The gradient fades to nothing at the base ON PURPOSE so a
+>      lane beam never washes the driving surface (the night-readability rule).
+>      Bloom haloes the bright tops for free. Knobs: `RAY_ONSET`,
+>      `RAY_CELL`/`RAY_DENSITY`, `RAY_CENTRAL_CHANCE`, `RAY_COLOR`, per-shaft
+>      size/opacity in `makeRayShaft`.
 > 1. **✅ Bloom BUILT (slope-vis 2026-07-24, awaiting look-pass)** — the halo
 >    that makes emissive read as *glowing*, tuned STRONG (verdict #4). Done as
 >    planned: `skiScene.ts` owns an `EffectComposer` (RenderPass →
@@ -390,7 +436,8 @@ The cross-session split:
 >    MSAA on the composer target (night edges are aliased vs the antialiased
 >    direct path), and a *subtle* daytime sun-bloom (bible allows it — out of
 >    scope here to protect the crisp daylight).
-> 2. **Phase-aware darkening:** snow sparkle (verdict #2, ✅ built), driven off
+> 2. **Phase-aware darkening:** snow sparkle (verdict #2, ⚠ **re-tune — still too
+>    bright**, see the fix direction there), driven off
 >    `timeOfDay`/`glowFactor`. (Trunk glow is gone — verdict #3 — so nothing to
 >    darken there. Also the general decor/spray darkening flagged earlier —
 >    still open.)

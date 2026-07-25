@@ -298,16 +298,23 @@ export const REFERENCE_GRADE = 0.35;
 // leg [60,180] that carries THROUGH the forest entrance (120) — so at the forest you're
 // already gliding, decel a fraction of the cap (~0.3 u/s² cruise), not slamming. The
 // mellow finishes at 180 (just inside the early forest) instead of at its mouth, and
-// the floor sits a touch higher (0.28) to narrow the summit→forest speed ratio without
-// touching the locked 0.5 plunge or the SLOPE_SPEED_GAIN steeps. The steepest grade
-// CHANGE now lives high on the mountain, not at the forest. (Secondary knob if it wants
-// even gentler: lower SLOPE_SPEED_GAIN in skiing.ts — it scales the absolute decel.)
+// the steepest grade CHANGE now lives high on the mountain, not at the forest.
+//
+// KEEP THE FOREST'S SPEED (slope-mech, 2026-07-25 director look-pass: "in the forest
+// speed drops off"). The old floor 0.28 was mellow enough that a hold-W run shed ~4 u/s
+// (18.5 → 14.4) crossing into the forest — a felt "brakes on." Raised to 0.33: the
+// forest still reads as the mountain leveling out (it stays below the 0.5 summit/lower
+// pitch, so "steeper = faster" holds where it matters) but the summit→forest cruise
+// drop is now ~1.5 u/s — you carry your speed into the trees instead of losing it. Still
+// under the REFERENCE_GRADE (0.35) at the frozen lake so the coupling reads as a genuine
+// mellow stretch, not flat. (Secondary knob if it wants even less drop: raise the plateau
+// toward 0.35, or lower SLOPE_SPEED_GAIN in skiing.ts — it scales the absolute decel.)
 const GRADE_PROFILE: readonly (readonly [number, number])[] = [
   [0, 0.5], // steep summit plunge (~26.6°, just under the camera's ~27°)
-  [60, 0.36], // shed most of the plunge up high — steep grade drop, expected here
-  [180, 0.28], // ease out onto the mellow forest, gently, PAST the 120 forest mouth
-  [340, 0.28], // …stays gentle across the forest + frozen lake
-  [460, 0.34], // building back up through the mid detours
+  [60, 0.37], // shed most of the plunge up high — steep grade drop, expected here
+  [180, 0.33], // ease out onto the forest — mellower, but it KEEPS its speed (see below)
+  [340, 0.33], // …holds across the forest + frozen lake
+  [460, 0.34], // building back up through the mid detours (parked map; trims total drop)
   [560, 0.5], // the steep lower pitch (ice valley / cliff run-in)
   [640, 0.38], // ease a touch for the flag
 ];
