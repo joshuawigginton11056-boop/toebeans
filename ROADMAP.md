@@ -132,7 +132,14 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   `SLOPE_SPEED_GAIN` (1.5) amplifies the coupling so the whole graded mountain skis
   faster — steeps really move, even the mellow forest out-paces the flat baseline;
   `GRADE_TOP_SPEED` raised 22→28. Both are live-build LOOK-PASS knobs; the Overlook
-  stays a hard no-op. Detour *content* (animal world, bird, penguin/ice castles) and
+  stays a hard no-op. **Forest speed, round 2 (slope-mech, 2026-07-25 — director "my
+  speed still feels extremely slow through the forest"):** the forest/lake plateau in
+  `GRADE_PROFILE` jumped 0.33→0.42 (from *below* the 0.35 reference to above it), so the
+  forest stops being a mellow-slow zone and becomes a fast glide that carries momentum
+  through the trees — cruise ~11.3→14.4 u/s (+27%), ~84% of the summit instead of 66%;
+  hold-W ~21.6. Steeps (0.5) stay clearly above it so "steeper = faster" still reads.
+  Side effect for slope-vis: the mountain is ~19% taller (total drop ~282 vs ~238) — a
+  genuinely steeper forest, rendered from `routeHeightAt`. Detour *content* (animal world, bird, penguin/ice castles) and
   per-route hazard balancing (§5) come after; §7's open reconciliations remain the
   director's.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
