@@ -205,7 +205,16 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   (1) **darker-night pass** — `NIGHT` constants crushed toward black (open-snow
   floor `#3F4D70`→`#12182B`, sky zenith `#1A2138`→`#0B0F1C`); the moon stays a
   faint down-lane key so the lit lane (`#4E608A`) still reads until the glow
-  assets carry lane light. (2) **the glowing-forest first layer** — the glow
+  assets carry lane light. **⚠ GLOWING PLANTS REMOVED (forest 2026-07-25, Josh:
+  "remove the glowing plants from the forest").** The entire glow field — the
+  code-built emissive mushroom clusters, their additive snow pools, and the
+  hue-matched cast `PointLight`s — is deleted from `forestGraphics.ts`; the night
+  forest is now lit only by the dim moon key + the moonlight-ray shafts + the
+  drifting mist. `applyGlowPhase` shrank to `nightBloomFactor` (still ramps the
+  night bloom the rays feed). Everything below in *this bullet* about the glow
+  props is HISTORY — kept for the design rationale (why trunks don't self-glow,
+  how bloom was tuned) but the props it describes no longer exist. (2) **the
+  glowing-forest first layer** — the glow
   ramp (G1–G4, DESIGN.md) + code-built emissive mushroom clusters with faked
   additive snow pools scattered along both treelines, night-gated (`glowFactor`,
   fades in past dusk). **Director look-passed (2026-07-24):** keep the glowing
@@ -272,6 +281,36 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   falls off ("cast on"), and trees away from any cluster stay dark silhouettes.
   Verified live at night: amber/green/violet pools light the adjacent trunks,
   distant trees still dark. Knobs: `GLOW_LIGHT_INTENSITY`, `GLOW_LIGHT_RANGE`.
+  **Ground-mist distance fade (forest-graphics 2026-07-25, "fog should float like
+  real fog, not a sharp line where it stops"):** the additive `MistField` banks
+  held constant opacity out to `DECOR_AHEAD` (170m) — past the fog's far=150m —
+  then stopped dead; perspective crushes those far cells into a thin horizon strip
+  and additive blending sums them into a bright WALL with a hard top edge that ends
+  abruptly. Added a forward-distance falloff (`MIST_FADE_START` 50m full →
+  `MIST_FADE_END` 130m gone, smoothstep) in `updateMistField` (`forestGraphics.ts`)
+  so the mist thins into the distance and dissolves; near/mid haze stays full.
+  Removed the mist wall — verified in-forest at night with bloom quieted.
+  **Banding RESOLVED — it was 8-bit posterization, dithered (forest-graphics,
+  2026-07-25).** The mist fade fixed ONE contributor; the SECOND artifact — the
+  discrete **horizontal steps/terraces across the fogged night snow** (and, read
+  clearly with bloom quieted, the **stepped sky-dome gradient** too) — turned out
+  to be plain **8-bit posterization**, NOT the mist and NOT the fog curve
+  (`scene.fog` is linear near=80/far=300, color-only, mathematically smooth).
+  Diagnosis: at full night the whole frame lives in a razor-thin dark value range
+  (sky navy `0x121829`→`0x293651`, snow `0x12182b`→`0x4e608a` fogged toward the
+  horizon), so a smooth gradient rounds to a handful of adjacent 8-bit codes and
+  each code paints a wide flat terrace — the exact "stripes instead of a grade"
+  Josh saw. Confirmed by quieting `BLOOM_STRENGTH` (0.25) at the summit: the sky
+  showed unmistakable even terraces with no geometry behind them (pure
+  quantization). Fix: a final **ordered-dither `ShaderPass`** (`DitherShader` in
+  `skiScene.ts`) appended to the night-bloom composer after `OutputPass`, adding a
+  ±1 LSB triangular-PDF interleaved-gradient-noise dither in display space just
+  before the 8-bit write, so the quantization boundary scatters into imperceptible
+  noise instead of a hard contour. Screen-static (keyed on `gl_FragCoord`, no
+  temporal shimmer); runs only inside the composer, so daytime (bloom 0, composer
+  bypassed) is byte-identical. Verified honestly under REAL conditions — bloom ON
+  (1.5), in-forest, full night: sky gradient now continuous, mid-ground snow grades
+  smoothly (the remaining dark diagonals there are tree-cast shadows, not bands).
   Still to do (verdict-ordered): general decor/spray darkening, real MegaKit glow
   props, realistic fireflies, the auto-transition, night audio. ⚠ amends the bible's
   "bright only" rule (DESIGN.md).
@@ -329,6 +368,10 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 - **Menu lobby / title screen** (`lobbyRender.ts` + `lobbyUi.ts`) — a live 3D
   vignette of the character + cat on dawn snow; doubles as character select.
   This **replaced the scrapped walkable bedroom**; there is no walkable home space.
+  The vignette's background trees are the MegaKit `StylizedPine` models, matching
+  the slope (lobby, 2026-07-25 — swapped off the old Ultimate Nature Pack
+  birches/amber-pines; those 13 tree GLBs + their CREDITS rows were deleted, the
+  pack's rocks/bushes/stump/log stay).
 - **HUD** (`client/src/hud.ts`): nine cat-face lives with a **"N lives left!"**
   caption, crash/forfeit banners. **Losing a life plays out** (lobby, 2026-07-24):
   the spent cat takes a red X, shakes, and tumbles off the row, leaving a faint
@@ -363,6 +406,12 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 ## Open — still to resolve
 
 ### M2 remaining
+- [x] **Night fog sharp horizontal banding (Josh, 2026-07-25, screenshot) — FIXED.**
+      Diagnosed as plain 8-bit **posterization** of the dark, narrow-value-range
+      night gradients (sky dome + fogged snow), not the mist and not the fog curve.
+      Fixed with a final ordered-dither `ShaderPass` on the night-bloom composer
+      (`DitherShader` in `skiScene.ts`). Verified bloom-on + in-forest at full
+      night. Full context under Ski slope → night look.
 - [ ] **Second hazard: tree limbs + the `crouch` control.** Crouch is deliberately
       unbuilt until there's a limb to duck under; build them together.
 - [ ] **"Fling more" snow:** bigger plume + lens boost on hard carves, and a

@@ -72,11 +72,11 @@ const TREES: ReadonlyArray<{
   height: number;
   turn: number;
 }> = [
-  { file: "PineTree_Snow_1.glb", x: -3.4, z: -3.2, height: 4.2, turn: 0.4 },
-  { file: "BirchTree_Snow_2.glb", x: 3.1, z: -4.0, height: 3.6, turn: 1.9 },
-  { file: "PineTree_Snow_4.glb", x: -5.6, z: -7.5, height: 5.2, turn: 2.7 },
-  { file: "BirchTree_Dead_Snow_1.glb", x: 5.2, z: -7.0, height: 4.4, turn: 0.9 },
-  { file: "PineTree_Snow_2.glb", x: 1.6, z: -9.0, height: 5.6, turn: 4.1 },
+  { file: "StylizedPine_2.glb", x: -3.4, z: -3.2, height: 4.2, turn: 0.4 },
+  { file: "StylizedPine_3.glb", x: 3.1, z: -4.0, height: 3.6, turn: 1.9 },
+  { file: "StylizedPine_1.glb", x: -5.6, z: -7.5, height: 5.2, turn: 2.7 },
+  { file: "StylizedPine_4.glb", x: 5.2, z: -7.0, height: 4.4, turn: 0.9 },
+  { file: "StylizedPine_5.glb", x: 1.6, z: -9.0, height: 5.6, turn: 4.1 },
   { file: "Rock_Snow_3.glb", x: -1.9, z: -2.6, height: 0.5, turn: 1.2 },
   { file: "Bush_Snow_1.glb", x: 2.2, z: -2.2, height: 0.45, turn: 2.3 },
 ];
