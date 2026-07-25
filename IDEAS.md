@@ -3,6 +3,39 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## ⏭ START HERE (mountain) — build the STARTING MOUNTAIN as an open sculpted peak vista (Josh, 2026-07-25)
+
+**Josh's callout:** the *starting* area (the open summit before the forest) is the
+weakest view in the game — a flat, pink-hazed, featureless wash — while the forest
+looks great. He'll re-open this in a **fresh session with a reference photo** (a real
+alpine shot: a rocky snow-corniced peak rising behind rolling, sculpted powder slopes
+with a lit/shadow side to every roll, sparse scattered pines, bright crisp sunlit white).
+
+**Diagnosis (already done — don't re-derive):**
+- The snow is **ONE material** that follows the skier (`createSnowfieldGeometry` +
+  `createSnowMaterial`, mountainGraphics.ts). It is **identical** at the summit and the
+  forest — nothing to rebuild. Confirmed in code and live.
+- The summit only *looks* washed for two reasons, **neither is the snow**: (1) the open
+  expanse is more exposed to the **dawn fog** (`THREE.Fog(dawnPink, 35, 150)`,
+  skiScene.ts) — a live diagnostic pushing it to 80/400 de-washed it markedly; (2) it has
+  **no shadow-casters** — the forest snow's richness is tree shadows raking across it, and
+  the open summit has nothing casting them. Even fog-free, the open snow stayed a smooth
+  sheet.
+- **So the fix is terrain, not snow:** give the summit its own **shadow-casting relief**
+  (a real distant peak + rolling ridges/drifts) so the same snow reads the same way. This
+  is mountain-graphics' lane (terrain + sky/peak); the **sparse pines are forest-graphics'**
+  — coordinate the scatter.
+
+**Open scope decision (deferred by Josh — "ignore the sky right now"):** the reference is
+bright midday-blue but the game defaults to pink dawn. Whether the starting area shifts
+brighter/crisper (touches the shared day/night lighting solve + sky) or keeps the dawn mood
+is **unresolved** — Josh will decide next session. Do NOT touch the sky/atmosphere until then.
+
+**Already landed as a down-payment (mountain, 2026-07-25):** coarse dune form-shading in
+`createSnowMaterial` (sun-away dune faces tint toward snow-shadow blue #2) so the snow's own
+relief reads without cast shadows. Helps the flanks; can't sculpt the intentionally-flat
+groomed lane. It'll have real terrain to bite on once the peak/ridges exist.
+
 ## ⏭ START HERE (slope-mech) — ONE solid mountain, one SMOOTH trail summit → back of the forest (director look-pass, 2026-07-24)
 
 Director look-pass on the real-terrain build. **Redirect: stop branching. Build one

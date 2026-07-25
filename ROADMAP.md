@@ -137,7 +137,13 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   director's.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
   across all 24 slope models; decor scatter follows the run. (Old birches removed.)
-- **Realism snow:** procedural displaced surface + GPU-carved ski trails.
+- **Realism snow:** procedural displaced surface + GPU-carved ski trails. Plus
+  **coarse dune form-shading** (mountain, 2026-07-25): the big wind-dunes get a
+  self-cast blue (#2) shade on their sun-away faces so their form reads on open,
+  shadowless ground — the summit, which has no trees to rake the shadows the
+  forest snow reads by. In-palette, mood-untouched. (A down-payment; the summit
+  still reads flat because it's an empty flat corridor — see the starting-mountain
+  item in IDEAS.md.)
 - **Lighting/haze:** warm sun, palette-exact blue shadows, dawn-pink fog, sun disc.
   Now on a **`timeOfDay` phase** (`skiScene.ts`): 0 = that dawn (a verified no-op),
   1 = night, cycled by the debug key **N**. A first **moonlit night** was built
