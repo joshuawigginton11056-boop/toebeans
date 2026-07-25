@@ -256,11 +256,13 @@ const GLOW_HUES = [GLOW.cyan, GLOW.moss, GLOW.violet, GLOW.amber] as const;
 // Glow ramps in only past this phase — mushrooms at golden hour would be wrong.
 const GLOW_ONSET = 0.55;
 // How brightly the emissive caps read at full night (feeds emissiveIntensity;
-// pushed well past 1 so bloom has a lot to bleed). Raised 2.2 → 3.5 on the
-// director's "increase the bloom of the glowing plants" call (2026-07-25),
-// alongside the core BLOOM_STRENGTH bump — brighter caps clear the bloom
-// threshold by more, so the halo off each mushroom reads bigger. Look-pass knob.
-const GLOW_EMISSIVE = 3.5;
+// pushed past 1 so bloom has something to bleed). History: 2.2 → 3.5 on the
+// "increase the bloom" call, then back to 2.0 on the follow-up (2026-07-25):
+// the 3.5 bump didn't grow the halo, it just *brightened the mushroom bodies*
+// (director: "lower the brightness of the plants themselves"). The halo is now
+// grown the right way instead — in the core bloom pass (bigger BLOOM_RADIUS +
+// lower BLOOM_THRESHOLD), not by over-driving the emissive. Look-pass knob.
+const GLOW_EMISSIVE = 2.0;
 // Peak opacity of a prop's additive snow pool at full night.
 const POOL_ALPHA = 0.55;
 
@@ -679,17 +681,24 @@ const RAY_COLOR = 0xbfd4f2;
 const RAY_ONSET = 0.5;
 // Sparse — "a few rays," not a forest of beams. One potential shaft per this
 // many metres of run, and even then only RAY_DENSITY of the cells spawn one.
+// Thinned 0.7 → 0.45 on the director's "too strong / randomly dropped in" call
+// (2026-07-25): fewer beams read as real breaks in the canopy, not a lightshow.
 const RAY_CELL = 30;
-const RAY_DENSITY = 0.7;
+const RAY_DENSITY = 0.45;
 // How often a shaft is a central hero beam over the lane (ref photo 2) rather
-// than a treeline-flank shaft. Kept low so the lane stays mostly clear.
-const RAY_CENTRAL_CHANCE = 0.32;
+// than a treeline-flank shaft. Cut 0.32 → 0.12 (same call): a beam standing
+// straight over the open lane is exactly what read as a "spotlight dropped in."
+// Almost all shafts now rake in from the treeline, filtering past the trunks.
+const RAY_CENTRAL_CHANCE = 0.12;
 
-// Base→top direction of a shaft: mostly vertical, leaning down-lane (−z) and a
-// touch left, matched to the moon's azimuth so the beams rake toward the camera
-// the way "you ski into the light" reads. Steeper than the moon's own elevation
-// so the shafts stand up rather than lie flat.
-const RAY_DIR = new THREE.Vector3(-0.15, 1.7, -1).normalize();
+// Base→top direction of a shaft: angled, leaning down-lane (−z, toward the
+// moon's azimuth) and a touch left, so the beams rake in from the moon rather
+// than dropping straight down. Was near-vertical (−0.15, 1.7, −1) ≈ 30° off
+// plumb, which still read as a spotlight; leaned to ~42° off plumb (director,
+// 2026-07-25: "should be angled from the moon, come around the tree leaves").
+// Still steeper than the moon's own low elevation so the shafts stand up in the
+// canopy instead of lying flat across the snow.
+const RAY_DIR = new THREE.Vector3(-0.25, 1.25, -1.1).normalize();
 const rayQuat = new THREE.Quaternion().setFromUnitVectors(
   new THREE.Vector3(0, 1, 0),
   RAY_DIR,
@@ -759,7 +768,9 @@ function makeRayShaft(
 ): THREE.Group {
   const cluster = new THREE.Group();
   const tint = new THREE.Color(RAY_COLOR);
-  const width = central ? 4 + rand() * 2.5 : 2.4 + rand() * 2;
+  // Narrower than before (director "too strong": 2026-07-25) — a thin raking
+  // ray reads as light through a canopy gap, a wide one reads as a spotlight.
+  const width = central ? 2.5 + rand() * 1.5 : 1.5 + rand() * 1.1;
   const height = central ? 26 + rand() * 9 : 20 + rand() * 9;
 
   const shaftMat = new THREE.MeshBasicMaterial({
@@ -808,8 +819,12 @@ function makeRayShaft(
   cluster.userData = {
     shaftMat,
     poolMat,
-    baseShaft: central ? 0.3 : 0.16 + rand() * 0.1,
-    basePool: central ? 0.34 : 0.2 + rand() * 0.1,
+    // Roughly halved (director "moon beams too strong", 2026-07-25). The pool
+    // is cut hardest of all: a bright disc directly under a beam is the single
+    // biggest "spotlight" tell, so it's now only a faint kiss of light where
+    // the raking shaft grazes the snow, not a stage spot.
+    baseShaft: central ? 0.15 : 0.08 + rand() * 0.06,
+    basePool: central ? 0.11 : 0.06 + rand() * 0.05,
     shimmerPhase: rand() * Math.PI * 2,
     shimmerSpeed: 0.15 + rand() * 0.25,
   };
