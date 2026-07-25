@@ -688,15 +688,16 @@ export function syncSkiSceneToState(
 // centerlines (segmentToWorld) AND the varying grade (segmentCenterline.y /
 // segmentPitch) so the ground descends + bends exactly under the run.
 //
-// SINGLE TRAIL (slope-mech, 2026-07-24 redirect — IDEAS.md START HERE): the forks
-// are parked, so this builds ONLY the played trail's segments (route.ts's
-// SINGLE_TRAIL — summit → forest → the frozen lake), riding the smooth continuous
-// TRAIL_LINE centerline. No detour corridors, no fork-marker rocks. The trail's
-// terminal (the back of the lake, singleTrailNext → null) extends a flat RUNOUT —
-// there is no finish line yet (director), so the run coasts off onto the valley
-// floor. Built once when a run starts (main.ts). Reopening the map = iterate more
-// of the graph here again. (Still one mesh PER segment for now; merging the trail
-// into a single seamless surface is the next chunk — Josh split it off.)
+// SINGLE TRAIL (slope-mech, 2026-07-24 redirect — IDEAS.md START HERE; extended past
+// the forest 2026-07-25): the forks are parked, so this builds ONLY the played
+// trail's segments (route.ts's SINGLE_TRAIL — the full spine summit → forest → frozen
+// lake → yeti → cave → cliff), riding the smooth continuous TRAIL_LINE centerline. No
+// detour corridors, no fork-marker rocks. The trail's terminal (the cliff at the
+// valley floor, singleTrailNext → null) extends a flat RUNOUT — there is no finish
+// line yet (director), so the run coasts off onto the valley floor. Built once when a
+// run starts (main.ts). Because it just iterates SINGLE_TRAIL, growing the trail in
+// route.ts grows the terrain here automatically. (Still one mesh PER segment for now;
+// merging the trail into a single seamless surface is a later chunk.)
 //
 // SEAM NOTE (slope-mech → slope-vis): this is a PLAIN-SHADED placeholder surface —
 // real geometry, no dressing. skiScene.ts (slope-vis) owns the final look (snow

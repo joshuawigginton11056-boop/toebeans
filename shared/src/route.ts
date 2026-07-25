@@ -63,21 +63,37 @@ export const BRANCH_START = "summit";
 // The single played trail (slope-mech, 2026-07-24 redirect — see IDEAS.md START
 // HERE). The §4 branching graph below is PARKED for the played path: it stays
 // here, still proven by the same-clock tests, but the active run no longer forks
-// through it. Instead it rides ONE non-branching trail — summit → forest → the
-// frozen lake — and ends there, coasting off into the flat runout (there is no
-// finish line yet). Kept as its own tiny ordered list so BRANCH_SEGMENTS' tested
-// topology is untouched: the sim walks THIS (via singleTrailNext) instead of
-// `next` when a run is flagged single-trail, and the forks never arm. Extend the
-// list (and its terrain in skiRender) to grow the trail — the lake's `lake-gap`
-// chasm + checkpoint come along for free, so the frozen lake is where the trail's
-// FIRST jump lives (design §4: "all three routes learn the jump here"). The
-// lake's own trigger (into `water`) stays parked with the forks.
-export const SINGLE_TRAIL: readonly string[] = ["summit", "forest-road", "lake"];
+// through it. Instead it rides ONE non-branching trail down the whole mountain —
+// the spine: summit → forest → frozen lake → yeti's peak → cave → cliff — reaching
+// the valley floor at the flag and then coasting off into the flat runout (there is
+// no finish line yet — director). Kept as its own ordered list so BRANCH_SEGMENTS'
+// tested topology is untouched: the sim walks THIS (via singleTrailNext) instead of
+// `next` when a run is flagged single-trail, and the forks never arm.
+//
+// EXTENDED PAST THE FOREST (slope-mech, 2026-07-25): the trail used to dead-end at
+// the back of the lake into an endless flat runout — a terrain-less void where the
+// controls also went dead (the grade-0 speed bug, fixed in skiing.ts). It now rides
+// the rest of the DESIGNED spine (yeti/cave/cliff already have world placement +
+// grade + terrain-builder support — they were only ever parked as *fork* content,
+// so pulling them onto the road just skis them straight, no splits). Two jumps come
+// along for free: the lake's `lake-gap` (the first jump — design §4, "all three
+// routes learn the jump here") and the cliff's `cliff-gap` (the signature crevasse).
+// The segments' own triggers (lake→water, yeti→ledge) stay parked with the forks
+// (guarded off for single-trail runs). Grow the trail by extending this list; the
+// terrain in skiRender.ts follows it automatically.
+export const SINGLE_TRAIL: readonly string[] = [
+  "summit",
+  "forest-road",
+  "lake",
+  "yeti",
+  "cave",
+  "cliff",
+];
 
-/** The next segment along the single played trail, or null at the back of the
- * frozen lake — the trail's terminal, where the run opens into the runout. Off
- * the trail (an unlisted id) returns null too, so a single-trail run never
- * wanders onto the parked graph. */
+/** The next segment along the single played trail, or null at the cliff — the
+ * trail's terminal, where the run reaches the valley floor and opens into the
+ * runout. Off the trail (an unlisted id) returns null too, so a single-trail run
+ * never wanders onto the parked graph. */
 export function singleTrailNext(segmentId: string): string | null {
   const i = SINGLE_TRAIL.indexOf(segmentId);
   return i >= 0 && i + 1 < SINGLE_TRAIL.length ? SINGLE_TRAIL[i + 1]! : null;
