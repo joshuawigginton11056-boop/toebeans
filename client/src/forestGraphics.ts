@@ -1,15 +1,16 @@
 // forestGraphics.ts — everything growing on and glowing over the slope
 // (forest-graphics session). Split out of skiScene.ts on 2026-07-24 (the
 // scenery carve — see PARALLEL.md): trees, decor scatter, treelines, the
-// painted-detail texturing, the enchanted-night glow props + snow pools, the
-// drifting mist banks, and the moonlight shafts breaking through the canopy.
-// The shared day/night engine + palette live in the core (skiScene.ts), which
-// imports and drives what this file builds; applyGlowPhase/applyMistPhase/
-// applyRayPhase are called by the core engine with the raw time-of-day phase
-// and gate themselves.
+// painted-detail texturing, the drifting mist banks, and the moonlight shafts
+// breaking through the canopy. (The enchanted-night glowing plants — mushroom
+// clusters + snow pools + cast lights — were removed 2026-07-25; see the NIGHT
+// BLOOM ONSET note below.) The shared day/night engine + palette live in the
+// core (skiScene.ts), which imports and drives what this file builds;
+// nightBloomFactor/applyMistPhase/applyRayPhase are called by the core engine
+// with the raw time-of-day phase and gate themselves.
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { LANE_EDGE, makeRandom, type SlopeEnvironment } from "./skiScene";
+import { LANE_EDGE, makeRandom } from "./skiScene";
 
 // How "on" the ground mist is (0 by day, 1 at full night) — set by
 // applyMistPhase from the time-of-day phase and read each frame in
@@ -228,87 +229,20 @@ export function updateSlopeDecor(anchorZ: number): void {
 const EMPTY_CELL = new THREE.Object3D();
 
 // ---------------------------------------------------------------------------
-// ENCHANTED NIGHT — glowing props (slope-vis 2026-07-24)
+// NIGHT BLOOM ONSET
 //
-// The night's lighting model (DESIGN.md Lighting amendment + the IDEAS.md
-// night entry, director redirect 2026-07-24): the forest is extremely dark and
-// lit by *objects in the world* — emissive glow props that pool light on the
-// snow — not a moon fill. This chunk builds that first layer: code-built
-// glowing mushroom clusters (real MegaKit props swap in a later chunk) with
-// faked additive snow pools. It fades in with the night phase (glowFactor, set
-// in applyTimeOfDay) and renders as pure emissive, so it reads "lit" regardless
-// of the near-black scene light. Bloom — the halo that makes emissive actually
-// *glow* — is now built (slope-vis 2026-07-24): see the bloom NOTE near the top
-// of this file and renderSlope; it's night-gated and pushed strong on these caps.
-// (A code-built firefly cloud was here too but was cut on the director's look —
-// realistic fireflies come from a CC0 pack later; see the IDEAS.md night entry.)
-//
-// Glow hues are their own ramp, carved out of the daylight 13 the way the
-// character ramps were (director sign-off 2026-07-24). Signal red stays
-// reserved; none of these fights the cat's scarf.
-const GLOW = {
-  cyan: 0x5fe9d0, // G1 mushroom cyan
-  moss: 0x8cf08a, // G2 luminous moss
-  violet: 0xb98cf0, // G3 crystal violet
-  amber: 0xf0c06a, // G4 warm lantern
-} as const;
-const GLOW_HUES = [GLOW.cyan, GLOW.moss, GLOW.violet, GLOW.amber] as const;
-// Glow ramps in only past this phase — mushrooms at golden hour would be wrong.
-const GLOW_ONSET = 0.55;
-// How brightly the emissive caps read at full night (feeds emissiveIntensity;
-// pushed past 1 so bloom has something to bleed). History: 2.2 → 3.5 on the
-// "increase the bloom" call, then back to 2.0 on the follow-up (2026-07-25):
-// the 3.5 bump didn't grow the halo, it just *brightened the mushroom bodies*
-// (director: "lower the brightness of the plants themselves"). The halo is now
-// grown the right way instead — in the core bloom pass (bigger BLOOM_RADIUS +
-// lower BLOOM_THRESHOLD), not by over-driving the emissive. Look-pass knob.
-// Dropped 2.0 → 1.4 (2026-07-25, "separate the glow from the brightness"): at
-// 2.0 the cap core clipped to pure white and bloom then bled *white*, not the
-// hue. Kept above 1 so it still clears the bloom threshold and haloes — but low
-// enough that the core stays coloured, so the glow reads as its hue, not a
-// white-hot dot.
-const GLOW_EMISSIVE = 1.4;
-// Peak opacity of a prop's additive snow pool at full night. Cut 0.55 → 0.22
-// (2026-07-25, "separate the glow from the brightness"): additive at 0.55 laid a
-// bright disc on the snow that, once the new cast light lit the SAME ground,
-// saturated all channels to white and bloomed into a white ball. The real cast
-// light now does the ground pooling; this additive disc is back to a faint
-// coloured wash that tints the snow without clipping it.
-const POOL_ALPHA = 0.22;
+// The enchanted-night GLOWING PLANTS — code-built mushroom clusters, their
+// additive snow pools, and the hue-matched cast PointLights — were REMOVED
+// here on Josh's call (2026-07-25, "remove the glowing plants from the
+// forest"). What survives is the night-bloom onset the moonlight rays still
+// ride: the rays' bright tops feed the core bloom pass, which ramps from this
+// phase (see nightBloomFactor below and skiScene.ts's applyTimeOfDay). The old
+// glow-prop machinery (hues, emissive/pool/cast-light tuning, and the earlier
+// rejected self-glowing trunks) is preserved in git history and the DESIGN.md
+// night notes. makeGlowSprite (below) is kept — the ray landing pool reuses it.
 
-// The glow props actually CAST light now (forest-graphics, 2026-07-25: "the
-// bloom should glow on the trees"). Each mushroom cluster carries a real,
-// hue-matched PointLight, so the environmental glow spills onto the nearby dark
-// trunks — the reference-photo read of light *landing on* the wood — and the
-// lit bark near a cap clears the bloom threshold, so the core bloom pass haloes
-// the tree exactly where the glow touches it. This is NOT the self-emissive
-// trunk the director rejected 2026-07-24: a real light has a hotspot that falls
-// off, which reads as "cast on," not "the wood glows." The additive snow pool
-// only ever touched the flat ground; this is what finally reaches the vertical
-// trunks the pool never could. Look-pass knobs:
-//   INTENSITY — bright enough that the near bark blooms, dim enough to stay a
-//     spill of light, not a floodlight. Cut 6 → 2.4 (2026-07-25, "separate the
-//     glow from the brightness"): at 6 the light seared the ground right under
-//     the cluster to white on top of the additive pool. It now colours the near
-//     trunks without blowing out the snow it stands on.
-//   RANGE — short, so it pools on the closest trunks and dies before it becomes
-//     an even wash of the whole treeline.
-const GLOW_LIGHT_INTENSITY = 2.4;
-const GLOW_LIGHT_RANGE = 8;
-// Set by applyGlowPhase (the eased night factor), read by updateGlowField to
-// scale every live cluster's cast light — off by day, full at night.
-let glowLightFactor = 0;
-
-// NOTE (director verdict, 2026-07-24): self-glowing tree trunks are OUT. Two
-// passes shipped — a flat emissive up the whole trunk (verdict #3), then a
-// base-bright vertical gradient textured by the bark (ref-photo revision) — and
-// both were rejected: "the tree glow looks tacky; I don't want the trees to
-// glow themselves." The reference photos read as dark tree *silhouettes* against
-// an enchanted environment: the glow belongs to the world around the trees
-// (ground mushrooms, mist/haze, the light shaft, floating motes), not to the
-// wood. All trunk-glow code was removed here; the enchantment is carried by the
-// glow field (mushrooms + pools) and the still-to-come environment work. See
-// the DESIGN.md "Glowing trunks" note and the ROADMAP / IDEAS night entry.
+// Night bloom ramps in only past this phase — nothing enchanted at golden hour.
+const NIGHT_BLOOM_ONSET = 0.55;
 
 // A soft round dot (radial white → transparent) — stretched flat, the shape of
 // a glow pool on the snow. Generated once, tinted per use by the material's color.
@@ -336,211 +270,24 @@ function makeGlowSprite(falloff: number): THREE.CanvasTexture {
   return texture;
 }
 
-// Shared, hue-keyed materials so the whole glow field costs one material set,
-// like the painted-decor trick. applyGlowPhase scales all of them at once.
-let glowCapMaterials: THREE.MeshStandardMaterial[] = [];
-let glowPoolMaterials: THREE.MeshBasicMaterial[] = [];
-let glowStemMaterial: THREE.MeshStandardMaterial | null = null;
-
-function ensureGlowMaterials(): void {
-  if (glowCapMaterials.length) return;
-  const poolTex = makeGlowSprite(0.35); // wider soft falloff for a ground pool
-  glowCapMaterials = GLOW_HUES.map(
-    (hue) =>
-      new THREE.MeshStandardMaterial({
-        color: 0x0b0f12, // near-black body; the cap reads by its emissive
-        emissive: new THREE.Color(hue),
-        emissiveIntensity: 0, // brought up by applyGlowPhase
-        roughness: 1,
-        metalness: 0,
-      }),
-  );
-  glowPoolMaterials = GLOW_HUES.map(
-    (hue) =>
-      new THREE.MeshBasicMaterial({
-        map: poolTex,
-        color: new THREE.Color(hue),
-        transparent: true,
-        opacity: 0,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        fog: true,
-      }),
-  );
-  glowStemMaterial = new THREE.MeshStandardMaterial({
-    color: 0x11161c, // dark stalk — a silhouette holding the cap up
-    roughness: 1,
-    metalness: 0,
-  });
-}
-
-export interface GlowField {
-  readonly group: THREE.Group;
-  readonly templates: THREE.Group[]; // one per hue, cloned into the scatter
-  readonly placed: Map<string, THREE.Object3D>;
-}
-
-// One glowing-mushroom cluster for hue index `h`: a few emissive-capped
-// stalks of varied height standing in a shared additive snow pool. Built from
-// primitives (the real MegaKit mushrooms replace these next chunk); the
-// silhouette and the pool are what sell the read at gameplay distance.
-function makeGlowCluster(h: number, rand: () => number): THREE.Group {
-  ensureGlowMaterials();
-  const cluster = new THREE.Group();
-  const capMat = glowCapMaterials[h]!;
-
-  // The snow pool: a flat additive disc under the whole cluster.
-  const poolRadius = 1.0 + rand() * 0.8;
-  const pool = new THREE.Mesh(
-    new THREE.PlaneGeometry(poolRadius * 2, poolRadius * 2),
-    glowPoolMaterials[h]!,
-  );
-  pool.rotation.x = -Math.PI / 2;
-  pool.position.y = 0.06; // just above the snow; additive + no depth write
-  pool.renderOrder = 1;
-  cluster.add(pool);
-
-  const shrooms = 2 + Math.floor(rand() * 3); // 2–4 stalks
-  for (let i = 0; i < shrooms; i++) {
-    const shroom = new THREE.Group();
-    const height = 0.16 + rand() * 0.3;
-    const capR = 0.06 + rand() * 0.08;
-    const stem = new THREE.Mesh(
-      new THREE.CylinderGeometry(capR * 0.32, capR * 0.42, height, 6),
-      glowStemMaterial!,
-    );
-    stem.position.y = height / 2;
-    stem.castShadow = false;
-    shroom.add(stem);
-    // Cap: a squashed dome sitting on the stalk.
-    const cap = new THREE.Mesh(
-      new THREE.SphereGeometry(capR, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2),
-      capMat,
-    );
-    cap.scale.y = 0.7;
-    cap.position.y = height;
-    cap.castShadow = false;
-    shroom.add(cap);
-    const a = rand() * Math.PI * 2;
-    const r = rand() * poolRadius * 0.6;
-    shroom.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
-    cluster.add(shroom);
-  }
-
-  // The real cast light (see the GLOW_LIGHT note): one hue-matched PointLight
-  // at the cluster centre, lifted to cap height so it rakes the trunk sides
-  // rather than only the ground. Intensity starts at 0 and is driven each frame
-  // from glowLightFactor in updateGlowField (clones can't share the template's
-  // reference, so it's re-found and cached there). No shadows — a soft ambient
-  // spill, and shadow-casting a dozen live lights would be far too costly.
-  const light = new THREE.PointLight(
-    new THREE.Color(GLOW_HUES[h]!),
-    0,
-    GLOW_LIGHT_RANGE,
-    2,
-  );
-  // Lifted to ~trunk-mid height (0.55 → 1.1) so the light rakes the trunk SIDES
-  // instead of dumping a tight hotspot on the snow right below it — part of
-  // separating the coloured glow from the white ground-blowout (2026-07-25).
-  light.position.set(0, 1.1, 0);
-  light.castShadow = false;
-  cluster.add(light);
-
-  return cluster;
-}
-
-export function createGlowField(): GlowField {
-  const group = new THREE.Group();
-  group.visible = false; // off by day; applyGlowPhase turns it on at night
-  const templates: THREE.Group[] = [];
-  for (let h = 0; h < GLOW_HUES.length; h++) {
-    // A deterministic per-hue template, cloned into every scatter cell —
-    // same one-material-set economy as the decor. Seeded so it never reshuffles.
-    templates.push(makeGlowCluster(h, makeRandom(0x91074 + h * 7919)));
-  }
-  return { group, templates, placed: new Map() };
-}
-
-// Glow scatter recycles along the run exactly like the decor window: sparse
-// clusters hugging both treelines, deterministic per cell so a stretch of
-// forest always glows the same. Cheap enough to run every frame (a handful of
-// live clusters); the group's visibility gates the actual render cost by day.
-const GLOW_CELL = 15;
-const GLOW_DENSITY = 0.55;
-
-export function updateGlowField(field: GlowField, anchorZ: number): void {
-  const { group, templates, placed } = field;
-  const minZ = anchorZ - DECOR_AHEAD;
-  const maxZ = Math.min(anchorZ + DECOR_BEHIND, -4);
-  const live = new Set<string>();
-  for (const side of [-1, 1]) {
-    const first = Math.floor(-maxZ / GLOW_CELL);
-    const last = Math.floor(-minZ / GLOW_CELL);
-    for (let cell = first; cell <= last; cell++) {
-      const key = `${side}:${cell}`;
-      live.add(key);
-      if (placed.has(key)) continue;
-      const random = makeRandom(
-        (0x6104 ^ Math.imul(cell, 2654435761)) + side * 104729,
-      );
-      if (random() > GLOW_DENSITY) {
-        placed.set(key, EMPTY_CELL);
-        continue;
-      }
-      const h = Math.floor(random() * templates.length);
-      const copy = templates[h]!.clone();
-      // Just *outside* the lane edge (never in the driving line — the skier
-      // would clip through a mushroom), but close enough that the wide additive
-      // pool reaches back into the skiable snow and reads as lane light.
-      const x = LANE_EDGE + 0.5 + random() * 7;
-      const jitter = random() * 0.8;
-      copy.position.set(side * x, 0, -(cell + 0.1 + jitter) * GLOW_CELL);
-      copy.rotation.y = random() * Math.PI * 2;
-      copy.scale.setScalar(0.85 + random() * 0.6);
-      // Cache this clone's cast light so the per-frame factor loop below can
-      // scale it without traversing (clone() gave it a fresh PointLight).
-      copy.userData.glowLight = copy.getObjectByProperty("isPointLight", true);
-      group.add(copy);
-      placed.set(key, copy);
-    }
-  }
-  // Drive every live cluster's cast light off the eased night factor, so the
-  // glow that spills onto the trunks fades in and out exactly with the props.
-  for (const object of placed.values()) {
-    if (object === EMPTY_CELL) continue;
-    const light = object.userData.glowLight as THREE.PointLight | undefined;
-    if (light) light.intensity = GLOW_LIGHT_INTENSITY * glowLightFactor;
-  }
-  for (const [key, object] of placed) {
-    if (live.has(key)) continue;
-    if (object !== EMPTY_CELL) group.remove(object);
-    placed.delete(key);
-  }
-}
-
 // NOTE (director, 2026-07-24): the code-built firefly mote cloud was removed —
 // too many colors and glued in front of the skier. Realistic fireflies come
 // from a CC0 pack in a later chunk (see IDEAS.md night entry).
 
-// Bring the whole enchanted layer in/out with the night phase. Called from
-// applyTimeOfDay whenever the phase moves; scales the shared materials so one
-// call lights the entire field.
-export function applyGlowPhase(env: SlopeEnvironment, phase: number): number {
-  // Gate on GLOW_ONSET here (dusk) so the core engine just passes the raw
-  // phase. Returns the eased 0..1 factor so the core can size the night bloom
-  // (bloom lives in the core — see skiScene.ts's applyTimeOfDay).
-  const factor = Math.min(1, Math.max(0, (phase - GLOW_ONSET) / (1 - GLOW_ONSET)));
-  const on = factor > 0.01;
-  env.glow.group.visible = on;
-  const ease = on ? factor * factor : 0; // slow start so glow blooms late
-  // The cast light rides the same eased factor; updateGlowField reads this each
-  // frame so a stale value can't leave a light on after the group hides.
-  glowLightFactor = ease;
-  if (on) {
-    for (const cap of glowCapMaterials) cap.emissiveIntensity = GLOW_EMISSIVE * ease;
-    for (const pool of glowPoolMaterials) pool.opacity = POOL_ALPHA * ease;
-  }
-  return ease;
+// The eased night factor that sizes the core-owned night bloom. Called from
+// applyTimeOfDay whenever the phase moves; the moonlight rays' bright tops feed
+// the bloom pass this scales (bloom lives in the core — see skiScene.ts's
+// applyTimeOfDay). Formerly applyGlowPhase, which also lit the now-removed glow
+// props; with the glowing plants gone it only reports this factor.
+export function nightBloomFactor(phase: number): number {
+  // Gate on NIGHT_BLOOM_ONSET (dusk) so the core engine just passes the raw
+  // phase. Returns the eased 0..1 factor; the ease is a slow start so the bloom
+  // blooms late.
+  const factor = Math.min(
+    1,
+    Math.max(0, (phase - NIGHT_BLOOM_ONSET) / (1 - NIGHT_BLOOM_ONSET)),
+  );
+  return factor > 0.01 ? factor * factor : 0; // slow start so bloom blooms late
 }
 
 // ---------------------------------------------------------------------------
