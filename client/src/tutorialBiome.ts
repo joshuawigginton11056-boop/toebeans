@@ -18,6 +18,7 @@
 // y=0). That lets the whole biome be built once in fixed world coordinates.
 
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   TUTORIAL_CREEK_START,
   TUTORIAL_CREEK_WIDTH,
@@ -163,57 +164,322 @@ function buildCreek(): THREE.Group {
   return group;
 }
 
-// One low-poly tree: a trunk with two stacked foliage cones, flat-shaded per the
-// bible's shape language. Reused (cloned) across the forest.
-function makeTreeTemplate(): THREE.Group {
-  const tree = new THREE.Group();
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.22, 0.32, 2.2, 6),
-    new THREE.MeshStandardMaterial({ color: COLOR.trunk, roughness: 1, flatShading: true }),
-  );
-  trunk.position.y = 1.1;
-  trunk.castShadow = true;
-  tree.add(trunk);
+// ---------------------------------------------------------------------------
+// FOREST PROPS — the real slope .glb models, recolored out of their winter frost
+// (onboarding foliage pass, 2026-07-25). The forest used to be code-built cones;
+// the director asked for the actual tree models from assets/slope, but in a
+// summer dress. Those files ship frosted — a white "Snow" material, and the
+// pines wear a snow texture atlas — so makeSummer strips the frost: snow that
+// sits ON foliage becomes green leaves, snow caps on rocks/logs are hidden, and
+// the pack's amber "Green" canopy is repainted the biome's summer green. No
+// textures survive (bible: no textures), so the models match the flat-shaded
+// look of the ground, creek, and grass.
 
-  const litMat = new THREE.MeshStandardMaterial({ color: COLOR.leafLit, roughness: 1, flatShading: true });
-  const shadeMat = new THREE.MeshStandardMaterial({ color: COLOR.leafShade, roughness: 1, flatShading: true });
-  const lower = new THREE.Mesh(new THREE.ConeGeometry(1.7, 2.6, 7), shadeMat);
-  lower.position.y = 2.7;
-  lower.castShadow = true;
-  tree.add(lower);
-  const upper = new THREE.Mesh(new THREE.ConeGeometry(1.25, 2.3, 7), litMat);
-  upper.position.y = 3.9;
-  upper.castShadow = true;
-  tree.add(upper);
-  return tree;
+// Each prop's kind decides how its frost is handled and how tall it stands once
+// normalized to a target height.
+type PropKind = "pine" | "tree" | "bush" | "rock" | "log";
+
+const PINE_MODELS = [
+  "StylizedPine_1",
+  "StylizedPine_2",
+  "StylizedPine_3",
+  "StylizedPine_4",
+  "StylizedPine_5",
+] as const;
+const LEAFY_MODELS = [
+  "PineTree_Snow_1",
+  "PineTree_Snow_2",
+  "PineTree_Snow_4",
+  "PineTree_Snow_5",
+  "BirchTree_Snow_1",
+  "BirchTree_Snow_2",
+  "BirchTree_Snow_3",
+  "BirchTree_Snow_5",
+] as const;
+const BUSH_MODELS = ["Bush_Snow_1", "Bush_Snow_2"] as const;
+const ROCK_MODELS = [
+  "Rock_Snow_1",
+  "Rock_Snow_2",
+  "Rock_Snow_3",
+  "Rock_Snow_4",
+  "Rock_Snow_5",
+  "Rock_Snow_6",
+  "Rock_Snow_7",
+] as const;
+const LOG_MODELS = ["WoodLog_Snow", "TreeStump_Snow"] as const;
+
+// Rocks and logs lose their snow entirely; everything leafy turns its frost into
+// green foliage.
+function snowRoleFor(kind: PropKind): "leaf" | "hide" {
+  return kind === "rock" || kind === "log" ? "hide" : "leaf";
 }
 
-function buildForest(): THREE.Group {
-  const forest = new THREE.Group();
-  const template = makeTreeTemplate();
-  const rand = makeRandom(71337);
-  // March down both flanks placing trees in the hills, clear of the path and
-  // clear of the creek's edges so nothing hides the jump. The run advances
-  // toward -Z, so worldZ steps from just behind the start (+GROUND_BEHIND) down
-  // past the finish.
-  for (
-    let worldZ = GROUND_BEHIND;
-    worldZ > -(TUTORIAL_FINISH + GROUND_AHEAD);
-    worldZ -= 6
-  ) {
+// The world height each kind is normalized to (source models vary wildly in
+// scale, so every clone is resized to sit in these ranges).
+function targetHeight(kind: PropKind, r: number): number {
+  switch (kind) {
+    case "pine":
+      return 5.5 + r * 3; // the forest's heroes
+    case "tree":
+      return 3.5 + r * 1.8;
+    case "bush":
+      return 0.7 + r * 0.5;
+    case "rock":
+      return 0.5 + r * 0.7;
+    case "log":
+      return 0.5 + r * 0.5;
+  }
+}
+
+// Repaint one frosted material into its summer form. Idempotent (a material
+// shared across meshes may pass through twice), and it drops every texture map
+// so nothing carries the snow atlas.
+function summerize(mat: THREE.MeshStandardMaterial, snow: "leaf" | "hide"): void {
+  mat.map = null;
+  mat.metalness = 0;
+  mat.roughness = 1;
+  mat.flatShading = true;
+  const name = mat.name.replace(/\.\d+$/, "");
+  switch (name) {
+    case "Green":
+      mat.color.set(COLOR.leafLit); // the pack's amber canopy -> summer green
+      break;
+    case "DarkGreen":
+      mat.color.set(COLOR.leafShade);
+      break;
+    case "PineSnow": // the pines' snow-laden canopy shell
+    case "Snow":
+      if (snow === "leaf") {
+        mat.color.set(COLOR.leafLit); // snow-on-foliage becomes green leaves
+      } else {
+        mat.transparent = true; // frost cap on a rock/log — make it vanish
+        mat.opacity = 0;
+        mat.depthWrite = false;
+      }
+      break;
+    // Wood / PineBark stay brown trunks; White / Black stay birch bark; Rock
+    // stays stone — all kept as authored.
+  }
+  mat.needsUpdate = true;
+}
+
+function makeSummer(root: THREE.Object3D, snow: "leaf" | "hide"): void {
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    o.castShadow = true;
+    o.receiveShadow = true;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      if (m instanceof THREE.MeshStandardMaterial) summerize(m, snow);
+    }
+  });
+}
+
+interface PropTemplate {
+  readonly group: THREE.Group;
+  readonly kind: PropKind;
+  readonly height: number; // natural (unscaled) height
+  readonly minY: number; // natural base offset, so clones plant flush on ground
+}
+
+// Load every prop model, recolor it, and measure it — done once, in the
+// background. Returns a name->template map the scatter clones from.
+async function loadProps(): Promise<Map<string, PropTemplate>> {
+  const loader = new GLTFLoader();
+  const specs: Array<readonly [readonly string[], PropKind]> = [
+    [PINE_MODELS, "pine"],
+    [LEAFY_MODELS, "tree"],
+    [BUSH_MODELS, "bush"],
+    [ROCK_MODELS, "rock"],
+    [LOG_MODELS, "log"],
+  ];
+  const jobs = specs.flatMap(([names, kind]) =>
+    names.map(async (name) => {
+      const gltf = await loader.loadAsync(
+        `${import.meta.env.BASE_URL}slope/${name}.glb`,
+      );
+      const model = gltf.scene;
+      makeSummer(model, snowRoleFor(kind));
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model);
+      const template: PropTemplate = {
+        group: model,
+        kind,
+        height: Math.max(0.001, box.max.y - box.min.y),
+        minY: box.min.y,
+      };
+      return [name, template] as const;
+    }),
+  );
+  return new Map(await Promise.all(jobs));
+}
+
+// Clone a template onto the ground at (x, z), resized to its kind's height and
+// planted so its base sits flush on the rolling terrain.
+function placeProp(
+  forest: THREE.Group,
+  tmpl: PropTemplate,
+  x: number,
+  z: number,
+  rand: () => number,
+): void {
+  const inst = tmpl.group.clone(true);
+  const scale = targetHeight(tmpl.kind, rand()) / tmpl.height;
+  inst.scale.setScalar(scale);
+  inst.position.set(x, groundHeight(x, z) - tmpl.minY * scale - 0.05, z);
+  inst.rotation.y = rand() * Math.PI * 2;
+  forest.add(inst);
+}
+
+const pick = <T>(list: readonly T[], r: () => number): T =>
+  list[Math.floor(r() * list.length)]!;
+
+// Scatter the loaded models down both grassy flanks — trees leading, with rocks,
+// logs, and bushes filling between them — always clear of the flat path the
+// player skis and of the creek banks so nothing hides the jump.
+function placeProps(
+  forest: THREE.Group,
+  templates: Map<string, PropTemplate>,
+): void {
+  const near = (z: number, gap: number): boolean =>
+    Math.abs(z - CREEK_MID_Z) < gap;
+
+  // Trees: the forest proper, mostly pines with leafy trees mixed in.
+  const treeRand = makeRandom(71337);
+  for (let z = GROUND_BEHIND; z > -(TUTORIAL_FINISH + GROUND_AHEAD); z -= 5) {
     for (const side of [-1, 1]) {
-      if (rand() > 0.55) continue;
-      if (Math.abs(worldZ - CREEK_MID_Z) < 4) continue; // keep the creek banks open
-      const x = side * (PATH_HALF + 2 + rand() * (HILL_REACH - 2));
-      const jitterZ = worldZ - rand() * 4;
-      const tree = template.clone();
-      tree.position.set(x, groundHeight(x, jitterZ) - 0.1, jitterZ);
-      tree.rotation.y = rand() * Math.PI * 2;
-      tree.scale.setScalar(0.8 + rand() * 0.9);
-      forest.add(tree);
+      if (treeRand() > 0.6) continue;
+      if (near(z, 4)) continue; // keep the creek banks open
+      const name =
+        treeRand() < 0.6 ? pick(PINE_MODELS, treeRand) : pick(LEAFY_MODELS, treeRand);
+      const tmpl = templates.get(name);
+      if (!tmpl) continue;
+      const x = side * (PATH_HALF + 2 + treeRand() * (HILL_REACH - 2));
+      placeProp(forest, tmpl, x, z - treeRand() * 4, treeRand);
     }
   }
-  return forest;
+
+  // Rocks and logs: strewn through the whole forest floor, a touch closer to the
+  // path than the trees so the ground reads as lived-in.
+  const groundRand = makeRandom(0x2f0c9);
+  for (let z = GROUND_BEHIND; z > -(TUTORIAL_FINISH + GROUND_AHEAD); z -= 4) {
+    for (const side of [-1, 1]) {
+      if (groundRand() > 0.4) continue;
+      if (near(z, 3)) continue;
+      const name =
+        groundRand() < 0.4 ? pick(LOG_MODELS, groundRand) : pick(ROCK_MODELS, groundRand);
+      const tmpl = templates.get(name);
+      if (!tmpl) continue;
+      const x = side * (PATH_HALF + 0.5 + groundRand() * HILL_REACH);
+      placeProp(forest, tmpl, x, z - groundRand() * 3, groundRand);
+    }
+  }
+
+  // Bushes: leafy foliage clumps tucked among the trees.
+  const bushRand = makeRandom(0x51a33);
+  for (let z = GROUND_BEHIND; z > -(TUTORIAL_FINISH + GROUND_AHEAD); z -= 6) {
+    for (const side of [-1, 1]) {
+      if (bushRand() > 0.4) continue;
+      if (near(z, 3)) continue;
+      const tmpl = templates.get(pick(BUSH_MODELS, bushRand));
+      if (!tmpl) continue;
+      const x = side * (PATH_HALF + 1 + bushRand() * HILL_REACH);
+      placeProp(forest, tmpl, x, z - bushRand() * 4, bushRand);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GRASS — code-built blade tufts scattered across the meadow (no grass model in
+// the pack). Two layers, both drawn as a single InstancedMesh so thousands of
+// blades cost one draw call each: a short dense carpet over the grass, and
+// sparser TALL tufts standing among the trees (the "higher grass" the director
+// asked for). The immediate driving lane is left clear; blades start a few
+// metres out and climb the hillsides.
+
+// A single flat-shaded blade: a slim 3-sided spike, base on the ground.
+function makeBlade(): THREE.BufferGeometry {
+  const geo = new THREE.ConeGeometry(0.06, 1, 3, 1);
+  geo.translate(0, 0.5, 0);
+  return geo;
+}
+
+function makeGrassLayer(
+  blade: THREE.BufferGeometry,
+  mats: THREE.Matrix4[],
+  cols: THREE.Color[],
+): THREE.InstancedMesh {
+  const mat = new THREE.MeshStandardMaterial({
+    roughness: 1,
+    metalness: 0,
+    flatShading: true,
+  });
+  const mesh = new THREE.InstancedMesh(blade, mat, mats.length);
+  for (let i = 0; i < mats.length; i++) {
+    mesh.setMatrixAt(i, mats[i]!);
+    mesh.setColorAt(i, cols[i]!);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  mesh.castShadow = false;
+  mesh.receiveShadow = true;
+  mesh.frustumCulled = false; // instances span the whole run
+  return mesh;
+}
+
+function buildGrass(): THREE.Group {
+  const group = new THREE.Group();
+  const blade = makeBlade();
+  const rand = makeRandom(0x6a5511);
+  const shortM: THREE.Matrix4[] = [];
+  const shortC: THREE.Color[] = [];
+  const tallM: THREE.Matrix4[] = [];
+  const tallC: THREE.Color[] = [];
+
+  const carpet = new THREE.Color(COLOR.grassLit);
+  const leaf = new THREE.Color(COLOR.leafLit);
+  const shade = new THREE.Color(COLOR.grassShade);
+  const q = new THREE.Quaternion();
+  const e = new THREE.Euler();
+  const pos = new THREE.Vector3();
+  const scl = new THREE.Vector3();
+
+  for (let z = GROUND_BEHIND; z > -(TUTORIAL_FINISH + GROUND_AHEAD); z -= 1.6) {
+    for (const side of [-1, 1]) {
+      const tufts = 1 + Math.floor(rand() * 3);
+      for (let t = 0; t < tufts; t++) {
+        const cx = side * (3 + rand() * (PATH_HALF + HILL_REACH - 3));
+        const cz = z - rand() * 1.6;
+        if (Math.abs(cz - CREEK_MID_Z) < 2.5) continue; // keep the water clear
+        // Higher tufts only stand out among the trees (past the path edge).
+        const tall = rand() < 0.18 && Math.abs(cx) > PATH_HALF;
+        const blades = tall ? 5 + Math.floor(rand() * 4) : 3 + Math.floor(rand() * 3);
+        for (let b = 0; b < blades; b++) {
+          const bx = cx + (rand() - 0.5) * 0.5;
+          const bz = cz + (rand() - 0.5) * 0.5;
+          const height = tall ? 0.9 + rand() * 0.8 : 0.25 + rand() * 0.35;
+          const width = tall ? 0.8 + rand() * 0.5 : 0.7 + rand() * 0.6;
+          e.set((rand() - 0.5) * 0.3, rand() * Math.PI * 2, (rand() - 0.5) * 0.3);
+          q.setFromEuler(e);
+          pos.set(bx, groundHeight(bx, bz), bz);
+          scl.set(width, height, width);
+          const m = new THREE.Matrix4().compose(pos, q, scl);
+          const col = (tall ? leaf : carpet).clone().lerp(shade, rand() * 0.5);
+          if (tall) {
+            tallM.push(m);
+            tallC.push(col);
+          } else {
+            shortM.push(m);
+            shortC.push(col);
+          }
+        }
+      }
+    }
+  }
+
+  group.add(makeGrassLayer(blade, shortM, shortC));
+  group.add(makeGrassLayer(blade, tallM, tallC));
+  return group;
 }
 
 export interface TutorialBiome {
@@ -229,7 +495,17 @@ export function createTutorialBiome(handle: SkiSceneHandle): TutorialBiome {
   const group = new THREE.Group();
   group.add(buildGround());
   group.add(buildCreek());
-  group.add(buildForest());
+  group.add(buildGrass());
+  // The real .glb props load in the background; the biome is fine before they
+  // arrive (same graceful pattern as the slope decor). A failed load just
+  // leaves the grassy ground + grass tufts, still playable.
+  const forest = new THREE.Group();
+  group.add(forest);
+  void loadProps()
+    .then((templates) => placeProps(forest, templates))
+    .catch((error) => {
+      console.error("tutorial forest props failed to load", error);
+    });
   group.visible = false;
   handle.scene.add(group);
 

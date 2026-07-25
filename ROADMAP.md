@@ -265,11 +265,20 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   swap). Small marked seams elsewhere: `setSlopeSceneryVisible`/`setBranchTerrainVisible`
   (hide the snow scenery), the lobby button, and the `main.ts` wiring. Verified live
   in the browser (grass forest, sunrise, creek, crash-if-not-jumped all working).
+- **Forest dressing (foliage pass, tutorial 2026-07-25):** the code-built cone
+  trees are gone — the forest now uses the **real slope `.glb` models**
+  (StylizedPine, PineTree, birches, bushes, rocks, logs) **recolored out of their
+  winter frost into a summer green** (`makeSummer` in `tutorialBiome.ts`: snow-on-
+  foliage → green leaves, snow caps on rocks/logs hidden, the pack's amber canopy
+  repainted the biome green, all textures stripped per the bible). Added a
+  **grass layer** — a short dense carpet across the meadow plus sparser **taller
+  tufts among the trees** (two `InstancedMesh`es, one draw call each) — and
+  **rocks + logs strewn through the forest floor**. Loads in the background like
+  the slope decor; the run is playable before the models arrive. Verified live.
 - **First slice — polish parked in IDEAS.md `(tutorial)`:** the ski spray still
-  reads as snow on grass; the creek is a flat plane (wants flow/foam/splash); the
-  forest floor wants real dressing + real tree models; and the big next piece is
-  **coaching prompts** ("press Space to jump!" as the creek nears) so it actually
-  *teaches* rather than just showing keys once.
+  reads as snow on grass; the creek is a flat plane (wants flow/foam/splash); and
+  the big next piece is **coaching prompts** ("press Space to jump!" as the creek
+  nears) so it actually *teaches* rather than just showing keys once.
 
 ### Tooling / assets
 - `tools/obj2glb_palette.py`, `tools/glb_palette.py`, `tools/gltf_character.py`
