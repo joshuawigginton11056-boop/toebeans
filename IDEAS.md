@@ -44,7 +44,15 @@ kink, no drift, no forks.
 - **NOTE the terrain is still one mesh PER segment** (summit + forest-road) — the seamless
   single-surface merge is the remaining piece above.
 
-**2. Speed instantly drops at the forest. ✅ FIXED (slope-mech, 2026-07-24).** Reshaped
+**2. Speed instantly drops at the forest. ✅ FIXED (slope-mech, 2026-07-24; re-tuned 2026-07-25).**
+Update (2026-07-25, director look-pass "speed drops off in the forest"): the ease-out
+shape wasn't the issue — the mellow FLOOR was too low (0.28), so a hold-W run still shed
+~4 u/s (18.5 → 14.4) into the forest. Raised the forest/lake plateau to **0.33** (`GRADE_PROFILE`
+in route.ts): the drop is now ~2 u/s (19 → 17), you carry speed into the trees. Still below
+the 0.5 summit/lower pitch (steeper=faster holds) and below REFERENCE 0.35 at the lake.
+`[460]` trimmed to 0.34 to keep the total drop under the height-scale test. Knobs: raise the
+plateau toward 0.35 for even less drop, or lower `SLOPE_SPEED_GAIN`. Original note follows —
+Reshaped
 `GRADE_PROFILE` (route.ts) into an ease-out: steep grade shed high on the summit
 (`[60, 0.36]`) then a gentle leg (`[180, 0.28]`) carrying through the forest mouth (route
 120) — so the decel at the forest is a fraction of the `COAST_DRAG` cap, not pinned to it.
@@ -53,10 +61,15 @@ Numeric trace through the real sim: forest-window worst decel dropped to 0.27 u/
 not the felt ratio — it's the secondary knob if Josh wants it gentler still). route.test.ts
 pins the ease-out. **Josh: feel-test on the live build — the grade shape is a look-pass knob.**
 
-**3. Character drifts right at the forest. ✅ DONE (subsumed by item 1, 2026-07-24).** The
-old +x drift was the `forest-road` arc's `turn = +0.24`. The single smooth `TRAIL_LINE` is
-a symmetric S returning heading AND lateral to ~0 at the forest, so the run tracks the fall
-line with no net drift.
+**3. Character drifts right at the forest. ✅ DONE 2026-07-24; re-fixed 2026-07-25.** The
+old +x drift was the `forest-road` arc's `turn = +0.24`. The single smooth `TRAIL_LINE`
+returned heading AND lateral to ~0 at the forest END — but the summit+forest was ONE
+half-period lobe that leaned ~10.7 units left by the forest mouth, so the WHOLE forest was
+the one-directional rightward RETURN (still read as "slowly drift right," director look-pass
+2026-07-25). Re-fixed: `TRAIL_LOBES` is now ONE lobe PER AREA (summit / forest / lake), each
+a full sine that returns to the fall line at its OWN end — the forest weaves left-then-right
+and settles centered *inside the forest*, no sustained veer. Amplitude ~halved (peak ~2.7
+units, heading ≤4°); amp·2π/span matched across seams so curvature stays continuous.
 
 Touch points (as built): `shared/src/route.ts` (`SINGLE_TRAIL` + `singleTrailNext`),
 `shared/src/skiing.ts` (`singleTrail` flag, `createSingleTrailSkiState`, trail routing +

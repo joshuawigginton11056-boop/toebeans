@@ -448,9 +448,20 @@ interface TrailLobe {
    * per-area LOOK-PASS KNOB — raise for a bolder curve, → 0 for near-straight. */
   readonly amplitude: number;
 }
+// ONE LOBE PER AREA (slope-mech, 2026-07-25 director look-pass: "in the forest I
+// slowly drift to the right"). The old summit+forest span was a SINGLE half-period
+// sine [0,240]: it leaned all the way to ~10.7 units left by the forest mouth (route
+// 120), so the WHOLE forest (120→240) was the rightward return — a long, one-directional
+// veer with no steering, which reads as a drift. The fix keeps a gentle curve but makes
+// each AREA its own full sine that returns heading AND lateral to 0 at the area's end —
+// so the forest weaves left-then-right and settles ON the fall line inside the forest,
+// no sustained drift. Amplitudes are ~half the old peak (excursion ~2.7 units, heading
+// ≤4°) and share amp·2π/span across each seam so the curvature stays continuous (no
+// kink): summit & forest are identical (same span), the lake matched to them.
 const TRAIL_LOBES: readonly TrailLobe[] = [
-  { from: 0, to: 240, amplitude: -0.14 }, // summit + forest: the approved gentle S
-  { from: 240, to: 340, amplitude: -0.06 }, // the frozen lake: a mellow continuing weave
+  { from: 0, to: 120, amplitude: -0.07 }, // summit: a gentle weave, back to the fall line at the forest mouth
+  { from: 120, to: 240, amplitude: -0.07 }, // forest: its OWN weave, returns to center — no one-way drift
+  { from: 240, to: 340, amplitude: -0.058 }, // the frozen lake: a mellow continuing weave (amp·2π/span matched)
 ];
 const TRAIL_ROUTE_LEN = TRAIL_LOBES[TRAIL_LOBES.length - 1]!.to; // summit→forest→lake
 // Heading at a route distance: the lobe covering it, as a full sine over its span
