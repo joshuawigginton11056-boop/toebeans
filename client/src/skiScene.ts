@@ -199,6 +199,14 @@ const SUN_BILLBOARD_DIRECTION = new THREE.Vector3(
 // silhouettes at the far end of the lane.
 const MOON_BILLBOARD_DIRECTION = new THREE.Vector3(-0.15, 0.2, -1).normalize();
 
+// How far out the sun/moon disc rides from the camera. Must sit BEYOND the
+// mountain backdrop ring (radius ≤184, mountainGraphics.ts) so the ridgeline
+// OCCLUDES the low dawn sun — it rises behind the peaks instead of being pasted
+// in front of them (the "why is the sun in front of the mountain?" callout).
+// Still inside the camera's 200u far plane. discScale is tuned to keep the disc
+// the same apparent size it had at the old 150u. (2026-07-25, sky fix.)
+const DISC_DISTANCE = 192;
+
 export const SLOPE_LENGTH = 100;
 // The visual lane derives from the sim's clamp — one extra unit each side,
 // so the skier's body never visibly overlaps the treeline while pinned at
@@ -530,7 +538,7 @@ export function createEnvironment(
     skyHorizon: new THREE.Color(PALETTE.dawnPink),
     skyZenith: new THREE.Color(PALETTE.skyBlue),
     disc: new THREE.Color(PALETTE.sunGlow),
-    discScale: 34,
+    discScale: 44, // = 34 × (DISC_DISTANCE/150): same apparent size, farther out
     discOpacity: 1,
     discDir: SUN_BILLBOARD_DIRECTION.clone(),
     stars: 0,
@@ -542,7 +550,7 @@ export function createEnvironment(
     skyHorizon: new THREE.Color(NIGHT.skyHorizon),
     skyZenith: new THREE.Color(NIGHT.skyZenith),
     disc: new THREE.Color(NIGHT.moon),
-    discScale: 22, // the moon reads smaller and crisper than the hazy sun
+    discScale: 28, // the moon reads smaller/crisper; = 22 × (DISC_DISTANCE/150)
     discOpacity: 1,
     discDir: MOON_BILLBOARD_DIRECTION.clone(),
     stars: 1,
@@ -659,7 +667,7 @@ export function syncEnvironment(
   // — the sun sits near the horizon, the moon a little higher.
   environment.sunBillboard.position
     .copy(camera.position)
-    .addScaledVector(currentDiscDir, 150);
+    .addScaledVector(currentDiscDir, DISC_DISTANCE);
   // Loose snow — spray kicked off the skis, flurries drifting past the
   // lens. Reads the skier's speed straight off the anchor's motion (no new
   // seam field) and its own frame clock; see updateSnowEffects.
