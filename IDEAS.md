@@ -3,38 +3,46 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
-## ⏭ START HERE (mountain) — build the STARTING MOUNTAIN as an open sculpted peak vista (Josh, 2026-07-25)
+## STARTING MOUNTAIN — first pass LANDED (mountain, 2026-07-25); open follow-ups below
 
-**Josh's callout:** the *starting* area (the open summit before the forest) is the
-weakest view in the game — a flat, pink-hazed, featureless wash — while the forest
-looks great. He'll re-open this in a **fresh session with a reference photo** (a real
-alpine shot: a rocky snow-corniced peak rising behind rolling, sculpted powder slopes
-with a lit/shadow side to every roll, sparse scattered pines, bright crisp sunlit white).
+**Landed:** a distant snowy peak vista now fills the empty summit horizon —
+`createMountainBackdrop` (`mountainGraphics.ts`); see the ROADMAP entry for the
+build. It reads as a cool-blue-shadowed / white-lit snowy range on the horizon,
+in the dawn palette, prominent at the open summit and softening behind the forest.
 
-**Diagnosis (already done — don't re-derive):**
-- The snow is **ONE material** that follows the skier (`createSnowfieldGeometry` +
-  `createSnowMaterial`, mountainGraphics.ts). It is **identical** at the summit and the
-  forest — nothing to rebuild. Confirmed in code and live.
-- The summit only *looks* washed for two reasons, **neither is the snow**: (1) the open
-  expanse is more exposed to the **dawn fog** (`THREE.Fog(dawnPink, 35, 150)`,
-  skiScene.ts) — a live diagnostic pushing it to 80/400 de-washed it markedly; (2) it has
-  **no shadow-casters** — the forest snow's richness is tree shadows raking across it, and
-  the open summit has nothing casting them. Even fog-free, the open snow stayed a smooth
-  sheet.
-- **So the fix is terrain, not snow:** give the summit its own **shadow-casting relief**
-  (a real distant peak + rolling ridges/drifts) so the same snow reads the same way. This
-  is mountain-graphics' lane (terrain + sky/peak); the **sparse pines are forest-graphics'**
-  — coordinate the scatter.
+**Open follow-ups (mountain), in priority order:**
+1. **The camera fights drama — needs Josh's call.** The follow-camera looks ~18°
+   DOWN the fall line, so only a ~7° strip of sky sits above the horizon. A distant
+   range can only occupy that strip, so it reads as a horizon *ridge*, not the
+   towering reference peak. To get reference-level drama you'd need one of: (a) a
+   brighter/darker sky so the peaks contrast harder (the **deferred sky decision**
+   below — the natural unlock), (b) a gentle camera tweak (raise the fixed
+   elevation a few degrees, or a slight summit-only look-up — a slope-mech seam
+   change), or (c) lean into a *closer* mid-ground massif instead of a far rim.
+   Pick a direction before pushing the look further.
+2. **Sparse scattered pines on the open summit (forest-graphics).** The reference
+   has them; coordinate the scatter so the summit isn't bare between the run and
+   the peaks.
+3. **Day/night:** the backdrop is UNLIT (baked dawn colours) so it does NOT respond
+   to the `timeOfDay` engine — fine for the dawn default, wrong at night. Tint the
+   baked colours by the night phase when night matters.
+4. **Curve drift:** the tall front arc is pinned to world −z (the camera's facing at
+   the summit start); as the trail curves the peaks drift off-centre. Harmless today
+   (forest canopy owns the frame by then), but if it shows, rotate the backdrop
+   group to the camera yaw in `syncEnvironment`.
 
-**Open scope decision (deferred by Josh — "ignore the sky right now"):** the reference is
-bright midday-blue but the game defaults to pink dawn. Whether the starting area shifts
+**Josh's original callout & reference (kept for context):** the *starting* area was
+the weakest view — a flat, pink-hazed, featureless wash — while the forest looks
+great. Reference: a real alpine shot — a rocky snow-corniced peak rising behind
+rolling, sculpted powder slopes with a lit/shadow side to every roll, sparse
+scattered pines, bright crisp sunlit white.
+
+**⚠ Deferred sky decision (Josh — "ignore the sky right now"):** the reference is bright
+midday-blue but the game defaults to pink dawn. Whether the starting area shifts
 brighter/crisper (touches the shared day/night lighting solve + sky) or keeps the dawn mood
-is **unresolved** — Josh will decide next session. Do NOT touch the sky/atmosphere until then.
-
-**Already landed as a down-payment (mountain, 2026-07-25):** coarse dune form-shading in
-`createSnowMaterial` (sun-away dune faces tint toward snow-shadow blue #2) so the snow's own
-relief reads without cast shadows. Helps the flanks; can't sculpt the intentionally-flat
-groomed lane. It'll have real terrain to bite on once the peak/ridges exist.
+is **unresolved** — Josh will decide. This is the natural unlock for follow-up #1 above
+(the peaks contrast much harder against a decided sky). Do NOT touch the sky/atmosphere
+until then.
 
 ## ⏭ START HERE (slope-mech) — ONE solid mountain, one SMOOTH trail summit → back of the forest (director look-pass, 2026-07-24)
 
