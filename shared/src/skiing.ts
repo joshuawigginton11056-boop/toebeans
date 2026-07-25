@@ -129,9 +129,11 @@ export interface SkiState {
   readonly segmentId: string;
   // Whether this run is the single played trail (slope-mech, 2026-07-24 redirect —
   // IDEAS.md START HERE). The §4 branching graph is PARKED: when this is true the
-  // sim walks route.ts's SINGLE_TRAIL (summit → the back of the forest) instead of
-  // the fork graph — the forks never arm, and the trail's end opens into the runout
-  // rather than flowing on to the lake. The Overlook and the (test-only) full
+  // sim walks route.ts's SINGLE_TRAIL (summit → forest → the frozen lake) instead
+  // of the fork graph — the forks never arm, and the trail's end (the back of the
+  // lake) opens into the runout rather than flowing on toward the yeti/detours. The
+  // lake's own hazards (its gap + checkpoint) DO ride the trail. The Overlook and
+  // the (test-only) full
   // branching run leave it false, so they route exactly as before. Static run
   // shape, deliberately not saved: a restore rebuilds the Overlook (branching/trail
   // state isn't saved), which is false — same spirit as segmentId below.
@@ -889,10 +891,10 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   let finishDistance = state.finishDistance;
   let finished = false;
   if (!crashed && distance >= finishDistance) {
-    // The single played trail walks route.ts's SINGLE_TRAIL (summit → forest-road),
-    // not the fork graph: at forest-road's end singleTrailNext returns null, so the
-    // run drops through to the runout below (the back of the forest opens onto the
-    // flat coast-out — no finish line yet) instead of flowing on to the lake. The
+    // The single played trail walks route.ts's SINGLE_TRAIL (summit → forest-road →
+    // lake), not the fork graph: at the lake's end singleTrailNext returns null, so
+    // the run drops through to the runout below (the back of the lake opens onto the
+    // flat coast-out — no finish line yet) instead of flowing on to the yeti. The
     // full branching run keeps resolving next via the armed fork or the road.
     const nextId = state.singleTrail
       ? singleTrailNext(state.segmentId)

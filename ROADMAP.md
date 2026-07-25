@@ -342,6 +342,22 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
         branching map is the default slope now (`main.ts`), `?overlook=1` keeps the
         old flat Overlook reachable. A proper slope-select menu (if the Overlook
         earns a permanent spot as onboarding) is a later lobby polish, not required.
+      - **(slope-mech) — trail extended past the forest into the FROZEN LAKE ✅
+        (2026-07-25, "extend past the forest," Josh):** the single played trail is
+        now summit → forest → the frozen lake (`SINGLE_TRAIL` += `lake`); it ends at
+        the back of the lake, coasting into the runout (still no finish line). This
+        brings the trail's **first hazard**: the lake's `lake-gap` chasm + its
+        checkpoint now ride the played run (design §4 — "all three routes learn the
+        jump here"), so the summit→forest ride stays gentle and the lake is where
+        you first jump. The lake's own fork (into `water`) stays parked with the
+        other forks. Presentation: `TRAIL_LINE` (slopePath.ts) refactored to
+        per-area **lobes** — each a full-sine S that returns to the fall line at the
+        area's end (no drift, generalized), with a gentle lake lobe tuned for a
+        near-zero seam-curvature step; the terrain builder + chasm/checkpoint
+        rendering follow `SINGLE_TRAIL` automatically. **Look-pass knobs (Josh, live
+        build):** each lobe's `amplitude` in `TRAIL_LOBES`; the grade through the
+        lake (`GRADE_PROFILE` in route.ts). 159 tests. **Next area = append one lobe
+        + one `SINGLE_TRAIL` id.**
 - [ ] **Night → the enchanted forest (director redirect 2026-07-24).** First
       moonlit night was too bright; new target is an *extremely dark* forest with
       a few moonlight rays, lit by **glowing emissive assets** (mushrooms/crystals/

@@ -16,6 +16,12 @@ per-segment placeholder meshes (summit + forest-road) meeting at a seam; the nex
 (Josh split it off) merges them into one continuous dressed mountain surface — coordinate
 with slope-vis on that (`addBranchTerrain` → one surface; slope-vis re-skins).
 
+**Update (2026-07-25, "extend past the forest," Josh):** the trail now continues past the
+forest into the **frozen lake** (`SINGLE_TRAIL` = summit → forest-road → lake) — its first
+hazard, the lake gap, rides the played run. `TRAIL_LINE` is now a chain of per-area lobes
+(append one to grow the trail). See the ROADMAP entry. The seamless-surface merge above is
+still its own pending chunk; it now covers three trail meshes, not two.
+
 **1. One trail, no switching, NOT jerky. ✅ DONE (slope-mech, 2026-07-24).** The played run
 now rides ONE continuous-curvature centerline summit → the back of the forest — no seam
 kink, no drift, no forks.

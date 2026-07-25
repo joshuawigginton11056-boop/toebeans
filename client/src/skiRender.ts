@@ -690,9 +690,9 @@ export function syncSkiSceneToState(
 //
 // SINGLE TRAIL (slope-mech, 2026-07-24 redirect — IDEAS.md START HERE): the forks
 // are parked, so this builds ONLY the played trail's segments (route.ts's
-// SINGLE_TRAIL — summit → the back of the forest), riding the smooth continuous
+// SINGLE_TRAIL — summit → forest → the frozen lake), riding the smooth continuous
 // TRAIL_LINE centerline. No detour corridors, no fork-marker rocks. The trail's
-// terminal (the back of the forest, singleTrailNext → null) extends a flat RUNOUT —
+// terminal (the back of the lake, singleTrailNext → null) extends a flat RUNOUT —
 // there is no finish line yet (director), so the run coasts off onto the valley
 // floor. Built once when a run starts (main.ts). Reopening the map = iterate more
 // of the graph here again. (Still one mesh PER segment for now; merging the trail
