@@ -105,6 +105,39 @@ is **unresolved** — Josh will decide. This is the natural unlock for follow-up
 (the peaks contrast much harder against a decided sky). Do NOT touch the sky/atmosphere
 until then.
 
+## ⏭ START HERE (slope-mech) — PLAYTEST FIRST, THEN JOSH PICKS (2026-07-26)
+
+**Nothing is queued. Ask Josh what he wants before writing code** — the last two sessions
+both started from a direct director call, and there isn't one pending.
+
+**Step 1: he rides the lake and the fork.** The 2026-07-26 work (block directly below) is
+unridden. It was verified by deterministic renders and headless sim runs, NOT end to end
+in a live ride — real-time runs stall in an unfocused automation tab, so his verdict is
+the missing evidence. Two things I'd specifically ask him to look at, because I couldn't
+settle them: **does the cave have a ceiling** (the mass is a double-sided shell meant to
+roof the tunnel for free; from inside the render is ambiguous), and **is the mouth big
+enough** to spot and aim at from the approach (~90 units out it's legible but small).
+
+**Step 2: the standing candidates**, in the order I'd argue for them — but it's his call:
+1. **Fork 4, the cliff shove** (v3 §5 fork 4, §8 item 6). The natural next fork: it's the
+   only one left with content already designed *and* it gives the orphaned ice tail back a
+   steerable entrance. Note it needs a **speed condition**, not a lateral trigger — a new
+   kind of trigger for the sim, and the design question "the shove is same-clock, so
+   slowing down costs nothing" is still open in §5.
+2. **What the cave is LIKE inside** (v3 §7 #8, new). It's a place players can go now, and
+   nothing decides whether it's dark, lit, hazardous, or what its exclusive reward is
+   (§7 #6). Cheap to make good, and it's the payoff for the fork that just landed.
+3. **The §10 debug teleport.** Still doesn't exist, and it's now costing real time: testing
+   anything at the cliff is a ~45-second ride, and that's before the map grows. The spec
+   says "not a nicety" and it's right.
+4. **The forest scatter runs the whole route** — the biggest gap between the clean renders
+   and what he actually sees riding it. Not slope-mech's file; see the (forest) note below.
+
+**One thing NOT to do:** don't chase §9's 3:30. Josh retired that on 2026-07-26 — size each
+area to its own content and let the total fall out. It's written into v3 §9 and §12.4.
+
+---
+
 ## THE BIG LAKE AND THE FORK MOUNTAIN — LANDED (slope-mech, 2026-07-26); follow-ups below
 
 **Status: this block is CLOSED.** Both of Josh's 2026-07-26 calls shipped together —
