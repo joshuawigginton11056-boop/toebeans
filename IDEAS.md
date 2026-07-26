@@ -105,7 +105,68 @@ is **unresolved** — Josh will decide. This is the natural unlock for follow-up
 (the peaks contrast much harder against a decided sky). Do NOT touch the sky/atmosphere
 until then.
 
-## ⏭ START HERE (slope-mech) — HANDOFF, end of 2026-07-26 session 3
+## ⏭ START HERE (slope-mech) — THE MAP IS MEASURED NOW (2026-07-26, session 4)
+
+Director, at the top of this session: *"its all crap. i am so exhausted of describing
+this. i thought i would be able to upload a photo and get a close match."* Then:
+*"can we just build the frame without any graphics first?"*
+
+**What changed.** The world's shape is no longer anybody's numbers. `slope-map.png` —
+which was already sitting in the repo — is now READ by `tools/extract_map.py`, which
+segments it by colour and emits `shared/src/mapLayout.generated.ts`. `TRAIL_LINE` in
+slopePath.ts rides that line; the eight hand-tuned `TRAIL_LOBES` are deleted.
+
+Verify the extraction, don't trust it: `python tools/extract_map.py --overlay` draws
+the result back over the drawing at `docs/screens/map-frame-overlay.png`.
+
+Measured out of the drawing: the trail (461 samples), the cave line, both mountain
+masses, the lake footprint, **80 trees one per drawn dot**, and the treehouse /
+penguin castle / ice castle boxes — each as world x/z AND as (route, lateral).
+
+Two numbers the tool prints and holds itself to, because both are felt:
+- **curvature jump 0.0075 rad/unit²** (the bar slopePath.test.ts sets is 0.01). A traced
+  line is pixel-jagged and the trail's tangent aims the camera, so it is smoothed until
+  it clears that. Gotchas that cost time: `atan2` wraps at ±π and the run turns ~172°
+  around the second mountain, so headings must be UNWRAPPED on both the TS and Python
+  sides; and pinning a smoothing window's endpoints re-creates the staircase at the ends,
+  which is why the worst jump kept landing in the first 15 units.
+- **smoothing pulls the line ≤10.2 units off the painted stroke**, which is still inside
+  it (the drawn stroke is ~±14 units wide at this scale). The line never leaves the paint.
+
+### ⚠ THE THREE PLACES THE DRAWING DISAGREES WITH EARLIER TUNING — DIRECTOR'S CALL
+
+These are why the suite is not green. They are NOT bugs; each is a real question, and
+guessing at them is the exact failure this session exists to stop. **Do not answer them
+in code. Ask.**
+
+1. **The lake is 3.2× the old ribbon, not 15×.** The drawn lake is about three lane-widths
+   across (radius ~41). After riding it, the director's verdict was that the lake was far
+   too small, and it was set to radius 90 (~15×, "spread out in front of you"). The drawing
+   and that verdict differ by ~3×. Test `is about 15× the ice it replaced` pins the verdict
+   and now fails at 3.2. Cheapest fix if he wants it bigger: **draw a bigger circle and
+   re-run the tool** — one visible round, not another number typed in here.
+2. **The grade's flat is not under the lake.** `GRADE_PROFILE` goes flat over route
+   312–415 so the ice can be level; the drawn lake centres at route **432**. The flat should
+   be DERIVED from the lake rather than fixed, but it interlocks with `iceGlideFactor`
+   (which samples the grade at exactly 290), so it is a route.ts change with sim consequences.
+3. **The drawn trail rides ON the second mountain, not past it.** Its centroid is 47 units
+   off the trail with a 75-unit reach — so the line runs *inside* the drawn mass. The code
+   models the opposite: a mass standing BESIDE the lane, big enough (radius 190) to bore a
+   cave through, guarded by a test that it never walls off the piste. Both readings are
+   defensible skiing; they are different worlds. This is probably the single biggest reason
+   the built map never looked like the drawing.
+
+### What is NOT done
+
+Segment boundaries still come from route.ts's hand-set lengths (summit 100, forest-road 190,
+lake 140, mountain 100, outside 300, cliff 90) and do not match where the drawn trail actually
+enters the forest, meets the lake, or reaches the mountain. **They are measurable the same
+way** — walk the trail in the image and record where the colour underneath it changes — which
+is the obvious next mechanical step once the three questions above are answered.
+
+---
+
+## ⏭ START HERE (slope-mech) — HANDOFF, end of 2026-07-26 session 3 (superseded by the block above)
 
 **Nothing is queued. Ask Josh what he wants before writing code.** Everything below is
 either shipped-and-merged or parked; there is no work in flight and the worktree is

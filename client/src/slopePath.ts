@@ -29,6 +29,7 @@
 import {
   BRANCH_SEGMENTS,
   LATERAL_LIMIT,
+  MAP_LAYOUT,
   PLAYED_FORK_BRANCHES,
   REFERENCE_GRADE,
   routeDistanceOf,
@@ -429,164 +430,73 @@ export const SEGMENT_PLACEMENTS: Readonly<Record<string, SegmentPlacement>> = ((
   return out;
 })();
 
-// The single played trail's smooth centerline (slope-mech, 2026-07-24 redirect —
-// IDEAS.md START HERE). The branching corridors above are per-segment CONSTANT-
-// curvature arcs whose curvature sign FLIPS at each seam (summit −0.24 then
-// forest-road +0.24 …) — the "jerky" path. The active run instead rides ONE
-// continuous-curvature line summit → forest → the frozen lake: a gentle weave
-// whose curvature is smooth EVERYWHERE (no seam kink).
+// The single played trail's centerline — THE LINE THE DIRECTOR DREW.
 //
-// Built as a chain of LOBES, one per area on the trail. Each lobe carries two
-// things: a NET TURN (where the trail as a whole is heading by the area's end) and
-// a WEAVE (a sine that returns to zero, so the weave alone never drifts). Lobes
-// chain at whatever heading the previous one ended on, so position AND tangent stay
-// continuous across every seam. Extend the trail = append a lobe here AND its id to
-// route.ts's SINGLE_TRAIL. Keyed to ROUTE distance so every trail segment samples
-// one shared line; y still comes from the shared grade profile (segmentGroundY).
+// This used to be a chain of hand-tuned "lobes": a net turn and a sine weave per
+// area, eight of them, each a number somebody picked and then re-picked after a
+// playtest. That is the thing that failed. The map was only ever describable in
+// words — "the forest meanders", "it wraps the second mountain" — and words do not
+// converge on a shape. Twelve hours of tuning went into those radians and the world
+// still did not look like the drawing it was tuned against.
 //
-// NET TURNS ADDED (slope-mech, 2026-07-25 — director: "build my map as i drew it").
-// Every lobe used to be a pure weave with zero net turn, so the whole run was a
-// straight fall line with a wiggle: fine for a single trail down one mountain, but
-// the drawn map is not that. It coils off the start mountain, meanders through the
-// forest, crosses the corner of the lake and then WRAPS AROUND the second mountain
-// before turning back to the flag. A pure weave cannot express a wrap — that needs
-// a sustained turn in one direction — hence `netTurn`.
+// So the numbers come out of the drawing now. `slope-map.png` is a top-down plan in
+// flat colour; `tools/extract_map.py` segments it, thins the painted trail stroke to
+// a one-pixel centreline, smooths the pixel staircase out of it, rotates it so the
+// run leaves the start marker down the fall line, and scales it so the drawn line is
+// exactly TRAIL_ROUTE_LEN units long. What lands in mapLayout.generated.ts is that
+// line, sampled every `step` units — so index i IS route distance i·step, and this
+// module just reads it.
 //
-// ⚠ WHAT LIMITS THE SHAPE (worth knowing before you make a curve bolder): the
-// dressed ribbon is ±46 units wide (addBranchTerrain's FLANK_HALF) and the whole
-// run is only 640 long, so the trail is FAT relative to its length — about seven
-// ribbon-widths end to end, where the drawn map's trail is nearer a hundred. A turn
-// whose radius approaches the ribbon half-width folds its inner bank, so curvature
-// is capped by geometry, not taste. Two consequences:
-//   * the forest gets ONE big meander here, not the drawn map's three;
-//   * the second mountain wraps ~160°, not the drawn ~180°.
-// Both open up as soon as the route is stretched to §9's 3:30 (the parked job).
-// The banks are pinched on the inside of a turn (see addBranchTerrain) so the
-// curves we DO use don't crumple; the playable ±12 lane is never narrowed.
-interface TrailLobe {
-  /** Route distance the lobe starts / ends at. */
-  readonly from: number;
-  readonly to: number;
-  /** Total heading gained across the lobe, radians (+ turns RIGHT, toward world
-   * +x). 0 = the area finishes pointing the way it started. This is what makes an
-   * area WRAP rather than wiggle. Applied through a smoothstep, so the turn eases
-   * in and releases instead of snapping on at the seam. */
-  readonly netTurn?: number;
-}
-
-// How hard the trail weaves, in radians of peak heading per unit of area length —
-// ONE knob for the whole run's wiggle (raise for a bolder meander, → 0 for clean
-// fall lines). Each lobe's weave amplitude is this × its own span, and that is not
-// a stylistic choice: a lobe's curvature at both its ends is amplitude·2π/span, so
-// making amplitude proportional to span is exactly what makes the curvature MATCH
-// across every seam. Continuous curvature is the whole point — the original "the
-// path is jerky" bug was per-segment arcs stepping their curvature at the joins,
-// and hand-tuned per-area amplitudes would quietly reintroduce it the first time
-// someone nudged one. It also falls out right: a short area weaves little (the lake
-// crossing is nearly straight), a long one weaves a lot (the forest meanders ~18
-// units), which is precisely how the map is drawn.
-const TRAIL_WEAVE = 0.0031;
-// The net turn's shape across a lobe: smoothstep, whose slope is 0 at both ends.
-// That keeps a lobe's END curvature independent of its net turn, so a wrapping area
-// can sit next to a straight one without a curvature step at the seam.
+// The consequences are the point:
+//   * the trail's shape is no longer anybody's opinion. Change the drawing, re-run
+//     the tool, and the world moves. Nothing here needs editing.
+//   * the map's features (the lake, the fork mountain, the landmarks) are measured
+//     against this same line as (route, lateral) — see MAP_LAYOUT — so they stay
+//     pinned to it through any redraw, exactly as trailPointAtRoute already required.
+//   * the old ⚠ caveat about curvature being capped by the ribbon half-width STILL
+//     HOLDS. The drawing can ask for a turn tighter than a ±46 ribbon can survive
+//     (addBranchTerrain pinches its inside bank for exactly this reason). Redraw a
+//     hairpin and the banks will crumple before the lane does — the playable ±12 is
+//     never narrowed, but the dressing around it can fold.
+//
+// Elevation is NOT in a plan view and never was: y still comes from the shared grade
+// profile (segmentGroundY / routeHeightAt), keyed to the same route distance.
+const TRAIL_ROUTE_LEN = MAP_LAYOUT.routeLength;
+// Eases a turn in and out with zero slope at both ends, so a curve can sit next to a
+// straight without a curvature step at the seam. The trail no longer needs it (it is
+// measured, not shaped), but the cave branch below still solves its own weave.
 const smoothstep = (u: number): number => u * u * (3 - 2 * u);
-// ONE LOBE PER AREA, laid out as the map is drawn (slope-mech, 2026-07-25; re-spanned
-// 2026-07-26 for the big lake + the fork mountain). The route spans match route.ts's
-// segments — start mountain 0..100, forest 100..290, lake 290..430, the second
-// mountain's approach 430..530, Fork 3's outside branch 530..830, cliff 830..920.
-// Signs: − leans LEFT first, + turns RIGHT.
-//
-// ⚠ WHY THE WRAP IS THREE LOBES, NOT ONE (slope-mech, 2026-07-26). A lobe's weave
-// amplitude is TRAIL_WEAVE × its own span — the rule that keeps curvature continuous
-// at the seams. The consequence is that a LONG lobe weaves hard: one 300-unit lobe
-// carries 0.93 rad of sine, whose curvature (~1/51) swamps the net turn's and swings
-// the line ~44 units in and out. Around a mountain that reads as a wobble, not a
-// wrap, and it repeatedly walks the ribbon toward the mass. Splitting the wrap into
-// three 100-unit lobes that each turn a third of the way keeps the same total sweep
-// with a third of the weave — and because the seam curvature is TRAIL_WEAVE·2π
-// whatever the span, continuity is untouched. Measured: the outside line then holds
-// 19–23 units off the mass's foot for the whole 172°, instead of 36–51 and wobbling.
-const TRAIL_LOBES: readonly TrailLobe[] = [
-  // The start mountain: the drawn trail begins near the peak and coils off its
-  // flank. A short area, so a short weave (~5 units) — it reads as peeling off the
-  // summit rather than dropping straight down it.
-  { from: 0, to: 100 },
-  // The forest: the long meander, and the biggest curve on the run (~18 units of
-  // swing). The drawn map has three of these; one is what fits at this length.
-  { from: 100, to: 290 },
-  // The frozen lake: the trail clips the corner of a big body of ice. Nearly a
-  // straight crossing, so the expanse opens out beside you rather than the trail
-  // wandering across it — the body itself is FROZEN_LAKE below.
-  { from: 290, to: 430 },
-  // The second mountain's APPROACH: deliberately no net turn. This is the stretch
-  // where the mass is in front of you and the cave mouth is a thing you can see and
-  // aim at (route.ts's Fork 3 trigger lives here), so the line runs AT the mountain
-  // rather than already curving away from it.
-  { from: 430, to: 530 },
-  // FORK 3, the outside branch: the WRAP, as three chained lobes (see the note
-  // above). ~172° of sustained right-hand sweep around the mass — the exposed line
-  // riding around the mountain's foot while it stands above you on your right.
-  // Height still drops with route distance, so you corkscrew down its flank.
-  { from: 530, to: 630, netTurn: 1.0 },
-  { from: 630, to: 730, netTurn: 1.0 },
-  { from: 730, to: 830, netTurn: 1.0 },
-  // The cliff run-in: swing back out of the wrap and run out to the flag.
-  { from: 830, to: 920, netTurn: -1.0 },
-];
-const TRAIL_ROUTE_LEN = TRAIL_LOBES[TRAIL_LOBES.length - 1]!.to; // the whole spine
-// The heading each lobe STARTS at — the sum of every previous lobe's net turn, so
-// lobes chain tangent-continuously instead of all resetting to the fall line.
-const TRAIL_LOBE_STARTS: readonly number[] = (() => {
-  const out: number[] = [];
-  let acc = 0;
-  for (const lobe of TRAIL_LOBES) {
-    out.push(acc);
-    acc += lobe.netTurn ?? 0;
-  }
-  return out;
-})();
-const TRAIL_END_HEADING =
-  TRAIL_LOBE_STARTS[TRAIL_LOBES.length - 1]! +
-  (TRAIL_LOBES[TRAIL_LOBES.length - 1]!.netTurn ?? 0);
-// Heading at a route distance: the lobe's baseline (its start heading plus however
-// much of its net turn is behind you) plus a full-period sine weave that is 0 at
-// both ends. Past the last lobe the heading HOLDS at the trail's final heading, so
-// the runout continues straight on out of the cliff rather than kinking back to the
-// original fall line.
-const trailHeadingAt = (s: number): number => {
-  for (let i = 0; i < TRAIL_LOBES.length; i++) {
-    const lobe = TRAIL_LOBES[i]!;
-    if (s <= lobe.to) {
-      const span = lobe.to - lobe.from;
-      const u = (Math.max(s, lobe.from) - lobe.from) / span;
-      return (
-        TRAIL_LOBE_STARTS[i]! +
-        (lobe.netTurn ?? 0) * smoothstep(u) +
-        TRAIL_WEAVE * span * Math.sin(2 * Math.PI * u)
-      );
-    }
-  }
-  return TRAIL_END_HEADING;
-};
 const TRAIL_LINE: Centerline = (() => {
-  const step = STEP;
-  const n = Math.ceil(TRAIL_ROUTE_LEN / step) + 1;
+  const { step, xs: drawnXs, zs: drawnZs } = MAP_LAYOUT.trail;
+  const n = drawnXs.length;
   const xs = new Float64Array(n);
   const zs = new Float64Array(n);
   const headings = new Float64Array(n);
-  let x = 0;
-  let z = 0;
-  headings[0] = trailHeadingAt(0);
+  for (let i = 0; i < n; i++) {
+    xs[i] = drawnXs[i]!;
+    zs[i] = drawnZs[i]!;
+  }
+  // Heading by central difference — the tangent convention is (sin H, −cos H), the
+  // same one buildCenterline integrates, so everything downstream (the skier's
+  // facing, the camera, the terrain sweep) reads this line the way it read the old one.
+  //
+  // UNWRAPPED, and that is not a detail. `atan2` returns (−π, π], but the trail wraps
+  // ~172° around the second mountain, so the true heading crosses the branch cut. Left
+  // wrapped, one sample would read +π and the next −π; `centerlineAt` lerps between
+  // samples, so it would sweep the long way through zero — a skier and camera spinning
+  // a half-turn mid-wrap. The old lobe chain never hit this because it INTEGRATED
+  // heading and was free to run past π. Accumulating the deltas restores that.
+  let unwrapped = Math.atan2(xs[1]! - xs[0]!, -(zs[1]! - zs[0]!));
+  headings[0] = unwrapped;
   for (let i = 1; i < n; i++) {
-    const h0 = trailHeadingAt((i - 1) * step);
-    const h1 = trailHeadingAt(i * step);
-    // Tangent (downhill) = (sin H, −cos H); trapezoid it into position, same as
-    // buildCenterline — arc-length parameterized, so travel ≈ route distance.
-    x += 0.5 * (Math.sin(h0) + Math.sin(h1)) * step;
-    z += 0.5 * (-Math.cos(h0) - Math.cos(h1)) * step;
-    xs[i] = x;
-    zs[i] = z;
-    headings[i] = h1;
+    const a = i - 1;
+    const b = i < n - 1 ? i + 1 : n - 1;
+    const raw = Math.atan2(xs[b]! - xs[a]!, -(zs[b]! - zs[a]!));
+    let delta = raw - unwrapped;
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+    unwrapped += delta;
+    headings[i] = unwrapped;
   }
   return { step, xs, zs, headings };
 })();
@@ -615,8 +525,12 @@ const TRAIL_LINE: Centerline = (() => {
 // match rather than hand-tuned, so retuning the wrap above re-solves the cave
 // instead of quietly tearing the rejoin. `slopePath.test.ts` pins the residual.
 const CAVE_ID = "cave";
-const CAVE_FROM = 530; // route distance where Fork 3 splits (the approach's end)
-const CAVE_TO = 830; // route distance where both branches rejoin (the cliff)
+// Where Fork 3 splits and rejoins — MEASURED, as the two ends of the grey line the
+// director drew through the second mountain, projected onto the drawn trail. These
+// were 530 and 830, the segment boundaries; the drawing puts the split later and the
+// rejoin nearly at the flag.
+const CAVE_FROM = MAP_LAYOUT.caveLine.fromRoute ?? 530;
+const CAVE_TO = MAP_LAYOUT.caveLine.toRoute ?? 830;
 
 // The heading down the cave at a fraction u of its length, for a given weave.
 const caveHeadingAt = (u: number, weave: number, from: number, net: number): number =>
@@ -858,8 +772,12 @@ export function trailPointAtRoute(
  * exactly where the ground starts falling away — which is what a lake's outlet is.
  */
 export const FROZEN_LAKE = {
-  /** Route distance the disc is centred on — the middle of the flat crossing. */
-  routeCenter: 363,
+  /** Route distance the disc is centred on — MEASURED off the drawn map (the cyan
+   * body's centroid, projected onto the drawn trail). It was 363, a number picked to
+   * sit in the middle of GRADE_PROFILE's flat; the drawing puts the lake later than
+   * that flat, which is a real disagreement between the two and is written up in
+   * IDEAS.md rather than split the difference here. */
+  routeCenter: MAP_LAYOUT.lake.route,
   /**
    * How far right of the lane the centre sits. Not free: it has to be near enough
    * that the lane runs on ice for the WHOLE flat span (route 312–415, ±51 either side
@@ -869,9 +787,21 @@ export const FROZEN_LAKE = {
    * lake, and it is only at the two ends that the lane sits on the shore. That is what
    * clipping a corner means.
    */
-  lateralCenter: 58,
-  /** Disc radius. 90 ⇒ ~25.4k sq units ⇒ ~15× the old ribbon's ~1.7k. */
-  radius: 90,
+  lateralCenter: MAP_LAYOUT.lake.lateral,
+  /**
+   * Disc radius, MEASURED off the drawing (the cyan footprint's mean radius).
+   *
+   * ⚠ THIS IS THE ONE PLACE THE DRAWING AND A PREVIOUS DIRECTOR CALL DISAGREE, and
+   * the disagreement is ~3×. It used to be 90 — "~25.4k sq units, ~15× the old
+   * ribbon's ~1.7k" — set after the verdict that the lake was far too small. The
+   * drawn lake is about three lane-widths across, which at this scale is ~41.
+   *
+   * The drawing wins here on purpose: the whole reason this file now reads a measured
+   * map is that overriding it with remembered verbal notes is what failed. If the lake
+   * rides small, the fix is to draw it bigger and re-run the tool — one round, visible
+   * — rather than another number picked in here. Logged in IDEAS.md for Josh's call.
+   */
+  radius: MAP_LAYOUT.lake.radius,
   /** How wide a shore lip rings the body, and how high it rises above the ice. */
   shoreBand: 20,
   shoreRise: 14,
@@ -948,14 +878,15 @@ export function lakeIceExtent(
  * a test rather than swallowing the run.
  */
 export const FORK_MOUNTAIN = {
-  /** Placed relative to the trail at the middle of the wrap, on the inside. */
-  routeAnchor: 680,
+  /** Placed relative to the trail at the middle of the wrap, on the inside —
+   * MEASURED as the drawn mass's centroid projected onto the drawn trail. */
+  routeAnchor: MAP_LAYOUT.mountains[1]?.route ?? 680,
   /**
    * How far off the trail the centre sits. Together with the wrap's shape this is
    * what makes the outside branch hug the mountain: measured, the line holds ~20
    * units off the foot for the whole 172°.
    */
-  lateralAnchor: 102,
+  lateralAnchor: MAP_LAYOUT.mountains[1]?.lateral ?? 102,
   /**
    * The footprint is NOT a circle (slope-mech, 2026-07-26, after looking at it).
    *
