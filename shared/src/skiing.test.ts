@@ -1677,15 +1677,25 @@ describe("The branching map: same clock, same flag", () => {
 // lake) and ends there, coasting off into the runout. These pin that the flag
 // reroutes the sim correctly and the forks stay off, WITHOUT touching the tested
 // graph.
-describe("The single played trail: summit → the frozen lake, forks parked", () => {
+describe("The single played trail: summit → cliff down the spine, forks parked", () => {
   const dt = 0.02;
 
-  it("SINGLE_TRAIL / singleTrailNext describe summit → forest-road → lake → (end)", () => {
-    expect(SINGLE_TRAIL).toEqual(["summit", "forest-road", "lake"]);
+  it("SINGLE_TRAIL / singleTrailNext describe summit → forest → lake → yeti → cave → cliff → (end)", () => {
+    expect(SINGLE_TRAIL).toEqual([
+      "summit",
+      "forest-road",
+      "lake",
+      "yeti",
+      "cave",
+      "cliff",
+    ]);
     expect(singleTrailNext("summit")).toBe("forest-road");
     expect(singleTrailNext("forest-road")).toBe("lake");
-    expect(singleTrailNext("lake")).toBeNull(); // the back of the frozen lake
-    expect(singleTrailNext("yeti")).toBeNull(); // off the trail → never wanders on
+    expect(singleTrailNext("lake")).toBe("yeti");
+    expect(singleTrailNext("yeti")).toBe("cave");
+    expect(singleTrailNext("cave")).toBe("cliff");
+    expect(singleTrailNext("cliff")).toBeNull(); // the valley floor → the runout
+    expect(singleTrailNext("water")).toBeNull(); // a parked detour, off the trail → never wanders on
   });
 
   it("a fresh single-trail run is a summit run, flagged single-trail", () => {
@@ -1700,22 +1710,23 @@ describe("The single played trail: summit → the frozen lake, forks parked", ()
     expect(createBranchingSkiState().singleTrail).toBe(false);
   });
 
-  it("flows summit → forest-road → lake, jumps the lake gap, then coasts off the back of the lake into the runout (never the yeti/detours)", () => {
+  it("flows the whole spine summit → … → cliff, jumps both gaps, then coasts off the valley floor into the runout (never the detours)", () => {
     let state = createSingleTrailSkiState();
     const segments = [state.segmentId];
-    // The trail's total route length (summit 120 + forest-road 120 + lake 100 =
-    // 340); coast a good way past it to prove the run keeps going down the flat
-    // runout, not onto a new segment.
+    // The trail's total route length (the full spine = 640); coast a good way past it
+    // to prove the run reaches the valley floor and keeps going down the flat runout,
+    // not onto a detour.
     const trailLen = SINGLE_TRAIL.reduce((s, id) => s + BRANCH_SEGMENTS[id]!.length, 0);
     for (
       let i = 0;
-      i < 6000 &&
+      i < 9000 &&
       routeDistanceOf(state.segmentId, state.distance) < trailLen + 120;
       i++
     ) {
-      // The lake brings the trail's first hazard (lake-gap): charge a jump timed to
-      // clear it, same technique as the branching runToFlag helper. No gap on the
-      // summit/forest, so this only fires at the lake.
+      // The trail's two hazards (the lake's `lake-gap` and the cliff's `cliff-gap`):
+      // charge a jump timed to clear whichever is ahead, same technique as the
+      // branching runToFlag helper. yeti/cave/forest/summit have no gaps, so this
+      // only fires at the two jumps.
       const grounded = state.height <= 0;
       const speed = Math.max(1, Math.abs(state.speed));
       const approaching = state.chasms.some((c) => {
@@ -1725,11 +1736,11 @@ describe("The single played trail: summit → the frozen lake, forks parked", ()
       state = stepSkiing(state, { ...noInput, jump: grounded && approaching }, dt);
       if (segments[segments.length - 1] !== state.segmentId) segments.push(state.segmentId);
     }
-    // Only ever the three trail segments — the yeti/water/other detours are never
-    // entered (the lake's own fork into `water` stays parked on the single trail).
-    expect(segments).toEqual(["summit", "forest-road", "lake"]);
-    expect(state.segmentId).toBe("lake");
-    // Cleared the gap, never crashed off the trail.
+    // Rides the full spine in order — the water/ledge/other detours are never entered
+    // (the segments' own forks stay parked on the single trail).
+    expect(segments).toEqual(["summit", "forest-road", "lake", "yeti", "cave", "cliff"]);
+    expect(state.segmentId).toBe("cliff");
+    // Cleared both gaps, never crashed off the trail.
     expect(state.status).toBe("skiing");
     // The terminal pushed the finish out of reach so the coast-out continues.
     expect(state.finishDistance).toBe(Number.POSITIVE_INFINITY);

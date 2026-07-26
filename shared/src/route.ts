@@ -63,21 +63,37 @@ export const BRANCH_START = "summit";
 // The single played trail (slope-mech, 2026-07-24 redirect — see IDEAS.md START
 // HERE). The §4 branching graph below is PARKED for the played path: it stays
 // here, still proven by the same-clock tests, but the active run no longer forks
-// through it. Instead it rides ONE non-branching trail — summit → forest → the
-// frozen lake — and ends there, coasting off into the flat runout (there is no
-// finish line yet). Kept as its own tiny ordered list so BRANCH_SEGMENTS' tested
-// topology is untouched: the sim walks THIS (via singleTrailNext) instead of
-// `next` when a run is flagged single-trail, and the forks never arm. Extend the
-// list (and its terrain in skiRender) to grow the trail — the lake's `lake-gap`
-// chasm + checkpoint come along for free, so the frozen lake is where the trail's
-// FIRST jump lives (design §4: "all three routes learn the jump here"). The
-// lake's own trigger (into `water`) stays parked with the forks.
-export const SINGLE_TRAIL: readonly string[] = ["summit", "forest-road", "lake"];
+// through it. Instead it rides ONE non-branching trail down the whole mountain —
+// the spine: summit → forest → frozen lake → yeti's peak → cave → cliff — reaching
+// the valley floor at the flag and then coasting off into the flat runout (there is
+// no finish line yet — director). Kept as its own ordered list so BRANCH_SEGMENTS'
+// tested topology is untouched: the sim walks THIS (via singleTrailNext) instead of
+// `next` when a run is flagged single-trail, and the forks never arm.
+//
+// EXTENDED PAST THE FOREST (slope-mech, 2026-07-25): the trail used to dead-end at
+// the back of the lake into an endless flat runout — a terrain-less void where the
+// controls also went dead (the grade-0 speed bug, fixed in skiing.ts). It now rides
+// the rest of the DESIGNED spine (yeti/cave/cliff already have world placement +
+// grade + terrain-builder support — they were only ever parked as *fork* content,
+// so pulling them onto the road just skis them straight, no splits). Two jumps come
+// along for free: the lake's `lake-gap` (the first jump — design §4, "all three
+// routes learn the jump here") and the cliff's `cliff-gap` (the signature crevasse).
+// The segments' own triggers (lake→water, yeti→ledge) stay parked with the forks
+// (guarded off for single-trail runs). Grow the trail by extending this list; the
+// terrain in skiRender.ts follows it automatically.
+export const SINGLE_TRAIL: readonly string[] = [
+  "summit",
+  "forest-road",
+  "lake",
+  "yeti",
+  "cave",
+  "cliff",
+];
 
-/** The next segment along the single played trail, or null at the back of the
- * frozen lake — the trail's terminal, where the run opens into the runout. Off
- * the trail (an unlisted id) returns null too, so a single-trail run never
- * wanders onto the parked graph. */
+/** The next segment along the single played trail, or null at the cliff — the
+ * trail's terminal, where the run reaches the valley floor and opens into the
+ * runout. Off the trail (an unlisted id) returns null too, so a single-trail run
+ * never wanders onto the parked graph. */
 export function singleTrailNext(segmentId: string): string | null {
   const i = SINGLE_TRAIL.indexOf(segmentId);
   return i >= 0 && i + 1 < SINGLE_TRAIL.length ? SINGLE_TRAIL[i + 1]! : null;
@@ -318,11 +334,31 @@ export const REFERENCE_GRADE = 0.35;
 // is ~19% taller now (total drop ~282 vs ~238) — a genuinely steeper forest, which the world
 // geometry (routeHeightAt) renders. Tuning knob: nudge the 0.42 plateau if the trees still
 // read slow (up) or start to feel out of control (down).
+//
+// FOREST SPEED, ROUND 3 (slope-mech, 2026-07-25 follow-up: "it stays at base speed
+// not recognizing my w or shift key"). Round 2's 0.42 STILL read as a slow zone
+// because the forest was graded MELLOWER than the 0.5 summit plunge: coming off the
+// plunge you decelerate into the trees no matter what you hold (a hold-W run shed
+// ~25.7 → 21.6 u/s crossing in; a boosted run is pinned at the GRADE_TOP_SPEED cap
+// through both, so the number never budges) — which reads as "the forest ignores my
+// keys and sits at one speed." The keys ARE live (the sim folds up/boost into the
+// target); the felt deadness was the mellow grade + the cap, not a dropped input.
+// Fix: stop making the forest mellower than the summit at all. The post-plunge grade
+// now eases from 0.5 only to 0.48 and HOLDS 0.48 flat across the forest + lake, so the
+// plunge's momentum carries straight through the trees instead of bleeding off — the
+// forest skis as fast as the summit (cruise ~16.5 u/s, hold-W ~24.7). "Steeper =
+// faster" now lives entirely in the *lower* pitch (0.5 at 560) and the flag ease; the
+// upper mountain is one sustained fast pitch by design (Josh's repeated call:
+// forest-not-slow beats a visible summit↔forest grade step). Consequence, flagged for
+// slope-vis: the upper mountain is a touch taller/steeper again (routeHeightAt renders
+// it). KNOBS: nudge the 0.48 plateau if the trees still read slow (up) / out of control
+// (down); if BOOST specifically should out-run cruise on the fast stretches rather than
+// sitting at the shared 28 ceiling, raise GRADE_TOP_SPEED in skiing.ts (its own call).
 const GRADE_PROFILE: readonly (readonly [number, number])[] = [
   [0, 0.5], // steep summit plunge (~26.6°, just under the camera's ~27°)
-  [60, 0.45], // shed the plunge's extreme up high — steep grade drop, expected here
-  [180, 0.42], // ease out onto the forest — a fast glide now, not a mellow-slow zone
-  [340, 0.42], // …holds across the forest + frozen lake (carries momentum through the trees)
+  [60, 0.48], // ease the plunge's extreme off — but only to 0.48, so speed barely sheds
+  [180, 0.48], // the forest skis as fast as the summit — momentum carries through the trees
+  [340, 0.48], // …holds flat across the forest + frozen lake (no mellow-slow zone anymore)
   [460, 0.43], // building back up through the mid detours (parked map; trims total drop)
   [560, 0.5], // the steep lower pitch (ice valley / cliff run-in)
   [640, 0.42], // ease a touch for the flag

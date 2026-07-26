@@ -598,11 +598,23 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   // the fastest steep+boost. See route.ts's grade profile (gradeSpeedFactor).
   // On the branching map SLOPE_SPEED_GAIN amplifies the coupling (director:
   // "increase speed on slopes"); off it (the Overlook), the factor is a hard 1
-  // so the locked feel is exactly as it was. Past the flag grade→0 → the factor
-  // eases toward 0 and the run coasts out down the flat runout (no finish yet).
+  // so the locked feel is exactly as it was.
+  //
+  // FLOOR AT 1 (slope-mech, 2026-07-25 — the real "forest speed" bug): past the
+  // flag the grade eases to 0, and the target is baseTarget × gradeFactor, so a
+  // ZERO factor multiplies the player's W/Shift/brake input to nothing — the run
+  // pins at MIN_SPEED on the flat runout with completely DEAD controls (Josh: "it
+  // stays at base speed not recognizing my w or shift key" — he was in the runout
+  // past the frozen lake, not the forest, which the grade tuning never touched).
+  // Flooring the factor at 1 keeps the flat runout playing like the tuned flat
+  // Overlook: cruise/lean/boost/brake all respond, so you can still ski the coast-
+  // out instead of being frozen at a crawl. The floor only bites where the grade
+  // factor would drop below 1 (roughly grade < REFERENCE_GRADE/SLOPE_SPEED_GAIN ≈
+  // 0.23) — i.e. only the near-flat runout; every graded pitch on the trail is
+  // already well above 1, so the trail feel is untouched.
   const onGradedMap = BRANCH_SEGMENTS[state.segmentId] !== undefined;
   const gradeFactor = onGradedMap
-    ? gradeSpeedFactor(state.segmentId, state.distance) * SLOPE_SPEED_GAIN
+    ? Math.max(1, gradeSpeedFactor(state.segmentId, state.distance) * SLOPE_SPEED_GAIN)
     : 1;
   const baseTarget = input.boost
     ? BOOST_SPEED
