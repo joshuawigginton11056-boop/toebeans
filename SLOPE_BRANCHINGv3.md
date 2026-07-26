@@ -88,6 +88,7 @@ in series, each rejoining before the next.
            |            /
             FINISH
 ```
+![Top-down map](slope-map.png)
 
 **Balance four fork-pairs, not eight routes.** Because every fork rejoins, the
 eight possible combinations do not need to be timed against each other. Each fork
