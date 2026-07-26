@@ -121,26 +121,32 @@ units of trail today, crossing the corner of an ice sheet.
   current route, making the lake ~68% of the run. Only coherent as part of the §9
   stretch to 3:30.
 
-My read is the BODY, because his second sentence puts the second mountain *behind* the
-lake — that composition is a vista across a wide expanse, which is a footprint change,
-not a crossing change. But it's a guess, so ask.
+Don't infer it from the mountain call — ask.
 
-**Why these two calls are really one job.** "A big lake with a mountain rising behind
-it" is a *view*, and nothing in the current build makes views: the lake is skinned onto
-the ±12 lane, the ground is a 92-unit ribbon that stops dead at the banks, and the
-second mountain is not a mass at all — it's 180 units of 21.5° descent that happens to
-curve. Delivering the view means the lake basin and the mountain mass exist as terrain
-BEYOND the ribbon. That is the first thing on this map that needs real off-trail
-geometry, and it crosses into mountain-graphics — worth agreeing the seam before
-building.
+**The second mountain has a JOB, and it isn't scenery.** Correcting my own first read
+here, because I framed it as composition and Josh put it straight: *"its not a view only
+mountain. its got real purpose. the second mountain is the mountain that introduces the
+cave entrance and the ride around."* It **is** Fork 3 — the mass is what makes "through
+the cave" and "around the outside" two lines you can see and choose between, and the
+cave mouth needs to be something you spot and aim at on approach. Today the area is 180
+units of 21.5° descent that happens to curve, and the fork is parked and never arms. So
+this is **two jobs joined: build the mass, and light up Fork 3 on it** — which pulls the
+parked "re-grayblock `route.ts` for v3's fork structure" (v3 §8) into this work.
+
+**What that means practically.** The mountain has to exist as terrain the lines go
+*around* and *through*, which is the first thing on this map needing real geometry
+beyond the 92-unit ribbon — the ground currently stops dead at the banks. That crosses
+into mountain-graphics; agree the seam before building. And the cave needs a mouth, so
+there's a hazard/marker-mesh question in there too.
 
 **The trap to avoid.** "Not another drop off" collides with the speed model: speed is
 grade, so a level second mountain is a slow second mountain. Do NOT solve it by making
 the area mellow — that is exactly the forest mistake, made three times. The options are
 (a) give it an `iceGlide`-style carry like the lake got, (b) let the CAVE carry the
-descent while the outside line stays flatter, or (c) keep the descent honest and build
-the mountain's bulk beside/above the line so it reads as going *around* a mass. (c) is
-closest to the drawing and cheapest; it's a graphics job more than a mechanics one.
+descent while the outside line stays flatter — which also gives the two fork lines
+distinct character, so it's the most interesting option — or (c) keep the descent honest
+and build the mountain's bulk beside/above the line so it reads as going *around* a
+mass. (b) and (c) compose.
 
 **Also worth deciding in the same breath:** the §9-vs-§4 size conflict (§12.4). A 15×
 lake makes the 640-unit route untenable, so this may be the moment to take the stretch

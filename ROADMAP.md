@@ -480,14 +480,21 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
       fork-3 bullets amended; working notes in IDEAS.md START HERE.
       **Blocking question for Josh: 15× the ice BODY (~4× linear, buildable at 640) or
       15× the CROSSING (80 → 1200 units, longer than the whole current route)?**
-      Two things make this bigger than it looks: (1) "a lake with a mountain behind it"
-      is a VIEW, and nothing on this map makes views yet — the ground is a 92-unit
-      ribbon that stops at the banks, so the lake basin and the mountain mass need real
-      off-trail geometry, which crosses into mountain-graphics; (2) "not another drop
-      off" collides with the speed model (speed IS grade, so level = slow) — solve it
-      with a glide carry, or by letting the cave carry the descent, or by building the
-      mountain's bulk beside the line, but NOT by making the area mellow (that is the
-      forest mistake, made three times).
+      **The second mountain is Fork 3's structure, not scenery** — *"its not a view only
+      mountain. its got real purpose. the second mountain is the mountain that introduces
+      the cave entrance and the ride around."* The mass is what makes "through the cave"
+      and "around the outside" two legible lines, and the cave mouth has to be something
+      you see and aim at. Today it's 180 units of 21.5° descent that happens to curve,
+      with the fork parked and never arming — so this is two jobs joined: build the mass,
+      and light up Fork 3 on it. That pulls the parked "re-grayblock route.ts for v3's
+      fork structure" into this work. Two consequences: (1) the mountain must exist as
+      terrain the lines go around and through, the first thing here needing real geometry
+      beyond the 92-unit ribbon — crosses into mountain-graphics, agree the seam first;
+      (2) "not another drop off" collides with the speed model (speed IS grade, so level =
+      slow) — solve it with a glide carry, or by letting the CAVE carry the descent while
+      the outside line stays flatter (which also differentiates the two fork lines), or
+      by building the bulk beside the line — but NOT by making the area mellow, which is
+      the forest mistake made three times.
 - [ ] **Stretch the route to §9's 3:30 — now the gating job, not a someday job.** The
       shape pass proved the run is too short and the dressed ribbon too wide for the
       drawn map: 640 units is ~7 ribbon-widths end to end where Josh's drawn trail is

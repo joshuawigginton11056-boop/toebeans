@@ -127,11 +127,13 @@ Both arrive at the cliff.
 
 - *Through — the cave:* the interior line.
 - *Around — the outside:* the exposed line over the shoulder.
-- **POSITION (director, 2026-07-26): the second mountain stands BEHIND the lake, and
-  is NOT another drop-off.** You see it rising across the ice and then go around or
-  through it — it is a mass you approach, not a third descending slope. See §12.3 #2
-  for what that costs (a near-level stretch is a slow stretch under the speed model,
-  and real uphill is a sim change).
+- **PURPOSE + POSITION (director, 2026-07-26): this mountain stands beyond the lake and
+  it is what INTRODUCES this fork.** *"its not a view only mountain. its got real
+  purpose. the second mountain is the mountain that introduces the cave entrance and
+  the ride around."* The mass is the fork's structure — the cave entrance is a thing
+  you see and aim at, the outside line is a thing you see going around. It is NOT a
+  backdrop and NOT a third descending slope (which is all it is today, with this fork
+  parked). See §12.3 #2.
 - **Open:** the cave has no exclusive reward assigned. Previously the ice castle
   justified this fork; it no longer sits here.
 
@@ -352,14 +354,19 @@ Three load-bearing decisions inside that:
      the entire current route and would make the lake ~68% of the run. Only coherent
      alongside the §9 stretch.
 
-   Reading it together with call 2 below (the mountain *behind* the lake), the intent
-   looks like a **vista**: a wide expanse of ice with the second mountain rising
-   across it. That points at the body, not the crossing — but confirm, don't assume.
+   Which reading is right is still open — ask, don't infer.
 
-2. **The second mountain sits BEHIND the lake, and is not another drop-off.** Today
-   it's a third descending stretch (180 units at 21.5°), which is why it reads as
-   just more slope. It should read as a *mass you approach across the lake* and then
-   go around or through. Two things that constrains:
+2. **The second mountain is the FORK mountain, and it stands beyond the lake.** Its
+   job is structural, not scenic (director, 2026-07-26: *"its not a view only mountain.
+   its got real purpose. the second mountain is the mountain that introduces the cave
+   entrance and the ride around"*). It **is** Fork 3 of §5: the mass is what makes
+   "through the cave" and "around the outside" two legible lines rather than an
+   abstract choice, and the cave entrance has to be something you can see and aim at
+   on approach. Today it is none of that — 180 units of 21.5° descent that happens to
+   curve, with the fork itself still parked and never armed. So this call is two jobs
+   joined: **build the mass, and light up Fork 3 on it.** That pulls §8's parked
+   "re-grayblock `route.ts` for v3's fork structure" into this work rather than leaving
+   it separate. Two things it constrains:
    - **"Not a drop-off" fights the speed model.** Height is keyed to route distance
      and speed comes from grade, so a near-level second mountain is a slow second
      mountain unless it gets an `iceGlide`-style carry (§12.2) or the cave itself
