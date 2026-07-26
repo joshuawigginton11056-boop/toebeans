@@ -15,7 +15,8 @@ it's explained.
   map, where SLOPE_BRANCHINGv3.md supersedes DESIGN.md.** DESIGN.md still describes
   the older three-linear-slopes model; the two are not yet reconciled (see
   SLOPE_BRANCHINGv3.md §7 #1). For any slope or map work, SLOPE_BRANCHINGv3.md wins.
-  ## Working with the owner
+
+## Working with the owner
 
 The owner is non-technical, owns all creative decisions, and delegates technical
 execution entirely.
@@ -102,9 +103,49 @@ Run from the repo root:
 - `npm run build` — build the client for production.
 - `npm run test` — run the Vitest suite.
 - `npm run typecheck` — TypeScript project-wide type check.
-- `npm run check` — typecheck + test. Run this before considering any
-  change done.
 - `npm run check` — typecheck + test. Run this before considering any change done.
   Passing `check` is necessary but not sufficient: a session is only done when
   there's something demonstrable in the browser that the owner can verify himself
   in under a minute.
+
+## How to actually SEE a slope change (learned the slow way, 2026-07-26)
+
+**You cannot drive a real-time ski run through an automated browser tab.** An
+unfocused tab throttles `requestAnimationFrame` to ~1 Hz and then stops it: the run
+either takes giant `dt` steps (skipping whole trigger windows, and tearing the debug
+readout into self-inconsistent reads) or freezes outright. Screenshots still composite
+on demand, so the page *looks* live when the sim hasn't advanced in 30 s — check
+`elapsed` on the `?debug` readout before trusting anything you see.
+
+**Render the view you want instead.** Vite serves the sources, so in the page you can
+import the real modules and build a second scene with your own camera — no waiting, no
+decor scatter in the way, and repeatable:
+
+```js
+const B = '/@fs/<abs repo path>/client/src/';
+const rend = await import(B + 'skiRender.ts');
+const sp   = await import(B + 'slopePath.ts');
+const fg   = await import(B + 'forestGraphics.ts');
+const THREE = await import('/@id/three');      // NOT '/node_modules/...'
+const box = document.createElement('div');
+box.style.cssText = 'position:fixed;inset:0;z-index:9999';
+document.body.appendChild(box);
+const h = rend.createSkiScene(box);
+rend.addBranchTerrain(h);
+fg.buildFrozenLake(h.scene);                    // dressing is opt-in
+const eye = sp.trailPointAtRoute(300, -4);      // route distance + lateral
+const look = sp.trailPointAtRoute(470, 20);
+const cam = new THREE.PerspectiveCamera(64, box.clientWidth / box.clientHeight, 0.5, 3000);
+cam.position.set(eye.x, eye.y + 26, eye.z);
+cam.lookAt(look.x, look.y + 4, look.z);
+h.scene.fog.near = 300; h.scene.fog.far = 1600;  // haze hides mid-distance geometry
+h.renderer.render(h.scene, cam);
+```
+
+Then screenshot. To find which mesh owns a visual artifact, toggle
+`h.scene.children[i].visible` and re-render — that is how a stray sliver was traced to
+a phantom lake band in one pass.
+
+**For LAYOUT questions, skip the browser entirely.** `client/src/slopePath.ts` has no
+three.js dependency, so `npx tsx` a throwaway script that imports it directly and emits
+an SVG plan view — top-down, labelled, exact. Much faster than flying the map.
