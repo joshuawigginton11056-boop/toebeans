@@ -470,8 +470,31 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 ## Open — still to resolve
 
 ### M2 remaining
-- [x] **SHAPE THE MOUNTAIN — DONE (slope-mech, 2026-07-25), awaiting playtest.** See
-      "the mountain has a shape" under *What exists now*.
+- [x] **SHAPE THE MOUNTAIN — DONE (slope-mech, 2026-07-25).** See "the mountain has a
+      shape" under *What exists now*. **PLAYTEST VERDICT (2026-07-26): partial.** The
+      shaping itself stands; two size/composition flaws called out, below.
+- [ ] **⏭ NEXT (slope-mech): A BIG LAKE, AND A MOUNTAIN BEHIND IT (director,
+      2026-07-26).** *"serious flaw: lake is too small. needs to be about 15x current
+      size. also, the second mountain should be behind it (not another drop off)."*
+      Written up in **SLOPE_BRANCHINGv3.md §12.3** (the brief) with §5's fork-2 and
+      fork-3 bullets amended; working notes in IDEAS.md START HERE.
+      **Blocking question for Josh: 15× the ice BODY (~4× linear, buildable at 640) or
+      15× the CROSSING (80 → 1200 units, longer than the whole current route)?**
+      Two things make this bigger than it looks: (1) "a lake with a mountain behind it"
+      is a VIEW, and nothing on this map makes views yet — the ground is a 92-unit
+      ribbon that stops at the banks, so the lake basin and the mountain mass need real
+      off-trail geometry, which crosses into mountain-graphics; (2) "not another drop
+      off" collides with the speed model (speed IS grade, so level = slow) — solve it
+      with a glide carry, or by letting the cave carry the descent, or by building the
+      mountain's bulk beside the line, but NOT by making the area mellow (that is the
+      forest mistake, made three times).
+- [ ] **Stretch the route to §9's 3:30 — now the gating job, not a someday job.** The
+      shape pass proved the run is too short and the dressed ribbon too wide for the
+      drawn map: 640 units is ~7 ribbon-widths end to end where Josh's drawn trail is
+      nearer 100, which is why the forest gets one meander instead of three and the
+      wrap is 160° not 180°. A 15× lake makes 640 untenable outright. Also unresolved
+      in the same breath: §9's near-equal segment budget contradicts §4's drawn
+      proportions (SLOPE_BRANCHINGv3 §12.4) — director's call.
 - [ ] **⚠ SLOPE_BRANCHINGv3 landed (director, 2026-07-25) — three jobs it created.**
       The spec was rewritten (`SLOPE_BRANCHING.md` → `SLOPE_BRANCHINGv3.md`) and it
       changes the design, not just the prose. Flagged by the (slope-mech) seamless-

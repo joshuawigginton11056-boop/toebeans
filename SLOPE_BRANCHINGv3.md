@@ -117,12 +117,21 @@ through the ice in front of you.
 - *Exclusive reward:* penguin-castle collectibles.
 - **Open:** the yeti that causes this is not yet placed on the map, and the exact
   resurface point is undrawn. Both needed before this fork can be built.
+- **SIZE (director, 2026-07-26): the lake is ~15× too small.** It is one of the
+  biggest features on the map, not a short icy stretch — you should come out of the
+  forest and see it spread out in front of you. See §12.3 #1 (including the blocking
+  question of whether 15× means the ice body or the crossing).
 
 **3 · Second Mountain — Type A.** Through the mountain, or around the outside.
 Both arrive at the cliff.
 
 - *Through — the cave:* the interior line.
 - *Around — the outside:* the exposed line over the shoulder.
+- **POSITION (director, 2026-07-26): the second mountain stands BEHIND the lake, and
+  is NOT another drop-off.** You see it rising across the ice and then go around or
+  through it — it is a mass you approach, not a third descending slope. See §12.3 #2
+  for what that costs (a near-level stretch is a slow stretch under the speed model,
+  and real uphill is a sim change).
 - **Open:** the cave has no exclusive reward assigned. Previously the ice castle
   justified this fork; it no longer sits here.
 
@@ -168,6 +177,11 @@ Both arrive at the cliff.
    See §9 and §10.
 6. **New: the cave's exclusive reward.** Fork 3 lost its reward when the ice castle
    moved. Assign one or accept that the cave is scenery-only.
+7. **New (2026-07-26): the map's SIZE story.** The shape work exposed that §9's
+   near-equal segment budget and §4's drawn proportions disagree, and that the run is
+   too short and the dressed ribbon too wide for the drawn map's meanders. See §12.4.
+   **This is what makes the §9 stretch to 3:30 the next big job rather than a
+   someday-job.**
 
 ## 8. Build order
 
@@ -281,3 +295,94 @@ This file is the source of truth for the branching map. If a second spec for the
 same map exists anywhere — an artifact, a chat, another markdown file — fold it in
 here and delete it. Two parallel specs is the most reliable way to make consecutive
 sessions contradict each other.
+
+---
+
+## 12. The mountain's shape
+
+*Added 2026-07-26. §§1–11 cover topology, the clock and instrumentation but said
+nothing about the map's HEIGHT and SIZE story — which turned out to be the thing
+that made the map read as one undifferentiated ramp. This is that missing section.*
+
+### 12.1 The rule
+
+> **Every area has its own character.** Not just its own scenery — its own pitch,
+> its own size, and its own shape in plan. An area you can't identify by how it
+> skis, with your eyes shut, isn't an area yet.
+
+### 12.2 What's built (2026-07-25, awaiting playtest)
+
+At today's 640-unit length. Proportions are read off the top-down map in §4.
+
+| Area | Length | Share | Pitch | Plan shape |
+|---|---|---|---|---|
+| Start mountain | 100 | 16% | 26.5°, steady | coils off the peak |
+| Enchanted forest | 190 | **30%** | 22–27°, **rolling** | one big meander (~34u) |
+| Frozen lake | 80 | 13% | **0° — flat** | near-straight corner crossing |
+| Second mountain | 180 | 28% | 21.5° | ~160° wrap around the mass |
+| Cliff run-in | 90 | 14% | 26° | turns back out to the flag |
+
+Three load-bearing decisions inside that:
+
+- **The forest's character is RELIEF, not pitch.** Speed is grade on this mountain,
+  so a mellower forest is a slower forest — rejected three times by the director.
+  The forest's mean pitch therefore stays at the summit's and only its *undulation*
+  changes. Any future "make area X gentler" ask should reach for relief first.
+- **The flat lake needed a new mechanic.** Flat ground would have floored the speed
+  coupling and read as slamming the brakes at the shore. `iceGlide` (route.ts) makes
+  an icy segment carry the pace you arrived with, bled off gently, instead of reading
+  its own zero grade. Note for anyone retuning the profile: the coupling floors at 1,
+  and that floor bites below ~13°, so **any shallow grade is mechanically identical
+  to true flat** — "gentle but still fast" does not exist via grade alone.
+- **Curvature is continuous by construction**, not by tuning: each lobe's weave
+  amplitude is a shared constant × its own span, and net turns run through a
+  smoothstep. This is what protects the earlier "the path is jerky" fix from being
+  reintroduced the next time someone makes a curve bolder.
+
+### 12.3 Director calls still to build (2026-07-26)
+
+1. **The frozen lake is far too small — roughly 15× too small.** It currently reads
+   as a short icy stretch of trail; the map draws it as one of the biggest features
+   on the mountain, a body you come out of the forest and see spread out in front of
+   you. **Open and BLOCKING for the next session: 15× of *what*?** The two readings
+   build differently:
+   - *the ice BODY* (its footprint) — ~4× linear, the trail still clips its corner.
+     Cheap-ish; mostly the ice sheet's extent plus a wide basin in the terrain.
+   - *the CROSSING* (trail length on the ice) — 80 → 1200 units, which is longer than
+     the entire current route and would make the lake ~68% of the run. Only coherent
+     alongside the §9 stretch.
+
+   Reading it together with call 2 below (the mountain *behind* the lake), the intent
+   looks like a **vista**: a wide expanse of ice with the second mountain rising
+   across it. That points at the body, not the crossing — but confirm, don't assume.
+
+2. **The second mountain sits BEHIND the lake, and is not another drop-off.** Today
+   it's a third descending stretch (180 units at 21.5°), which is why it reads as
+   just more slope. It should read as a *mass you approach across the lake* and then
+   go around or through. Two things that constrains:
+   - **"Not a drop-off" fights the speed model.** Height is keyed to route distance
+     and speed comes from grade, so a near-level second mountain is a slow second
+     mountain unless it gets an `iceGlide`-style carry (§12.2) or the cave itself
+     carries the descent. Pick one deliberately.
+   - **Real uphill is a sim change, not a map change.** The height profile only ever
+     falls. A mountain that genuinely rises in front of you needs either terrain mass
+     *beside* the line (cheap, reads right from the drawing) or a change to the
+     one-way height profile (expensive, touches same-clock).
+
+### 12.4 Known conflicts in this file, unresolved
+
+- **§9's segment budget contradicts §4's map.** §9 gives every area ~40–45 s, i.e.
+  near-equal. The map's proportions plus per-area speed give the forest ~12 s and the
+  second mountain ~13.5 s against the start mountain's ~5.9 s. One of the two has to
+  move; §9 is the newer number but §4 is the drawing. **Director's call.**
+- **"Gentle valley, steep cliff" is not expressible.** Height is keyed to route
+  DEPTH so that every branch drops the same amount (the same-clock guarantee). The
+  valley (on the ledge branch) and the cliff sit at the same depth, so they must
+  share a pitch. A per-branch pitch would break the equal-drop invariant. Either
+  accept a shared pitch there, or accept that same-clock loosens.
+- **Size is capped by the ribbon, not by taste.** The dressed ground is 92 units wide
+  and the run is 640 long — about seven ribbon-widths end to end, where the drawn
+  trail is nearer a hundred. That is why the forest has one meander instead of the
+  drawn three and the wrap is ~160° rather than ~180°, and it is the same reason the
+  lake can't grow 15× in crossing length here. **The stretch to §9's 3:30 is the
+  unlock for all of it**, which makes it the natural next big job.

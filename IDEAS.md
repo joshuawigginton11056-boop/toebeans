@@ -105,6 +105,53 @@ is **unresolved** — Josh will decide. This is the natural unlock for follow-up
 (the peaks contrast much harder against a decided sky). Do NOT touch the sky/atmosphere
 until then.
 
+## ⏭ START HERE (slope-mech) — A BIG LAKE, AND A MOUNTAIN BEHIND IT (director, 2026-07-26)
+
+Josh's verdict on the shaping pass, in his words: **"serious flaw: lake is too small.
+needs to be about 15x current size. also, the second mountain should be behind it (not
+another drop off)."** Both are now written into SLOPE_BRANCHINGv3.md — **§12.3 is the
+brief, read it there**, plus the amended §5 bullets for forks 2 and 3. This block is
+just the working notes.
+
+**ASK JOSH FIRST — this one is genuinely blocking:** *15× of what?* The lake is 80
+units of trail today, crossing the corner of an ice sheet.
+- **The ice BODY** (its footprint on the mountain) → ~4× linear. The trail still clips
+  a corner; what changes is the expanse you see. Buildable at today's 640 length.
+- **The CROSSING** (how long you ski on ice) → 80 → 1200 units, longer than the entire
+  current route, making the lake ~68% of the run. Only coherent as part of the §9
+  stretch to 3:30.
+
+My read is the BODY, because his second sentence puts the second mountain *behind* the
+lake — that composition is a vista across a wide expanse, which is a footprint change,
+not a crossing change. But it's a guess, so ask.
+
+**Why these two calls are really one job.** "A big lake with a mountain rising behind
+it" is a *view*, and nothing in the current build makes views: the lake is skinned onto
+the ±12 lane, the ground is a 92-unit ribbon that stops dead at the banks, and the
+second mountain is not a mass at all — it's 180 units of 21.5° descent that happens to
+curve. Delivering the view means the lake basin and the mountain mass exist as terrain
+BEYOND the ribbon. That is the first thing on this map that needs real off-trail
+geometry, and it crosses into mountain-graphics — worth agreeing the seam before
+building.
+
+**The trap to avoid.** "Not another drop off" collides with the speed model: speed is
+grade, so a level second mountain is a slow second mountain. Do NOT solve it by making
+the area mellow — that is exactly the forest mistake, made three times. The options are
+(a) give it an `iceGlide`-style carry like the lake got, (b) let the CAVE carry the
+descent while the outside line stays flatter, or (c) keep the descent honest and build
+the mountain's bulk beside/above the line so it reads as going *around* a mass. (c) is
+closest to the drawing and cheapest; it's a graphics job more than a mechanics one.
+
+**Also worth deciding in the same breath:** the §9-vs-§4 size conflict (§12.4). A 15×
+lake makes the 640-unit route untenable, so this may be the moment to take the stretch
+to 3:30 rather than shape twice. Flag it to Josh as a fork in the road, not a detail.
+
+**Acceptance (browser, <1 min):** come out of the forest and see a lake wide enough to
+read as a lake, with the second mountain standing across it — and check the second
+mountain no longer feels like a third slope in a row.
+
+---
+
 ## SHAPE THE MOUNTAIN — LANDED (slope-mech, 2026-07-25); follow-ups below
 
 **Status: this block is CLOSED.** The shaping shipped — proportions from the drawn map,
