@@ -11,7 +11,10 @@ it's explained.
   what's next.
 - **New ideas go in [IDEAS.md](IDEAS.md), not into code.** If a tangent
   comes up mid-session, write it down there instead of implementing it.
-- Game design decisions and rationale live in [DESIGN.md](DESIGN.md).
+- Game design decisions and rationale live in DESIGN.md — **except the branching
+  map, where SLOPE_BRANCHINGv3.md supersedes DESIGN.md.** DESIGN.md still describes
+  the older three-linear-slopes model; the two are not yet reconciled (see
+  SLOPE_BRANCHINGv3.md §7 #1). For any slope or map work, SLOPE_BRANCHINGv3.md wins.
 
 ## Stack
 
