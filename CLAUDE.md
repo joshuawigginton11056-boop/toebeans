@@ -15,6 +15,25 @@ it's explained.
   map, where SLOPE_BRANCHINGv3.md supersedes DESIGN.md.** DESIGN.md still describes
   the older three-linear-slopes model; the two are not yet reconciled (see
   SLOPE_BRANCHINGv3.md §7 #1). For any slope or map work, SLOPE_BRANCHINGv3.md wins.
+  ## Working with the owner
+
+The owner is non-technical, owns all creative decisions, and delegates technical
+execution entirely.
+
+- **Plan before code, every session.** State your plan and what you'll change,
+  then wait for approval before writing anything.
+- **Describe plans and results in terms of what he will see in the browser**, not
+  files, types, or refactors. Name files only when asked.
+- **For decisions with a creative or design component, don't choose.** Present 2–4
+  options with tradeoffs and let him pick.
+- **For purely technical decisions with no design impact, just choose.** Don't ask
+  him to arbitrate implementation details or read code to answer a question.
+- **Scope is a fence, not a suggestion.** If you find work outside the current
+  session's item, write it in IDEAS.md and mention it once. Don't do it.
+- **The spec file wins over conversation.** If something said in a session
+  contradicts SLOPE_BRANCHING.md, say so rather than following the conversation.
+- **Timing law:** every fork on the branching map is same-clock. If a change makes
+  the same-clock test fail, stop and report — don't adjust the tolerance.
 
 ## Stack
 
@@ -85,3 +104,7 @@ Run from the repo root:
 - `npm run typecheck` — TypeScript project-wide type check.
 - `npm run check` — typecheck + test. Run this before considering any
   change done.
+- `npm run check` — typecheck + test. Run this before considering any change done.
+  Passing `check` is necessary but not sufficient: a session is only done when
+  there's something demonstrable in the browser that the owner can verify himself
+  in under a minute.
