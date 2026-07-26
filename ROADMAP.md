@@ -150,6 +150,16 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   director's.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
   across all 24 slope models; decor scatter follows the run. (Old birches removed.)
+- **Tree scatter GROUNDED on the grade (forest 2026-07-25):** the decor scatter
+  used to be welded to y=0, so on the branching map the whole forest sat ~140–300u
+  below the elevated run — a green band on the horizon that never rose to meet the
+  frozen lake ("the forest goes on forever without ever reaching a lake"). Trees now
+  lift to the graded ground at their Z via `trailGroundHeightAtZ` (a small additive
+  export on `slopePath.ts`), toggled on for the branching map beside `addBranchTerrain`
+  (`setDecorGrounded`, main.ts). Verified numerically: grounded tree-Y matches terrain-Y
+  within 0.18u summit→lake. Flank trees sit a touch into the berm (reads as a treeline
+  in snowbanks; the berm-relief term is not added — parked in IDEAS if it reads sunk).
+  **Mist + moonlight rays are still welded to y=0** (night-only; same fix if wanted).
 - **Frozen lake (forest 2026-07-25):** the §4 `lake` segment (route 240–340) is
   now dressed as an actual sheet of ice — `buildFrozenLake` in
   `forestGraphics.ts` skins a glassy ice-blue surface (roughness 0.22 → catches a

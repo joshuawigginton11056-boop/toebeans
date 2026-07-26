@@ -525,6 +525,25 @@ export function segmentCenterline(segmentId: string, distance: number): SlopePoi
   };
 }
 
+/**
+ * The graded ground height at a world Z along the played trail — the lane-centerline
+ * elevation the branching terrain (addBranchTerrain) sits at. Added by the (forest)
+ * session (2026-07-25) as the smallest additive cross-seam export it needed to sit the
+ * forest decor scatter ON the descending mountain instead of on the y = 0 valley floor
+ * (the
+ * old grade seam: the scatter was pinned to 0 while the run rides y ≈ 140–280).
+ *
+ * The trail centerline is arc-length parameterized and nearly straight (heading stays
+ * ≤ ~0.07 rad), so world Z ≈ −routeDistance to sub-unit accuracy; invert by that and
+ * read the shared height profile. routeHeightAt clamps to [gate, flag], so Z above the
+ * gate returns the summit height and past the flag returns 0 (the flat runout) — both
+ * correct. This is the lane height; trees on the flank berms sit a touch into the bank,
+ * which reads as a treeline emerging from the snow (the berm relief is not added here).
+ */
+export function trailGroundHeightAtZ(worldZ: number): number {
+  return routeHeightAt(-worldZ);
+}
+
 /** World x/z for a (segmentId, distance, lateral) triple — the lane on a segment. */
 export function segmentToWorld(
   segmentId: string,

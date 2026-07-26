@@ -44,7 +44,11 @@ export {
   createCheckpointMarker,
   createTerrainSnowMaterial,
 } from "./mountainGraphics";
-export { loadSlopeDecor, buildFrozenLake } from "./forestGraphics";
+export {
+  loadSlopeDecor,
+  buildFrozenLake,
+  setDecorGrounded,
+} from "./forestGraphics";
 
 // skiScene.ts — the SHARED CORE of the slope's look (2026-07-24 scenery carve,
 // see PARALLEL.md). The scenery itself moved to mountainGraphics.ts (ground +

@@ -12,7 +12,11 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { BRANCH_SEGMENTS, LATERAL_LIMIT } from "@toebeans/shared";
 import { LANE_EDGE, makeRandom } from "./skiScene";
-import { segmentCenterline, segmentToWorld } from "./slopePath";
+import {
+  segmentCenterline,
+  segmentToWorld,
+  trailGroundHeightAtZ,
+} from "./slopePath";
 
 // How "on" the ground mist is (0 by day, 1 at full night) — set by
 // applyMistPhase from the time-of-day phase and read each frame in
@@ -180,6 +184,19 @@ interface DecorState {
 
 let decorState: DecorState | null = null;
 
+// GRADE GROUNDING (forest-graphics, 2026-07-25). The scatter is laid out in raw
+// world Z and used to pin every tree to y = 0 — fine on the flat Overlook, but on
+// the BRANCHING map the run rides a graded mountain (y ≈ 140–280), so the trees sat
+// down on the distant valley floor: a green band on the horizon that never rose to
+// meet the frozen lake (which IS on the grade). When true, each tree is lifted to the
+// graded ground at its Z (trailGroundHeightAtZ) so the forest surrounds the skier and
+// the lake reads as a clearing after it. Off by default so the Overlook stays flat;
+// main.ts turns it on beside addBranchTerrain/buildFrozenLake.
+let decorGrounded = false;
+export function setDecorGrounded(on: boolean): void {
+  decorGrounded = on;
+}
+
 export function updateSlopeDecor(anchorZ: number): void {
   if (!decorState) return;
   const { scene, templates, placed } = decorState;
@@ -211,7 +228,10 @@ export function updateSlopeDecor(anchorZ: number): void {
         if (!template) continue;
         const copy = template.clone();
         const jitter = random() * 0.8; // where in the cell the tree stands
-        copy.position.set(side * x, 0, -(cell + 0.1 + jitter) * band.cellSize);
+        const treeZ = -(cell + 0.1 + jitter) * band.cellSize;
+        // Sit on the graded mountain (branching map) instead of the y=0 valley floor.
+        const treeY = decorGrounded ? trailGroundHeightAtZ(treeZ) : 0;
+        copy.position.set(side * x, treeY, treeZ);
         copy.rotation.y = random() * Math.PI * 2;
         copy.scale.setScalar(scale);
         scene.add(copy);
