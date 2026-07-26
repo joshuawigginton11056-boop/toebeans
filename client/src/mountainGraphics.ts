@@ -135,6 +135,11 @@ export function createSkyDome(): THREE.Mesh {
   // no core edit, and the range always sits on the horizon like real far
   // mountains. See createMountainBackdrop.
   dome.add(createMountainBackdrop());
+  // The forested valley you look DOWN into rides the dome too (same recenter),
+  // filling the band below the horizon that used to be flat pink sky. It draws
+  // AFTER the peaks group is added so the valley floor tucks in front of the far
+  // ridgeline where they meet at the horizon. See createValleyVista.
+  dome.add(createValleyVista());
   return dome;
 }
 
@@ -406,6 +411,231 @@ export function createMountainBackdrop(): THREE.Group {
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.frustumCulled = false; // always wrapped around the camera
+  mesh.receiveShadow = false;
+  mesh.castShadow = false;
+  const group = new THREE.Group();
+  group.add(mesh);
+  return group;
+}
+
+// ---------------------------------------------------------------------------
+// THE VALLEY VISTA (mountain-graphics, 2026-07-25). Josh's callout: standing at
+// the summit you should look DOWN into the forested valley you're about to drop
+// into — instead the whole band below the horizon was flat pink sky. The cause
+// is geometric: the run descends at ~27° (GRADE_PROFILE) but the follow-camera
+// only looks ~18° down, so every sightline shallower than the slope sails out
+// OVER the valley and hits the sky dome — and the mountain backdrop ring only
+// rises AT/ABOVE eye level, leaving nothing below the horizon but fog. The real
+// gameplay forest sits below the convex summit rollover, hidden until you've
+// dropped into it.
+//
+// This fills that band with a distant forested valley: a curved matte surface in
+// the downhill-front arc that DROPS below eye level into a forested bowl and
+// rises again to meet the peak ring's feet at the horizon — so you look over the
+// near snow crest, down across snowy evergreen slopes to a valley floor, snow
+// peaks beyond. Like the peak ring it's a child of the sky dome (recenters on
+// the camera every frame = a fixed backdrop layer you never reach) and UNLIT
+// with baked shade + haze, for the same reasons (the real sun backlights this
+// camera-facing terrain; it sits past the shadow box). Crucially it keeps depth
+// test/write ON (unlike the peaks, which never need occluding): its world depth
+// is real, so the near rollover crest and the snowbanks naturally occlude its
+// lower edge — you see the valley through the run's opening, framed by the banks.
+const VISTA_R_IN = 88; // near forested rim (just past the fog's 80u onset)
+const VISTA_R_OUT = 168; // far edge, tucking under the peak ring's feet (R=170)
+const VISTA_SEG_A = 200; // angular resolution across the front arc
+const VISTA_SEG_R = 30; // radial resolution (near rim → far edge)
+const VISTA_ARC = 1.95; // half-arc (rad, ~112°) centered on downhill-front (-z)
+// The radial cross-section of the bowl, as [radial-fraction u, world height y].
+// From a near rim below eye, plunging to a forested floor that drops BELOW the
+// real rollover crest (so the near snow occludes it and the forest meets the
+// snow with no gap), rising back to the horizon where the peaks take over.
+const VISTA_PROFILE: readonly (readonly [number, number])[] = [
+  [0.0, -10],
+  [0.14, -34],
+  [0.4, -46], // bowl floor — drops past the crest so there's no pink sliver
+  [0.66, -32],
+  [0.85, -13],
+  [1.0, -1.5], // meets the peak feet at the horizon
+];
+// Above VISTA_SNOW_Y the slopes are open snowfield; below VISTA_FOREST_Y they're
+// dense evergreen; between, a treeline blend. The forest floods the low bowl.
+const VISTA_SNOW_Y = 4;
+const VISTA_FOREST_Y = -16;
+const VISTA_HAZE_MAX = 0.62; // most the far ridges melt toward dawn pink
+
+function vistaProfileY(u: number): number {
+  const p = VISTA_PROFILE;
+  for (let i = 1; i < p.length; i++) {
+    if (u <= p[i]![0]) {
+      const [u0, y0] = p[i - 1]!;
+      const [u1, y1] = p[i]!;
+      const t = u1 === u0 ? 0 : (u - u0) / (u1 - u0);
+      return y0 + (y1 - y0) * t;
+    }
+  }
+  return p[p.length - 1]![1];
+}
+
+export function createValleyVista(): THREE.Group {
+  const rand = makeRandom(0x7a11e9);
+  const smooth = (x: number): number => x * x * (3 - 2 * x);
+  const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
+  // Undulating ridgelines across the arc so the slopes read as folded forested
+  // spurs, not a smooth funnel. Integer angular frequencies, seeded phases.
+  const octaves = [
+    { f: 3, a: 0.5 },
+    { f: 5, a: 0.32 },
+    { f: 9, a: 0.2 },
+    { f: 15, a: 0.12 },
+  ].map((o) => ({ ...o, p: rand() * Math.PI * 2 }));
+  const ampSum = octaves.reduce((s, o) => s + o.a, 0);
+  const ridge = (theta: number): number => {
+    let n = 0;
+    for (const o of octaves) n += o.a * Math.sin(o.f * theta + o.p);
+    return n / ampSum; // -1..1
+  };
+  // Receding radial ridgelines (near→far folds), phase-shifted by angle.
+  const prA = rand() * Math.PI * 2;
+  const prB = rand() * Math.PI * 2;
+  const rolls = (theta: number, u: number): number =>
+    Math.sin(u * Math.PI * 4 + theta * 7 + prA) * 0.6 +
+    Math.sin(u * Math.PI * 7 - theta * 11 + prB) * 0.4;
+  // Depth envelope: full bowl in the front arc, easing up to eye level (hidden)
+  // toward the arc ends so there's no wall on the flanks.
+  const azEnv = (theta: number): number =>
+    1 - smooth(clamp01((Math.abs(theta) - VISTA_ARC * 0.5) / (VISTA_ARC * 0.5)));
+  // Canopy mottle for the forest color (two-octave value noise, seeded).
+  const cmA = rand() * Math.PI * 2;
+  const cmB = rand() * Math.PI * 2;
+  const mottle = (theta: number, u: number): number =>
+    0.5 +
+    0.5 *
+      (0.6 * Math.sin(theta * 23 + u * 15 + cmA) +
+        0.4 * Math.sin(theta * 41 - u * 27 + cmB));
+
+  const heightAt = (theta: number, u: number): number => {
+    const env = azEnv(theta);
+    const base = vistaProfileY(u) * env; // negative bowl, lifted flat at edges
+    const relief =
+      (ridge(theta) * 10 + rolls(theta, u) * 3.5) * smooth(clamp01(u * 1.3)) * env;
+    return base + relief;
+  };
+
+  const cols = VISTA_SEG_A + 1;
+  const rows = VISTA_SEG_R + 1;
+  const positions = new Float32Array(cols * rows * 3);
+  const heights = new Float32Array(cols * rows);
+  const us = new Float32Array(cols * rows);
+  const thetas = new Float32Array(cols * rows);
+  for (let i = 0; i < rows; i++) {
+    const u = i / (rows - 1);
+    const R = VISTA_R_IN + u * (VISTA_R_OUT - VISTA_R_IN);
+    for (let j = 0; j < cols; j++) {
+      // theta=0 → straight downhill (-z), where the camera looks at the start.
+      const theta = -VISTA_ARC + (j / VISTA_SEG_A) * (VISTA_ARC * 2);
+      const y = heightAt(theta, u);
+      const k = i * cols + j;
+      positions[k * 3] = R * Math.sin(theta);
+      positions[k * 3 + 1] = y;
+      positions[k * 3 + 2] = -R * Math.cos(theta);
+      heights[k] = y;
+      us[k] = u;
+      thetas[k] = theta;
+    }
+  }
+
+  const index = new Uint32Array((cols - 1) * (rows - 1) * 6);
+  let ptr = 0;
+  for (let i = 0; i < rows - 1; i++) {
+    for (let j = 0; j < cols - 1; j++) {
+      const a = i * cols + j;
+      const b = a + 1;
+      const c = a + cols;
+      const d = c + 1;
+      index[ptr++] = a;
+      index[ptr++] = c;
+      index[ptr++] = b;
+      index[ptr++] = b;
+      index[ptr++] = c;
+      index[ptr++] = d;
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setIndex(new THREE.BufferAttribute(index, 1));
+  geometry.computeVertexNormals();
+
+  // Baked, unlit per-vertex color: snow above the treeline, snowy evergreen in
+  // the bowl, a baked front-key so every fold shows a lit and shadow face, then
+  // aerial haze toward dawn pink with distance so the far ridges melt into the
+  // horizon fog and the peak ring rises cleanly out of it.
+  const normals = geometry.attributes.normal!;
+  const snowLit = new THREE.Color(PALETTE.sunlitSnow);
+  const snowShade = new THREE.Color(PALETTE.snowShadow);
+  // A pale, snow-laden evergreen — a distant snowy forest reads mostly WHITE
+  // with a desaturated green-grey mottle, not a solid dark-green wall. Kept
+  // cool and light so it never pops out of the palette and melts into the haze.
+  const forestLit = new THREE.Color(0xa7b39c);
+  const forestShade = new THREE.Color(0x717e64);
+  const haze = new THREE.Color(PALETTE.dawnPink);
+  const snowCol = new THREE.Color();
+  const forestCol = new THREE.Color();
+  const scratch = new THREE.Color();
+  // Front-key matte light (same cheat as the peaks), raked lower toward the
+  // horizon so the folds show a stronger lit/shadow contrast and the valley
+  // reads as sculpted forested spurs, not a flat green band.
+  const bakeLight = new THREE.Vector3(-0.44, 0.76, 0.48).normalize();
+  const nrm = new THREE.Vector3();
+  const colorArr = new Float32Array(cols * rows * 3);
+  for (let k = 0; k < cols * rows; k++) {
+    const y = heights[k]!;
+    const u = us[k]!;
+    const th = thetas[k]!;
+    nrm.set(normals.getX(k), normals.getY(k), normals.getZ(k));
+    const hl = 0.5 + 0.5 * nrm.dot(bakeLight);
+    const t = smooth(clamp01((hl - 0.15) / 0.7)); // 0 shadow … 1 lit
+    // Snow band (above the treeline): cool-blue shadow → warm-white lit.
+    snowCol.copy(snowShade).lerp(snowLit, t);
+    // Forest band: shaded evergreen, mottled tree by tree, with occasional
+    // snow-laden clumps catching the light.
+    const m = mottle(th, u);
+    forestCol.copy(forestShade).lerp(forestLit, t * (0.5 + 0.5 * m));
+    // Snow lies heavily on the canopy — lots of white clumps catching light, so
+    // the forest reads as snowy-green rather than a dark mass.
+    const snowClump = smooth(clamp01((m - 0.5) * 2.4));
+    forestCol.lerp(snowLit, snowClump * 0.68);
+    // Treeline blend: forest floods the low bowl, snow the higher slopes.
+    const forestAmt = smooth(
+      clamp01((VISTA_SNOW_Y - y) / (VISTA_SNOW_Y - VISTA_FOREST_Y)),
+    );
+    scratch.copy(snowCol).lerp(forestCol, forestAmt);
+    // Aerial haze: mostly a distance term (far ridges pinker), with a touch
+    // more near the horizon (y→0) so the far edge dissolves into the sky.
+    const hazeAmt = Math.min(
+      VISTA_HAZE_MAX,
+      smooth(u) * 0.5 + clamp01((y + 6) / 8) * 0.16,
+    );
+    scratch.lerp(haze, hazeAmt);
+    colorArr[k * 3] = scratch.r;
+    colorArr[k * 3 + 1] = scratch.g;
+    colorArr[k * 3 + 2] = scratch.b;
+  }
+  geometry.setAttribute("color", new THREE.BufferAttribute(colorArr, 3));
+
+  // Unlit + baked (see the peaks note): the real sun backlights this
+  // camera-facing terrain into grey murk, so we bake the shade and draw it
+  // unlit. fog:false — it bakes its own haze and sits where three's linear fog
+  // would double-tint it. DoubleSide so the camera at the ring center always
+  // sees the inner faces. Depth stays ON (default) so the near terrain occludes
+  // the bowl's lower edge — the one difference from the fog-far peak ring.
+  const material = new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    fog: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.frustumCulled = false;
   mesh.receiveShadow = false;
   mesh.castShadow = false;
   const group = new THREE.Group();
