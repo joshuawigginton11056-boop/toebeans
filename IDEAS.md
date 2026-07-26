@@ -111,18 +111,26 @@ Director look-pass on the real-terrain build. **Redirect: stop branching. Build 
 solid mountain with a SINGLE trail going down toward the forest — no forks, no
 switching over to other areas — and make the path smooth, not jerky.**
 
-**Status (2026-07-24):** the speed-drop bug (item 2) is **DONE and shipped**. The **smooth
-single trail centerline + routing (items 1 + 3) is DONE (slope-mech, 2026-07-24)** — see
-below. **Remaining = ONE piece: the seamless terrain SURFACE.** The trail is currently two
-per-segment placeholder meshes (summit + forest-road) meeting at a seam; the next chunk
-(Josh split it off) merges them into one continuous dressed mountain surface — coordinate
-with slope-vis on that (`addBranchTerrain` → one surface; slope-vis re-skins).
+**Status: this block is CLOSED (2026-07-25).** All three items are done and shipped —
+the speed-drop bug (item 2), the smooth single trail (items 1 + 3), and the last piece
+Josh split off, the **seamless terrain surface**, landed 2026-07-25: the played trail is
+ONE mesh whose rows run through the segment joins (`trailRows` in `slopePath.ts` →
+`addBranchTerrain`), lit as one mountain instead of a slab per area. Positions unchanged,
+so nothing moved under the sim; 163 tests. See the ROADMAP entry for the measured
+before/after and the doc correction below.
 
-**Update (2026-07-25, "extend past the forest," Josh):** the trail now continues past the
-forest into the **frozen lake** (`SINGLE_TRAIL` = summit → forest-road → lake) — its first
-hazard, the lake gap, rides the played run. `TRAIL_LINE` is now a chain of per-area lobes
-(append one to grow the trail). See the ROADMAP entry. The seamless-surface merge above is
-still its own pending chunk; it now covers three trail meshes, not two.
+**⚠ Correction (2026-07-25):** this block repeatedly says the trail "ends at the back of
+the forest" (later, the lake). It doesn't, and hasn't since 2026-07-25 — `SINGLE_TRAIL`
+is the whole spine, summit → forest-road → lake → yeti → cave → cliff (640 units, ~35 s),
+then the flat runout. Five joins. Read the code, not these lines.
+
+**Next work for (slope-mech) is NOT here — it's SLOPE_BRANCHINGv3.md.** The spec was
+rewritten by the director on 2026-07-25 and changes the design: no Type B anywhere, the
+yeti's son moved to the cliff as a fourth involuntary Type A fork, the ice castle moved
+to the valley. Its §8 build order + the three jobs it creates (re-grayblock `route.ts`
+for v3, build §10's same-clock runner + debug teleport before dressing more map, and the
+§9 clock numbers vs. today's ~35 s trail) are logged in ROADMAP's Open list. §7 #1 is
+BLOCKING and is the director's call.
 
 **1. One trail, no switching, NOT jerky. ✅ DONE (slope-mech, 2026-07-24).** The played run
 now rides ONE continuous-curvature centerline summit → the back of the forest — no seam
@@ -143,8 +151,7 @@ kink, no drift, no forks.
   trail's end opens into the flat runout (no finish line yet) — you coast off, don't win.
   `addBranchTerrain` builds only the two trail segments + the runout, no detour corridors,
   no fork-marker rocks.
-- **NOTE the terrain is still one mesh PER segment** (summit + forest-road) — the seamless
-  single-surface merge is the remaining piece above.
+- **The terrain is ONE mesh for the whole trail** since 2026-07-25 (was one per segment).
 
 **2. Speed instantly drops at the forest. ✅ FIXED (slope-mech, 2026-07-24; re-tuned 2026-07-25).**
 Update (2026-07-25, director look-pass "speed drops off in the forest"): the ease-out

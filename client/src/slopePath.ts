@@ -525,6 +525,47 @@ export function segmentCenterline(segmentId: string, distance: number): SlopePoi
   };
 }
 
+/** One cross-section of the trail surface: where down the trail it sits. */
+export interface TrailRow {
+  readonly segmentId: string;
+  /** Distance into that segment (past its length on the terminal's runout). */
+  readonly distance: number;
+}
+
+/**
+ * The rows of the played trail's ground surface, summit to runout, as ONE list.
+ *
+ * The terrain used to be built a mesh per segment; each ended with its own copy of
+ * the join row, so the two sides were lit independently and the shading stepped at
+ * every join. This walks the whole trail instead, emitting each join row ONCE — the
+ * segment above it ends there and the segment below starts there, and the sampled
+ * positions are identical either way (the trail centerline is continuous through a
+ * join; `slopePath.test.ts` pins that to 0 units). One list of rows → one mesh →
+ * normals that roll through the joins.
+ *
+ * Row positions are unchanged from the per-segment build: each segment still spans
+ * its own length in `ceil(span / step) + 1` even rows, so growing the trail
+ * (`SINGLE_TRAIL`) grows the surface with no retuning.
+ */
+export function trailRows(step: number, runout: number): TrailRow[] {
+  const out: TrailRow[] = [];
+  SINGLE_TRAIL.forEach((segmentId, index) => {
+    const seg = BRANCH_SEGMENTS[segmentId];
+    if (!seg) return;
+    // The trail's terminal carries the flat runout past the flag — there is no
+    // finish line yet (director), so the run coasts off onto the valley floor.
+    const isTerminal = index === SINGLE_TRAIL.length - 1;
+    const span = seg.length + (isTerminal ? runout : 0);
+    const rows = Math.max(2, Math.ceil(span / step) + 1);
+    // Skip row 0 below the first segment: the segment above already emitted that
+    // exact cross-section as its last row. This is the weld.
+    for (let i = out.length === 0 ? 0 : 1; i < rows; i++) {
+      out.push({ segmentId, distance: (i / (rows - 1)) * span });
+    }
+  });
+  return out;
+}
+
 /**
  * The graded ground height at a world Z along the played trail — the lane-centerline
  * elevation the branching terrain (addBranchTerrain) sits at. Added by the (forest)

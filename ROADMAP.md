@@ -100,8 +100,23 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   segments + runout. The §4 branching graph stays in `route.ts`, still proven by the
   same-clock tests (they use the unflagged `createBranchingSkiState`). 159 tests.
   **Both forest bugs fixed:** speed-drop (earlier) and drift-right (subsumed by the trail).
-  **Remaining piece (next chunk, Josh split it off):** merge the two per-segment
-  placeholder meshes into ONE seamless dressed surface — coordinate with slope-vis.
+  **✅ ONE SEAMLESS SURFACE (slope-mech, 2026-07-25) — the split-off piece, done.** The
+  ground was a mesh PER segment, butted end to end; the slabs met exactly but each was
+  lit on its own, so the row on every join was shaded from one side only — a crease
+  across the trail (measured: ≤1.4° of normal mismatch on the lane, 4–8° out on the
+  banks, where a low sun could catch it). The whole played trail is now a SINGLE mesh
+  whose rows run straight through the joins (`trailRows` in `slopePath.ts` walks
+  `SINGLE_TRAIL` and emits each join row once; `addBranchTerrain` builds one grid from
+  it), so normals are computed across the lot and the hill is lit as one mountain.
+  **Vertex positions are unchanged** — nothing moved under the sim, and the §9 clock is
+  untouched. Six draw calls → one. 163 tests (four new: the join cross-sections
+  coincide, each join row is emitted once, rows stay evenly spaced through a join, the
+  plan covers the whole trail and grows with it). Verified live end to end — no crease,
+  tear, or step at any of the five joins, runout intact.
+  **⚠ Doc correction (2026-07-25):** entries below that say the played trail "ends at
+  the back of the forest" (or of the lake) are STALE. `SINGLE_TRAIL` is the whole spine —
+  summit → forest-road → lake → yeti → cave → cliff, 640 units, ~35 s at cruise — then
+  the flat runout. Five joins, not one.
   **(slope-mech) speed-drop bug FIXED (2026-07-24):** the summit→forest grade shed no
   longer slams in at the forest mouth. `GRADE_PROFILE` (route.ts) was reshaped into an
   **ease-out** — the grade drops steeply high on the summit (`[60, 0.36]`, where bleeding
@@ -405,6 +420,30 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 ## Open — still to resolve
 
 ### M2 remaining
+- [ ] **⚠ SLOPE_BRANCHINGv3 landed (director, 2026-07-25) — three jobs it created.**
+      The spec was rewritten (`SLOPE_BRANCHING.md` → `SLOPE_BRANCHINGv3.md`) and it
+      changes the design, not just the prose. Flagged by the (slope-mech) seamless-
+      surface session; none of it done there (scope fence). In v3's own §8 order:
+      1. **Re-grayblock the topology for v3 (§8 #2).** Yeti's Peak is no longer a
+         Type B split — the cave and the outside line rejoin at the cliff, the yeti's
+         son moved to the CLIFF as a fourth (involuntary) Type A fork, and the ice
+         castle moved to the valley behind that shove. `route.ts` still encodes the v2
+         graph (Type B `ledge`/`valley`/`ice-castle` tail). **There is no Type B on the
+         map any more.**
+      2. **Instrumentation (§10), which v3 wants BEFORE more of the map is dressed:**
+         a headless clean-line runner asserting each fork-pair within **±0.5 s** and
+         each segment against §9's budget (four pairwise assertions), plus a debug
+         **teleport to any node** — without it, testing the cliff costs a full run
+         every attempt.
+      3. **§9 gave the clock real numbers:** 3:30 summit→flag, ±0.5 s within a
+         fork-pair, per-segment budgets (summit 40 s, forest 40 s, lake 45 s, second
+         mountain 45 s, cliff→finish 40 s). Today's played trail runs **~35 s total**,
+         so the map is roughly a sixth of its budgeted length — that gap is a director
+         conversation, not a bug.
+      **BLOCKING (v3 §11):** §7 #1 — is the branching map the template *all* slopes
+      follow, or one big branching map plus linear others? v3 says resolve it before
+      the next session, because it changes how `route.ts` should be structured and
+      `route.ts` is due for a v3 rewrite anyway. **Director's call.**
 - [x] **Night fog sharp horizontal banding (Josh, 2026-07-25, screenshot) — FIXED.**
       Diagnosed as plain 8-bit **posterization** of the dark, narrow-value-range
       night gradients (sky dome + fogged snow), not the mist and not the fog curve.

@@ -20,6 +20,7 @@ import {
   segmentPitch,
   segmentToWorld,
   slopeCenterline,
+  trailRows,
 } from "./slopePath";
 import {
   createChasmMesh,
@@ -695,9 +696,10 @@ export function syncSkiSceneToState(
 // detour corridors, no fork-marker rocks. The trail's terminal (the cliff at the
 // valley floor, singleTrailNext → null) extends a flat RUNOUT — there is no finish
 // line yet (director), so the run coasts off onto the valley floor. Built once when a
-// run starts (main.ts). Because it just iterates SINGLE_TRAIL, growing the trail in
-// route.ts grows the terrain here automatically. (Still one mesh PER segment for now;
-// merging the trail into a single seamless surface is a later chunk.)
+// run starts (main.ts). Because the row plan just walks SINGLE_TRAIL, growing the
+// trail in route.ts grows the terrain here automatically. ONE SEAMLESS SURFACE since
+// 2026-07-25: the whole trail is a single mesh whose rows run through the segment
+// joins (see trailRows in slopePath.ts), not a slab per segment.
 //
 // SEAM NOTE (slope-mech → slope-vis): this is a PLAIN-SHADED placeholder surface —
 // real geometry, no dressing. skiScene.ts (slope-vis) owns the final look (snow
@@ -735,63 +737,66 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
     return centerY + (BERM_HEIGHT + flankRelief(wx, wz)) * smooth;
   };
 
-  for (const id of SINGLE_TRAIL) {
-    const seg = BRANCH_SEGMENTS[id];
-    if (!seg) continue;
-    // Terminal on the PLAYED TRAIL (not the parked graph): the back of the forest
-    // is where singleTrailNext runs out, and there the surface extends the runout.
-    const isTerminal = singleTrailNext(id) === null;
-    const spanEnd = seg.length + (isTerminal ? RUNOUT : 0);
-    const rows = Math.max(2, Math.ceil(spanEnd / STEP_LONG) + 1);
-    const cols = COLS.length;
+  // ONE SURFACE (slope-mech, 2026-07-25). The trail used to be built one mesh PER
+  // segment, butted end to end. The slabs met exactly — `trailRows()` proves the
+  // shared row coincides to 0.0 units — but each slab computed its own vertex
+  // normals, so the row on the join was lit from only ONE side: the shading stepped
+  // across the trail instead of rolling through it (≤1.4° on the lane, 4–8° out on
+  // the banks, where a crease could catch the light). Now the whole played trail is
+  // a SINGLE grid — every join is one shared row of vertices, and normals are
+  // computed once across the lot, so the hill is lit as one continuous mountain.
+  // Vertex POSITIONS are unchanged, so nothing moved under the sim.
+  const rowPlan = trailRows(STEP_LONG, RUNOUT);
+  const cols = COLS.length;
+  const rows = rowPlan.length;
 
-    const positions = new Float32Array(rows * cols * 3);
-    for (let i = 0; i < rows; i++) {
-      const s = (i / (rows - 1)) * spanEnd;
-      const centerY = segmentCenterline(id, s).y;
-      for (let j = 0; j < cols; j++) {
-        const lat = COLS[j]!;
-        const w = segmentToWorld(id, s, lat);
-        const k = (i * cols + j) * 3;
-        positions[k] = w.x;
-        positions[k + 1] = crossY(centerY, lat, w.x, w.z);
-        positions[k + 2] = w.z;
-      }
+  const positions = new Float32Array(rows * cols * 3);
+  for (let i = 0; i < rows; i++) {
+    const { segmentId: id, distance: s } = rowPlan[i]!;
+    const centerY = segmentCenterline(id, s).y;
+    for (let j = 0; j < cols; j++) {
+      const lat = COLS[j]!;
+      const w = segmentToWorld(id, s, lat);
+      const k = (i * cols + j) * 3;
+      positions[k] = w.x;
+      positions[k + 1] = crossY(centerY, lat, w.x, w.z);
+      positions[k + 2] = w.z;
     }
-
-    // Two triangles per grid cell, wound so the normals face up (+y).
-    const indices: number[] = [];
-    for (let i = 0; i < rows - 1; i++) {
-      for (let j = 0; j < cols - 1; j++) {
-        const a = i * cols + j;
-        const b = i * cols + j + 1;
-        const c = (i + 1) * cols + j;
-        const d = (i + 1) * cols + j + 1;
-        indices.push(a, b, c, b, d, c);
-      }
-    }
-
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geo.setIndex(indices);
-    geo.computeVertexNormals();
-    // DRESSED (mountain-graphics, 2026-07-25): the plain off-white placeholder
-    // material is replaced with the realism snow — the same world-pinned dune
-    // relief + palette lit/shadow shading + sparkle the moving window wears, so
-    // the descending open slope reads as sculpted powder instead of a flat,
-    // pink-hazed wash. Shared across every segment (continuous world dune field,
-    // so no seam). The road/detour tint is dropped — it was a dev aid; snow is
-    // one albedo. The ski-trail carve now lands here too: the terrain material
-    // samples the live carve target (the moving window's render-target), so the
-    // grooves show on the ground the skier rides — see createTerrainSnowMaterial.
-    const mesh = new THREE.Mesh(
-      geo,
-      createTerrainSnowMaterial(handle.environment.trail.target.texture),
-    );
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    handle.scene.add(mesh);
   }
+
+  // Two triangles per grid cell, wound so the normals face up (+y). Rows run
+  // straight through the joins now, so the cells that span a join are ordinary
+  // cells — there is no edge to weld afterwards.
+  const indices: number[] = [];
+  for (let i = 0; i < rows - 1; i++) {
+    for (let j = 0; j < cols - 1; j++) {
+      const a = i * cols + j;
+      const b = i * cols + j + 1;
+      const c = (i + 1) * cols + j;
+      const d = (i + 1) * cols + j + 1;
+      indices.push(a, b, c, b, d, c);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  // DRESSED (mountain-graphics, 2026-07-25): the plain off-white placeholder
+  // material is replaced with the realism snow — the same world-pinned dune
+  // relief + palette lit/shadow shading + sparkle the moving window wears, so
+  // the descending open slope reads as sculpted powder instead of a flat,
+  // pink-hazed wash. The road/detour tint is dropped — it was a dev aid; snow is
+  // one albedo. The ski-trail carve now lands here too: the terrain material
+  // samples the live carve target (the moving window's render-target), so the
+  // grooves show on the ground the skier rides — see createTerrainSnowMaterial.
+  const mesh = new THREE.Mesh(
+    geo,
+    createTerrainSnowMaterial(handle.environment.trail.target.texture),
+  );
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  handle.scene.add(mesh);
   // Fork-marker boulders are parked with the forks (the "world grabs you" landmarks
   // at each trigger). They return when the map reopens — iterate the trigger
   // segments again then. Nothing to place on the single trail.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BRANCH_SEGMENTS,
   LATERAL_LIMIT,
+  SINGLE_TRAIL,
   routeDistanceOf,
   routeHeightAt,
 } from "@toebeans/shared";
@@ -13,6 +14,7 @@ import {
   segmentToWorld,
   slopeCenterline,
   slopeToWorld,
+  trailRows,
   type Bend,
 } from "./slopePath";
 
@@ -274,5 +276,83 @@ describe("slopePath — the branching map's shaped (curved) corridors", () => {
       expect(segmentCenterline("main", d).heading).toBeCloseTo(0, 9);
       expect(segmentToWorld("main", d, 4)).toMatchObject({ x: 4 });
     }
+  });
+});
+
+describe("slopePath — the trail is ONE surface (no seam at the segment joins)", () => {
+  const STEP = 5;
+  const RUNOUT = 180;
+  const LATS = [-46, -12, 0, 12, 46];
+
+  it("hands the two sides of every join the exact same cross-section", () => {
+    // This is what makes the weld legal: where one segment ends and the next
+    // begins, the sampled ring of vertices is identical, so emitting it ONCE
+    // moves nothing. If a future placement change breaks this, the merged
+    // surface would tear — fail here rather than on screen.
+    for (let i = 0; i + 1 < SINGLE_TRAIL.length; i++) {
+      const above = SINGLE_TRAIL[i]!;
+      const below = SINGLE_TRAIL[i + 1]!;
+      const end = BRANCH_SEGMENTS[above]!.length;
+      expect(segmentCenterline(above, end).y).toBeCloseTo(
+        segmentCenterline(below, 0).y,
+        6,
+      );
+      for (const lat of LATS) {
+        const a = segmentToWorld(above, end, lat);
+        const b = segmentToWorld(below, 0, lat);
+        expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeCloseTo(0, 6);
+      }
+    }
+  });
+
+  it("emits each join row once — one continuous ladder summit to runout", () => {
+    const rows = trailRows(STEP, RUNOUT);
+    const first = rows[0]!;
+    const last = rows[rows.length - 1]!;
+    expect(first.segmentId).toBe(SINGLE_TRAIL[0]);
+    expect(first.distance).toBe(0);
+    // The terminal carries the runout past the flag (no finish line yet).
+    expect(last.segmentId).toBe(SINGLE_TRAIL[SINGLE_TRAIL.length - 1]);
+    expect(last.distance).toBeCloseTo(
+      BRANCH_SEGMENTS[SINGLE_TRAIL[SINGLE_TRAIL.length - 1]!]!.length + RUNOUT,
+      6,
+    );
+
+    // No segment starts with a duplicate of the row above it: a segment change
+    // between consecutive rows must step DOWN the trail, never repeat in place.
+    for (let i = 1; i < rows.length; i++) {
+      const prev = rows[i - 1]!;
+      const row = rows[i]!;
+      if (row.segmentId === prev.segmentId) {
+        expect(row.distance).toBeGreaterThan(prev.distance);
+      } else {
+        expect(row.distance).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("keeps rows evenly spaced through the joins (no stretched cell)", () => {
+    const rows = trailRows(STEP, RUNOUT);
+    for (let i = 1; i < rows.length; i++) {
+      const a = rows[i - 1]!;
+      const b = rows[i]!;
+      const pa = segmentCenterline(a.segmentId, a.distance);
+      const pb = segmentCenterline(b.segmentId, b.distance);
+      const gap = Math.hypot(pb.x - pa.x, pb.y - pa.y, pb.z - pa.z);
+      expect(gap).toBeGreaterThan(0);
+      expect(gap).toBeLessThanOrEqual(STEP * 1.2);
+    }
+  });
+
+  it("covers the whole played trail, and grows with it", () => {
+    const rows = trailRows(STEP, RUNOUT);
+    const covered = new Set(rows.map((r) => r.segmentId));
+    for (const id of SINGLE_TRAIL) expect(covered.has(id)).toBe(true);
+    const trailLength = SINGLE_TRAIL.reduce(
+      (sum, id) => sum + BRANCH_SEGMENTS[id]!.length,
+      0,
+    );
+    // One row per STEP down the trail + the runout, minus the shared join rows.
+    expect(rows.length).toBeCloseTo((trailLength + RUNOUT) / STEP + 1, 0);
   });
 });
