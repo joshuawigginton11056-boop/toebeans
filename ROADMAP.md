@@ -182,6 +182,8 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   - **The fix is one rule for both:** where an off-ribbon surface would stand above the
     dressed ribbon it **ducks to it and feathers back out** over 40 units. That is what a
     lake outlet is, so the rim now has a notch at each crossing.
+  - **And it is now SPEC** — v3 **§12.5**, the map's second numbered rule (director,
+    2026-07-26), including why it cannot be written as a clearance threshold.
   - **The invariant is now a test, which is the point.** The mountain's footprint was
     already solved against every lane (`laneClearance`); the basin was solved against
     nothing. `frozenLakeBasinHeight` / `forkMountainShellHeight` / `insideCaveDoorway`

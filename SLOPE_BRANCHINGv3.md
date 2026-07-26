@@ -434,3 +434,53 @@ anywhere the map's shape and its features have to agree.
   distinct trigger segments. Fork 3 taking the second mountain's slot is what orphaned
   the ice tail from any *steerable* entrance (§5 fork 4); the tail keeps its same-clock
   identity but now waits on Fork 4's speed-triggered shove, which the sim doesn't model.
+
+### 12.5 The lane-headroom rule (director, 2026-07-26)
+
+*Appended after §12.4 rather than beside §12.1 so the existing section numbers — and
+the four places in this repo that cite §12.4 — keep meaning what they say.*
+
+> **No off-ribbon surface may have an edge inside a lane.** A terrain surface may be
+> buried under the corridor, or a continuous roof over it. It may never be proud on
+> part of a lane's cross-section while sitting at or below it on another — that is a
+> rim cutting up through the ground you ride, and you will pass straight through it.
+
+**Why this is a rule and not a bug report.** Nothing collides with terrain on this map:
+the sim rides `routeHeightAt`, a 1-D height profile, and every terrain mesh is decoration
+hung near it. That is a good trade — it is why the map can be reshaped freely — but it
+means a mesh that disagrees with the profile is not a hill you climb, it is a wall you
+ski through, and the failure is *invisible to every test that checks the profile*. It
+took a playtest to find the first one. It should not take a playtest to find the next.
+
+**The case that produced it.** The frozen lake's basin got a shore lip so it would read
+as water held in a bowl. The lip rings the disc; the disc is crossed by the trail; nobody
+reconciled the two. It stood 12.6 units above the lane at the ice's uphill shore and 27.8
+above it on the way out, and the director rode into both. Note the asymmetry that makes
+this worth writing down: the fork mountain's footprint in the same file was already
+solved against every playable lane and had no such fault. One feature got the invariant
+and one didn't, in the same week, because it lived in one builder's head instead of in
+the spec.
+
+**HEIGHT IS NOT THE DISCRIMINATOR.** The obvious rule — "nothing within N units above a
+lane" — cannot be written. The wall stood 12.6 up; the cave's ceiling comes *down* to
+19.7 at the tunnel's low shoulder. Every N that catches the wall condemns the ceiling,
+and choosing one in between would be fitting the rule to the failures it was written
+from. Whether a surface **crosses** the ridden ground is the property that actually
+separates a wall from a roof, and it needs no tolerance at all. Treat a proposed map rule
+that requires a tuned constant as a rule that hasn't been understood yet.
+
+**How it is enforced.** The surfaces are pure functions in `slopePath.ts`
+(`frozenLakeBasinHeight`, `forkMountainShellHeight`, `insideCaveDoorway`) and
+`slopePath.test.ts` sweeps every playable lane against them. The mesh builders in
+`skiRender.ts` call the same functions they are judged by, so geometry cannot drift away
+from the assertion. This is §12.3's "solved, not typed in" applied to the relationship
+*between* features rather than within one — and the same test caught two more faults
+nobody had seen (a 3.75-unit lip of mountainside at the cave's exit cutting, and a duck
+reference that had to be measured in three dimensions because the wrap passes under the
+lake).
+
+**Where it does not reach yet.** The assertion covers the ridden lane (±`LATERAL_LIMIT`);
+the *fix* ducks across the whole dressed ribbon (±46). Extending the assertion to the
+ribbon needs the corridor's own cross-section (`skiRender`'s `crossY`) extracted
+alongside these surfaces, because out there the banks legitimately climb to ~19 and the
+mountain's foot is deliberately allowed to crowd in beside them. Parked in IDEAS.md.

@@ -158,6 +158,9 @@ are my prompts confusing?"* Neither: 17.4k lines across client+shared is lean, a
 prompts have been precise. The cause was **a missing invariant**, and it is now a test.
 See the ROADMAP entry for the build and the measured numbers.
 
+**Now spec, not folklore:** the rule is written into v3 **§12.5** (director's call,
+2026-07-26), alongside why it can't be expressed as a clearance threshold.
+
 **The one thing worth carrying forward:** *height is not what makes a surface a wall.*
 The lip stood 12.6 units above the lane; the cave's ceiling comes down to 19.7. Any
 clearance threshold that catches the first condemns the second. What separates them is
