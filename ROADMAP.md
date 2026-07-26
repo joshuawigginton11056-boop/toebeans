@@ -150,6 +150,16 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   director's.
 - **Real assets:** frosted-green pines, rocks, etc. — painted detail rolled
   across all 24 slope models; decor scatter follows the run. (Old birches removed.)
+- **Frozen lake (forest 2026-07-25):** the §4 `lake` segment (route 240–340) is
+  now dressed as an actual sheet of ice — `buildFrozenLake` in
+  `forestGraphics.ts` skins a glassy ice-blue surface (roughness 0.22 → catches a
+  hard sun/moon glint, so it reads as glass by day and moonlit ice at night for
+  free) onto the graded lane via `segmentCenterline`/`segmentToWorld`, so it sits
+  flush on the same terrain the run rides. Seeded canvas texture (frost blotches,
+  branching cracks, sparkle) + per-vertex ALPHA frosting the edges into the snow
+  shore, split into ribbons around the `lake-gap` chasm so the jump reads as torn
+  open ice. Branching-map only, built once beside `addBranchTerrain` (main.ts).
+  Verified live day + dusk.
 - **Realism snow:** procedural displaced surface + GPU-carved ski trails. Plus
   **coarse dune form-shading** (mountain, 2026-07-25): the big wind-dunes get a
   self-cast blue (#2) shade on their sun-away faces so their form reads on open,

@@ -10,7 +10,9 @@
 // with the raw time-of-day phase and gate themselves.
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { BRANCH_SEGMENTS, LATERAL_LIMIT } from "@toebeans/shared";
 import { LANE_EDGE, makeRandom } from "./skiScene";
+import { segmentCenterline, segmentToWorld } from "./slopePath";
 
 // How "on" the ground mist is (0 by day, 1 at full night) — set by
 // applyMistPhase from the time-of-day phase and read each frame in
@@ -979,4 +981,240 @@ function applyPaintedDetail(object: THREE.Object3D): void {
 // 2026-07-24, "the tree glow looks tacky; I don't want the trees to glow
 // themselves." The night enchantment comes from the environment, not the wood.
 // See the GLOW-section note above and the DESIGN.md "Glowing trunks" entry.)
+
+// ---------------------------------------------------------------------------
+// THE FROZEN LAKE (forest-graphics, 2026-07-25)
+//
+// The §4 map's second area is the FROZEN LAKE (route.ts's `lake` segment): the
+// run leaves the enchanted forest and crosses a sheet of ice, the frozen-lake
+// gap (the `lake-gap` chasm at segment-distance 50) the jump every route learns
+// here. Until now that segment was dressed exactly like the rest of the run —
+// open graded snow — so "the frozen lake" existed only in the sim. This lays the
+// ice: a glassy blue sheet skinned onto the lane across the lake segment, frosting
+// into the snow at its shores and broken by the gap you leap.
+//
+// PLACEMENT. Like the chasm/checkpoint meshes (skiRender.ts), the sheet follows
+// segmentCenterline("lake", s).y — the REAL graded ground the skier rides — not
+// the flat dressed snowfield (which sits at y=0, the parked grade-seam). So the
+// ice sits flush on the terrain wherever the run actually is, and stays glued to
+// it if the corridor curve ever turns on (segmentToWorld carries the x/z). Built
+// ONCE, branching-map only (called beside addBranchTerrain in main.ts) — the flat
+// Overlook never visits the lake segment.
+//
+// LOOK. A cool ice-blue that catches a hard specular glint off the low sun / moon
+// (roughness 0.22), so the sheet reads as glass by day and moonlit ice at night
+// for free — no time-of-day special-casing. The colour + cracks live in a seeded
+// canvas texture; per-vertex ALPHA fades the sheet to nothing at its lateral
+// shores and at the torn edges of the gap, letting the white snow terrain show
+// through as a frosted shoreline instead of a hard-cut rectangle of ice.
+
+// The lane is flat across |lateral| ≤ LATERAL_LIMIT (12); the ice fills it and
+// laps one unit up the bank, where its alpha has already faded to a frosted shore.
+const ICE_HALF = LATERAL_LIMIT + 1;
+// Sit a hair above the flat lane so it never z-fights the terrain beneath it.
+const ICE_LIFT = 0.04;
+// Keep the ice off the segment seams (forest→lake, lake→runout) so it reads as a
+// lake WITHIN the area, not an abrupt wall of ice at the boundary.
+const ICE_END_INSET = 5;
+// Clear this much ice back from each side of the gap chasm so the jump reads as
+// torn-open water/ice, with a frosted broken rim (the longitudinal end-fade).
+const ICE_GAP_MARGIN = 1.6;
+
+// Lateral columns (fractions of ICE_HALF), denser near the shore for a clean
+// alpha fade; the matching alpha per column frosts the edge into the snow.
+const ICE_COLS = [-1, -0.86, -0.62, -0.32, 0, 0.32, 0.62, 0.86, 1];
+const iceEdgeAlpha = (frac: number): number => {
+  // Full ice out to |frac| 0.66, then smoothstep to 0 at the shore.
+  const t = Math.min(1, Math.max(0, (Math.abs(frac) - 0.66) / (1 - 0.66)));
+  return 1 - t * t * (3 - 2 * t);
+};
+// Fade the ice down over this many metres at each ribbon end (segment inset ends
+// AND the torn gap edges) so ice never stops on a hard line.
+const ICE_END_FADE = 3.5;
+
+// A seeded ice canvas: an ice-blue base, soft frost blotches, a scatter of
+// light-catching sparkle, and a thin branching CRACK network — the colour the
+// material wears (vertex colour only carries the shore alpha). Tiled, so it wraps.
+let iceTexture: THREE.CanvasTexture | null = null;
+function getIceTexture(): THREE.CanvasTexture {
+  if (iceTexture) return iceTexture;
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const random = makeRandom(0x1cef);
+  // Base ice blue (a cooler, deeper cousin of snow-shadow #D3DFF0).
+  ctx.fillStyle = "#a7c4e4";
+  ctx.fillRect(0, 0, size, size);
+  // Soft frost blotches — large pale patches, tiled so they wrap at the seams.
+  const blot = (x: number, y: number, r: number, hex: string, a: number): void => {
+    for (const dx of [-size, 0, size])
+      for (const dy of [-size, 0, size]) {
+        const g = ctx.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
+        g.addColorStop(0, hex);
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.globalAlpha = a;
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x + dx, y + dy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+  };
+  for (let i = 0; i < 14; i++) {
+    blot(random() * size, random() * size, 40 + random() * 90, "#d6e6f6", 0.5);
+  }
+  for (let i = 0; i < 6; i++) {
+    blot(random() * size, random() * size, 24 + random() * 40, "#eef6ff", 0.55);
+  }
+  ctx.globalAlpha = 1;
+  // Cracks: a few trunks, each throwing short branches. Dark hairline core with a
+  // faint bright edge so the ice reads as fractured glass, not painted lines.
+  const crack = (
+    x: number,
+    y: number,
+    ang: number,
+    len: number,
+    depth: number,
+  ): void => {
+    let cx = x;
+    let cy = y;
+    let a = ang;
+    const steps = Math.max(2, Math.floor(len / 10));
+    ctx.lineCap = "round";
+    for (let i = 0; i < steps; i++) {
+      const nx = cx + Math.cos(a) * 10;
+      const ny = cy + Math.sin(a) * 10;
+      ctx.strokeStyle = "rgba(240,248,255,0.5)";
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(nx, ny);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(96,124,160,0.55)";
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(nx, ny);
+      ctx.stroke();
+      cx = nx;
+      cy = ny;
+      a += (random() - 0.5) * 0.5;
+      if (depth > 0 && random() < 0.25) {
+        crack(cx, cy, a + (random() - 0.5) * 1.6, len * 0.5, depth - 1);
+      }
+    }
+  };
+  for (let i = 0; i < 7; i++) {
+    crack(random() * size, random() * size, random() * Math.PI * 2, 90 + random() * 120, 2);
+  }
+  // A dusting of sparkle grains (the ice catching stray light).
+  for (let i = 0; i < 260; i++) {
+    ctx.fillStyle = random() < 0.5 ? "rgba(255,255,255,0.8)" : "rgba(210,230,250,0.7)";
+    const s = 0.8 + random() * 1.4;
+    ctx.fillRect(random() * size, random() * size, s, s);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  iceTexture = texture;
+  return iceTexture;
+}
+
+// Build one ice ribbon over segment-distances [s0, s1] of the lake segment: a
+// flat grid on the graded lane, frosting to alpha 0 at the shores and the two
+// ends. Returns the mesh (or null if the span is too short to bother with).
+function buildIceRibbon(s0: number, s1: number): THREE.Mesh | null {
+  const span = s1 - s0;
+  if (span < 4) return null;
+  const rows = Math.max(2, Math.ceil(span / 1.5) + 1);
+  const cols = ICE_COLS.length;
+  const positions = new Float32Array(rows * cols * 3);
+  const colors = new Float32Array(rows * cols * 4);
+  const uvs = new Float32Array(rows * cols * 2);
+  for (let i = 0; i < rows; i++) {
+    const s = s0 + (i / (rows - 1)) * span;
+    const centerY = segmentCenterline("lake", s).y;
+    // End fade: distance to the nearer ribbon end, ramped over ICE_END_FADE.
+    const endT = Math.min(1, Math.min(s - s0, s1 - s) / ICE_END_FADE);
+    const endFade = endT * endT * (3 - 2 * endT);
+    for (let j = 0; j < cols; j++) {
+      const frac = ICE_COLS[j]!;
+      const lat = frac * ICE_HALF;
+      const w = segmentToWorld("lake", s, lat);
+      const k3 = (i * cols + j) * 3;
+      positions[k3] = w.x;
+      positions[k3 + 1] = centerY + ICE_LIFT;
+      positions[k3 + 2] = w.z;
+      const k4 = (i * cols + j) * 4;
+      colors[k4] = 1;
+      colors[k4 + 1] = 1;
+      colors[k4 + 2] = 1;
+      colors[k4 + 3] = iceEdgeAlpha(frac) * endFade;
+      const k2 = (i * cols + j) * 2;
+      uvs[k2] = frac * 1.4; // across
+      uvs[k2 + 1] = s * 0.1; // along (repeat every 10 m)
+    }
+  }
+  const indices: number[] = [];
+  for (let i = 0; i < rows - 1; i++) {
+    for (let j = 0; j < cols - 1; j++) {
+      const a = i * cols + j;
+      const b = i * cols + j + 1;
+      const c = (i + 1) * cols + j;
+      const d = (i + 1) * cols + j + 1;
+      indices.push(a, b, c, b, d, c);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(colors, 4));
+  geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(
+    geo,
+    new THREE.MeshStandardMaterial({
+      map: getIceTexture(),
+      vertexColors: true, // RGBA — carries the shore/gap alpha fade
+      transparent: true,
+      roughness: 0.22, // glassy: a hard specular glint off the sun / moon
+      metalness: 0,
+      // Center is opaque, so writing depth keeps the sheet solid; only the thin
+      // frosted rim blends over the snow beneath.
+      depthWrite: true,
+    }),
+  );
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+// Lay the frozen lake across the `lake` segment, leaving a torn gap around each
+// of its chasms (the jump). Branching-map only; call once at run setup.
+export function buildFrozenLake(scene: THREE.Scene): void {
+  const seg = BRANCH_SEGMENTS.lake;
+  if (!seg) return;
+  const lake = new THREE.Group();
+  lake.name = "frozenLake";
+  // The ice spans the segment (inset from both seams), split into ribbons around
+  // each chasm gap. Walk left→right, closing a ribbon before every gap.
+  const gaps = seg.chasms
+    .map((c) => ({ from: c.start - ICE_GAP_MARGIN, to: c.start + c.width + ICE_GAP_MARGIN }))
+    .sort((a, b) => a.from - b.from);
+  let cursor = ICE_END_INSET;
+  const end = seg.length - ICE_END_INSET;
+  for (const gap of gaps) {
+    if (gap.from > cursor) {
+      const ribbon = buildIceRibbon(cursor, Math.min(gap.from, end));
+      if (ribbon) lake.add(ribbon);
+    }
+    cursor = Math.max(cursor, gap.to);
+  }
+  if (cursor < end) {
+    const ribbon = buildIceRibbon(cursor, end);
+    if (ribbon) lake.add(ribbon);
+  }
+  scene.add(lake);
+}
 

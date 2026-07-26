@@ -38,7 +38,7 @@ import {
   render,
   syncSkiSceneToState,
 } from "./skiRender";
-import { cycleTimeOfDay } from "./skiScene";
+import { buildFrozenLake, cycleTimeOfDay } from "./skiScene";
 
 // The mountain is the DEFAULT slope now (director, 2026-07-24: the graded "real
 // mountain" run must be what the live build shows — no more hiding it behind a dev
@@ -193,6 +193,9 @@ function goSkiing(): void {
     // the run state resets per trip.
     if (!branchTerrainAdded) {
       addBranchTerrain(skiScene);
+      // (forest) Dress the lake segment with its frozen-lake ice — branching-map
+      // only, once, on the same graded terrain the run rides. See forestGraphics.
+      buildFrozenLake(skiScene.scene);
       branchTerrainAdded = true;
     }
     // The proof readout only under the dev flag (?branch/?debug) — see BRANCH_DEBUG.
