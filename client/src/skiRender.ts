@@ -750,12 +750,47 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
   const cols = COLS.length;
   const rows = rowPlan.length;
 
+  // PINCH THE BANKS ON THE INSIDE OF A TURN (slope-mech, 2026-07-25, "build my map
+  // as i drew it"). The trail now really turns — a ~160° wrap around the second
+  // mountain, a big forest meander — and a cross-section swept round a curve folds
+  // through itself once the turn radius drops below the section's own half-width.
+  // The ribbon is ±46, so any radius under ~46 crumples the inner bank into a fan
+  // of inverted triangles. Fix: on each row, shrink the FLANK columns on the inside
+  // of the turn to stay clear of the centre of curvature. The playable lane (±12,
+  // which IS the sim's ground) is never touched — only the decorative banks give
+  // way, so the piste stays exactly where the sim thinks it is.
+  const INNER_BANK_CLEARANCE = 0.7; // keep the inner bank inside 70% of the radius
+  const bankScaleFor = (id: string, s: number): { left: number; right: number } => {
+    // Local curvature from the centerline's own heading, central-differenced.
+    const back = segmentCenterline(id, Math.max(0, s - 2));
+    const fwd = segmentCenterline(id, s + 2);
+    let dh = fwd.heading - back.heading;
+    while (dh > Math.PI) dh -= 2 * Math.PI;
+    while (dh < -Math.PI) dh += 2 * Math.PI;
+    const curvature = dh / 4;
+    if (Math.abs(curvature) < 1e-6) return { left: 1, right: 1 };
+    const radius = 1 / Math.abs(curvature);
+    // How wide the inner bank may be before it reaches the centre of curvature.
+    const allowed = Math.max(LANE_HALF, Math.min(FLANK_HALF, radius * INNER_BANK_CLEARANCE));
+    const scale = (allowed - LANE_HALF) / (FLANK_HALF - LANE_HALF);
+    // + curvature turns toward +x, so the inside of the turn is the +x (right) side.
+    return curvature > 0 ? { left: 1, right: scale } : { left: scale, right: 1 };
+  };
+
   const positions = new Float32Array(rows * cols * 3);
   for (let i = 0; i < rows; i++) {
     const { segmentId: id, distance: s } = rowPlan[i]!;
     const centerY = segmentCenterline(id, s).y;
+    const bank = bankScaleFor(id, s);
     for (let j = 0; j < cols; j++) {
-      const lat = COLS[j]!;
+      const col = COLS[j]!;
+      // Inside the lane, columns are exactly where they say they are. Outside it,
+      // the bank columns are pulled in toward the lane edge on the turn's inside.
+      const scale = col < 0 ? bank.left : bank.right;
+      const lat =
+        Math.abs(col) <= LANE_HALF
+          ? col
+          : Math.sign(col) * (LANE_HALF + (Math.abs(col) - LANE_HALF) * scale);
       const w = segmentToWorld(id, s, lat);
       const k = (i * cols + j) * 3;
       positions[k] = w.x;

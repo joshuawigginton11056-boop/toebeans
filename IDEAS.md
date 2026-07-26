@@ -105,7 +105,61 @@ is **unresolved** — Josh will decide. This is the natural unlock for follow-up
 (the peaks contrast much harder against a decided sky). Do NOT touch the sky/atmosphere
 until then.
 
-## ⏭ START HERE (slope-mech) — SHAPE THE MOUNTAIN (director's pick, 2026-07-25)
+## SHAPE THE MOUNTAIN — LANDED (slope-mech, 2026-07-25); follow-ups below
+
+**Status: this block is CLOSED.** The shaping shipped — proportions from the drawn map,
+a pitch per area, a flat-but-fast lake, and the trail's plan view laid out as drawn
+(including the ~160° wrap around the second mountain). See the ROADMAP entry for the
+build and the measured numbers. Josh's three open questions were answered live:
+1. **The lake:** "flat look, ice keeps speed" → built as true 0° with an `iceGlide`
+   speed carry. Worth recording *why* the middle option died: the speed coupling floors
+   at 1, and that floor bites below ~13°, so "reads flat at 3–4°" was mechanically
+   IDENTICAL to true flat. There was no gentle-but-fast option without the glide.
+2. **Contrast:** superseded rather than answered. The question assumed each area's
+   character comes from its mean pitch, which would have made the forest slow again.
+   Rolling relief at a summit-fast mean gave the character without the cost.
+3. **The lake gap:** left alone this session (see the follow-up below).
+
+**Follow-ups (slope-mech), for later sessions:**
+- **AWAITING PLAYTEST** — Josh hasn't ridden it yet. The whole shape is unseen at speed.
+- **The lake gap is now a formality.** 3 units wide, and a min-charge jump carries ~6
+  units even at the lake's slower glide, so it cannot really be failed. The design calls
+  it a hole a yeti smashes through the ice; ~6–8 units would make it a real jump again.
+  Deliberately untouched so the playtest judges the SHAPE and nothing else.
+- **The run reads enclosed.** `BERM_HEIGHT` 12 flanks rise from the lane edge, and now
+  that the trail curves you spend more time looking straight into the inside bank. Not
+  obviously wrong — a banked piste is a real thing — but it's a look-pass call, and
+  lowering the berms or widening the lane on the tighter curves are both cheap.
+- **§9's budget table now contradicts the drawn map.** It gives every area ~40–45 s
+  (near-equal); map proportions + per-area speed give forest ~12 s and second mountain
+  ~13.5 s against the summit's ~5.9 s. §9 wants re-cutting — director's edit, per §11.
+- **"Valley gentle, cliff steep" is structurally impossible** as v3 words it. Height is
+  keyed to route DEPTH so every branch drops the same; the valley (on the parked ledge
+  branch) and the cliff sit at the same depth, so they must share a pitch. A per-branch
+  pitch would break the equal-drop invariant. Needs a spec note.
+- **The wrap is capped by geometry, not taste.** The dressed ribbon is ±46 and the run is
+  only 640 long — about seven ribbon-widths end to end, where the drawn trail is nearer a
+  hundred. That is why the forest gets ONE meander instead of the drawn three and the
+  wrap is ~160° rather than ~180°. Both open up on the stretch to §9's 3:30.
+
+**(forest) — the decor scatter needs a proper trail-relative pass.** slope-mech made the
+smallest additive change that works (per PARALLEL.md): trees now place via
+`trailPointAtRoute(routeDistance, lateral)` instead of raw world X/Z, because the curving
+trail was leaving the run bare and putting trunks inside the piste. Left for the owner:
+- the cell grid is still keyed to `-treeZ` read AS a route distance, which is a rename of
+  the old axis rather than a real re-basing — fine while `DECOR_AHEAD`/`BEHIND` are a
+  window around the skier, but it means "cell 12" is now a route distance, not a Z;
+- `updateSlopeDecor(anchorZ)` still takes a world Z from the seam. Route distance would be
+  the honest parameter now that Z and distance have genuinely diverged;
+- **the mist banks and moonlight rays are STILL raw world X/Z at y = 0** (`updateMistField`
+  / `updateRayField`) — pre-existing grade-seam breakage, now compounded because they also
+  won't follow the trail's curve. Both are night-only. Same fix available.
+
+**(mountain) — the flat dressed snowfield window is still welded to y = 0** and now also
+ignores the trail's curve, not just its grade. Unchanged by this session; noted because
+the curve makes it more visible.
+
+## (superseded) SHAPE THE MOUNTAIN — the original brief (director's pick, 2026-07-25)
 
 Josh's callout, looking at his own top-down map (`slope-map.png`, now embedded in
 SLOPE_BRANCHINGv3.md §4): **"you currently have the frozen lake on the downhill

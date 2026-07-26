@@ -15,7 +15,7 @@ import { LANE_EDGE, makeRandom } from "./skiScene";
 import {
   segmentCenterline,
   segmentToWorld,
-  trailGroundHeightAtZ,
+  trailPointAtRoute,
 } from "./slopePath";
 
 // How "on" the ground mist is (0 by day, 1 at full night) — set by
@@ -229,9 +229,21 @@ export function updateSlopeDecor(anchorZ: number): void {
         const copy = template.clone();
         const jitter = random() * 0.8; // where in the cell the tree stands
         const treeZ = -(cell + 0.1 + jitter) * band.cellSize;
-        // Sit on the graded mountain (branching map) instead of the y=0 valley floor.
-        const treeY = decorGrounded ? trailGroundHeightAtZ(treeZ) : 0;
-        copy.position.set(side * x, treeY, treeZ);
+        if (decorGrounded) {
+          // CROSS-SEAM EDIT (slope-mech, 2026-07-25 — smallest additive change per
+          // PARALLEL.md; polish parked in IDEAS.md for the forest session). The cell's
+          // −Z is read as a route distance and the tree is placed TRAIL-RELATIVE, so
+          // the treeline follows the run wherever it goes. Raw world X/Z only lines
+          // trees up with the piste while the trail is a straight line down x = 0, and
+          // since the map was laid out as drawn it meanders ~34 units and wraps ~160°
+          // around the second mountain — which left the run bare of trees and put
+          // trunks inside the piste at the meander's extremes.
+          const p = trailPointAtRoute(-treeZ, side * x);
+          copy.position.set(p.x, p.y, p.z);
+        } else {
+          // The flat Overlook: still a straight road down x = 0, so raw XZ is exact.
+          copy.position.set(side * x, 0, treeZ);
+        }
         copy.rotation.y = random() * Math.PI * 2;
         copy.scale.setScalar(scale);
         scene.add(copy);

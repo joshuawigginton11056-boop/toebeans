@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BRANCH_SEGMENTS,
   gradeSpeedFactor,
   REFERENCE_GRADE,
   routeGradeAt,
@@ -8,41 +9,73 @@ import {
 } from "./route";
 
 describe("route — the descent's grade profile (steepness → speed)", () => {
-  it("keeps the forest as fast as the summit; 'steeper = faster' lives in the lower pitch", () => {
-    const summit = routeGradeAt(0);
-    const forest = routeGradeAt(230); // the forest/lake glide — a fast stretch since round 3
-    const lower = routeGradeAt(560); // the steep lower pitch
-    // Round 3 (slope-mech, 2026-07-25, "it stays at base speed not recognizing my w or
-    // shift key"): the forest no longer skis mellower than the summit — the plunge's
-    // momentum carries flat through the trees. So the forest sits right at the summit's
-    // pitch (a decidedly fast glide), not stepped down below it into a slow zone.
-    expect(forest).toBeGreaterThan(REFERENCE_GRADE + 0.1); // decidedly fast, not mellow
-    expect(summit - forest).toBeLessThan(0.05); // no slow-zone step down into the trees
-    // "Steeper = faster" now reads in the LOWER pitch (the cliff run-in), which stays at
-    // least as steep as the already-fast upper mountain.
-    expect(lower).toBeGreaterThanOrEqual(forest);
-    // Every zone stays under the camera's ~27° framing (tan ≈ 0.51) and above a
-    // gentle floor — the grade is always a real, look-down descent.
-    for (const d of [0, 120, 230, 340, 460, 560, 640]) {
+  it("gives the forest character by ROLLING, not by going mellow (its mean stays summit-fast)", () => {
+    const summit = routeGradeAt(40);
+    const meanOver = (from: number, to: number) => {
+      let sum = 0;
+      for (let d = from; d <= to; d++) sum += routeGradeAt(d);
+      return sum / (to - from + 1);
+    };
+    // Shape-the-mountain (slope-mech, 2026-07-25). The forest has to read as its own
+    // place without becoming a slow zone — speed IS grade here, and a mellower forest
+    // was rejected three separate times ("my speed still feels extremely slow through
+    // the forest"). So its character is UNDULATION: the grade rolls crest-to-hollow
+    // while its MEAN stays right at the summit's pitch.
+    const forestMean = meanOver(100, 290);
+    expect(forestMean).toBeGreaterThan(REFERENCE_GRADE + 0.1); // decidedly fast on average
+    expect(summit - forestMean).toBeLessThan(0.06); // no slow-zone step into the trees
+    // …and it genuinely rolls, rather than being a straight ramp at that mean.
+    let crest = 0;
+    let hollow = 1;
+    for (let d = 100; d <= 290; d++) {
+      crest = Math.max(crest, routeGradeAt(d));
+      hollow = Math.min(hollow, routeGradeAt(d));
+    }
+    expect(crest - hollow).toBeGreaterThan(0.08); // real relief, not a flat plateau
+    // Every PITCHED zone stays under the camera's ~27° framing (tan ≈ 0.51) and above
+    // a gentle floor. The lake is deliberately excluded: it is the one flat area.
+    for (const d of [0, 120, 230, 260, 400, 470, 560, 640]) {
       expect(routeGradeAt(d)).toBeLessThan(0.51);
       expect(routeGradeAt(d)).toBeGreaterThan(0.15);
     }
   });
 
-  it("eases out into the forest — no grade 'wall' at the forest mouth (slope-mech, 2026-07-24)", () => {
-    // The bug fix (director look-pass): the summit→forest speed shed must not slam
-    // in at the forest entrance (route 120). The grade sheds its extreme high on the
-    // summit and levels onto a gentle leg through the mouth, so around the forest the
-    // grade barely moves — no sharp corner, no sustained hard decel there.
-    // 1) Across the forest mouth (route 100–200), any 20-unit window is nearly flat.
-    for (let d = 100; d <= 180; d += 10) {
-      expect(Math.abs(routeGradeAt(d) - routeGradeAt(d + 20))).toBeLessThan(0.03);
+  it("makes the frozen lake actually flat — and keeps it fast anyway (the ice glide)", () => {
+    // The callout that started the shaping pass (director, 2026-07-25): "you
+    // currently have the frozen lake on the downhill slope." It doesn't any more.
+    for (let d = 315; d <= 355; d += 5) {
+      expect(routeGradeAt(d)).toBe(0);
     }
-    // 2) The mouth-region grade change is far gentler than the upper-summit shed —
-    //    the steepest grade CHANGE lives high on the mountain, not at the forest.
-    const upperShed = routeGradeAt(0) - routeGradeAt(40); // the steep early leg
-    const mouthShed = routeGradeAt(110) - routeGradeAt(150); // across the mouth
-    expect(mouthShed).toBeLessThan(upperShed / 2);
+    // Flat ground would normally mean a hard speed shed, because the coupling reads
+    // grade. On the lake it doesn't: the factor is the one you arrived with, bleeding
+    // off gently, so you glide across instead of slamming into a crawl.
+    const arriving = gradeSpeedFactor("forest-road", BRANCH_SEGMENTS["forest-road"]!.length);
+    const onIce = gradeSpeedFactor("lake", 0);
+    const leavingIce = gradeSpeedFactor("lake", BRANCH_SEGMENTS["lake"]!.length);
+    expect(onIce).toBeCloseTo(arriving, 6); // you enter the ice at the pace you hit it
+    expect(leavingIce).toBeLessThan(onIce); // …and the ice does scrub some off…
+    expect(leavingIce).toBeGreaterThan(onIce * 0.75); // …but nowhere near a stop.
+    // The point of the whole mechanism: the flat lake is still faster than the
+    // reference pitch, so it never becomes the run's slow zone.
+    expect(leavingIce).toBeGreaterThan(1);
+  });
+
+  it("has no grade 'wall' at the forest mouth — you arrive already gliding (2026-07-24)", () => {
+    // The original bug (director look-pass): the summit→forest speed shed slammed in
+    // at the forest entrance and read as "slamming the brakes." The forest now ROLLS
+    // rather than stepping down, so the assertion is no longer "the grade barely
+    // moves here" (it moves — that's the rolling) but the thing that actually
+    // mattered: crossing the treeline costs you no NET pitch.
+    const mouth = 100;
+    const justAbove = routeGradeAt(mouth - 20);
+    const justBelow = routeGradeAt(mouth + 20);
+    expect(justBelow).toBeGreaterThan(justAbove - 0.03); // no step DOWN at the mouth
+    // And the mouth is not where the run's steepest change lives — a roll's slope is
+    // gentler than the drop onto the lake shore, which is the one place the mountain
+    // is meant to hand off hard.
+    const mouthChange = Math.abs(routeGradeAt(mouth - 20) - routeGradeAt(mouth + 20));
+    const shoreChange = Math.abs(routeGradeAt(295) - routeGradeAt(315));
+    expect(mouthChange).toBeLessThan(shoreChange);
   });
 
   it("clamps below the route to the summit; flattens past the flag to a runout", () => {
@@ -53,14 +86,23 @@ describe("route — the descent's grade profile (steepness → speed)", () => {
     expect(routeGradeAt(9999)).toBe(0);
   });
 
-  it("drops the height monotonically to exactly 0 at the flag", () => {
+  it("never climbs, and reaches exactly 0 at the flag (flat on the lake, falling everywhere else)", () => {
     expect(routeHeightAt(TOTAL_ROUTE_LENGTH)).toBeCloseTo(0, 9);
     expect(routeHeightAt(0)).toBeGreaterThan(0);
+    // Was strictly monotonic; since the lake was flattened (2026-07-25) the height
+    // holds LEVEL across the ice, which is the whole point of it. It must still never
+    // rise — there is no uphill skiing in this sim, and a climb would be a real bug.
     let prev = routeHeightAt(0);
     for (let d = 10; d <= TOTAL_ROUTE_LENGTH; d += 10) {
       const h = routeHeightAt(d);
-      expect(h).toBeLessThan(prev);
+      expect(h).toBeLessThanOrEqual(prev);
       prev = h;
+    }
+    // The lake is level, not merely gentle: same height at both ends of the ice.
+    expect(routeHeightAt(355)).toBeCloseTo(routeHeightAt(315), 6);
+    // …and everywhere off the lake it really is descending.
+    for (const d of [40, 150, 250, 420, 500, 600]) {
+      expect(routeHeightAt(d) - routeHeightAt(d + 20)).toBeGreaterThan(4);
     }
   });
 

@@ -139,20 +139,19 @@ describe("slopePath — the branching map's real grade (world-Y descent)", () =>
   });
 
   it("keeps every fork reconvergence at one height whichever way it's reached", () => {
-    // Cave and Water both deliver you to the shared cliff at route offset 540:
-    // the ends of cave and water, and the cliff's entrance, are all one height.
+    // Read the lengths off the registry rather than hard-coding them: the areas get
+    // RE-PROPORTIONED whenever the map's shape is retuned (2026-07-25 was one such
+    // pass), and a test that bakes in "cave is 120 long" stops testing the
+    // reconvergence and starts testing last month's numbers.
+    const endOf = (id: string) => segmentCenterline(id, BRANCH_SEGMENTS[id]!.length).y;
+    // Cave and Water both deliver you to the shared cliff: the ends of cave and
+    // water, and the cliff's entrance, are all one height.
     const cliffEntranceY = segmentCenterline("cliff", 0).y;
-    expect(segmentCenterline("cave", 120).y).toBeCloseTo(cliffEntranceY, 6);
-    expect(segmentCenterline("water", 200).y).toBeCloseTo(cliffEntranceY, 6);
+    expect(endOf("cave")).toBeCloseTo(cliffEntranceY, 6);
+    expect(endOf("water")).toBeCloseTo(cliffEntranceY, 6);
     // The Type A forest fork: road and tree both feed the lake at the same height.
-    expect(segmentCenterline("forest-road", 120).y).toBeCloseTo(
-      segmentCenterline("forest-tree", 120).y,
-      6,
-    );
-    expect(segmentCenterline("lake", 0).y).toBeCloseTo(
-      segmentCenterline("forest-road", 120).y,
-      6,
-    );
+    expect(endOf("forest-road")).toBeCloseTo(endOf("forest-tree"), 6);
+    expect(segmentCenterline("lake", 0).y).toBeCloseTo(endOf("forest-road"), 6);
   });
 
   it("descends monotonically down every segment", () => {
@@ -200,8 +199,12 @@ describe("slopePath — the branching map's shaped (curved) corridors", () => {
     // path). Sample the trail continuously across BOTH internal seams
     // (summit→forest-road AND forest-road→lake) and pin THREE things the old arcs
     // couldn't all give at once.
-    const trail = ["summit", "forest-road", "lake"];
-    const trailLen = trail.reduce((s, id) => s + lengthOf(id), 0); // 340
+    // Sampled across the WHOLE played spine, not just the first three areas: since
+    // the map was laid out as drawn (2026-07-25) the back half turns for real — a
+    // ~160° wrap around the second mountain — and that is exactly where a curvature
+    // step would be felt hardest, so it has to be inside the sampled range.
+    const trail = [...SINGLE_TRAIL];
+    const trailLen = trail.reduce((s, id) => s + lengthOf(id), 0); // the full 640
 
     // A helper: the world point at a ROUTE distance down the trail (which segment,
     // which local distance), so we can sample right across the internal seams.
@@ -224,6 +227,9 @@ describe("slopePath — the branching map's shaped (curved) corridors", () => {
     for (const [a, b] of [
       ["summit", "forest-road"],
       ["forest-road", "lake"],
+      ["lake", "yeti"],
+      ["yeti", "cave"],
+      ["cave", "cliff"],
     ] as const) {
       const aEnd = segmentCenterline(a, lengthOf(a));
       const bStart = segmentCenterline(b, 0);
@@ -232,31 +238,63 @@ describe("slopePath — the branching map's shaped (curved) corridors", () => {
       expect(bStart.heading).toBeCloseTo(aEnd.heading, 6);
     }
 
-    // 2) CURVATURE continuous everywhere — the real no-kink fix. The old arcs jumped
-    // curvature from summit's −0.002 to forest-road's +0.002 (a ~0.004 rad/unit
-    // step) at the seam; the smooth line's curvature never jumps, at either seam.
-    // Second difference of heading between adjacent unit steps stays tiny across the
-    // whole trail (the lake lobe's amplitude is tuned so its seam step is ~1e-4).
-    let maxCurvatureJump = 0;
+    // 2) CURVATURE continuous everywhere — the real no-kink fix, and the one that
+    // survives the map being laid out as drawn. The old arcs jumped curvature from
+    // summit's −0.002 to forest-road's +0.002 at the seam (the "jerky" path); the
+    // lobe chain never jumps, at ANY seam, even where a straight area meets the
+    // second mountain's wrap. Two construction rules earn that and this test is what
+    // holds them: every lobe's weave amplitude is TRAIL_WEAVE × its own span (so a
+    // lobe's end curvature is the same TRAIL_WEAVE·2π whatever its length), and a
+    // net turn is applied through a smoothstep (so it contributes NO curvature at
+    // the seams). Break either and this fails.
+    // Measured as "are the seams special?" rather than against a fixed number. The
+    // trail curves for real now, so curvature CHANGES as you ski — smoothly, all the
+    // way round the wrap. An absolute threshold can't tell that apart from a kink; it
+    // just gets loosened every time the map gets bolder. What a kink actually is: a
+    // curvature step that happens AT a seam and nowhere else. So compare the two.
+    const seams: number[] = [];
+    let acc = 0;
+    for (const id of trail.slice(0, -1)) {
+      acc += lengthOf(id);
+      seams.push(acc);
+    }
+    const nearSeam = (d: number) => seams.some((s) => Math.abs(d - s) <= 3);
+    let seamJump = 0;
+    let interiorJump = 0;
     let prevK = 0;
     for (let d = 1; d <= trailLen; d++) {
       const k = at(d).heading - at(d - 1).heading; // curvature over this unit step
-      if (d > 1) maxCurvatureJump = Math.max(maxCurvatureJump, Math.abs(k - prevK));
+      if (d > 1) {
+        const jump = Math.abs(k - prevK);
+        if (nearSeam(d)) seamJump = Math.max(seamJump, jump);
+        else interiorJump = Math.max(interiorJump, jump);
+      }
       prevK = k;
     }
-    expect(maxCurvatureJump).toBeLessThan(1e-3);
+    // Crossing a seam is no more of an event than any other metre of the trail.
+    expect(seamJump).toBeLessThanOrEqual(interiorJump * 1.5);
+    // …and the curve as a whole stays smooth in absolute terms too, so this can't
+    // pass by making the whole trail equally jerky.
+    expect(Math.max(seamJump, interiorJump)).toBeLessThan(0.01);
 
-    // 3) No net drift: heading AND lateral come back to ~0 at the back of the lake
-    // (∫ heading over each lobe's full sine period is 0), so the run tracks the fall
-    // line — the old forest drift-right is gone, and it holds at the lake's end too.
-    // The peak excursion mid-trail stays gentle.
-    const end = at(trailLen);
-    expect(end.heading).toBeCloseTo(0, 3);
-    expect(Math.abs(end.x)).toBeLessThan(0.5);
+    // 3) No UNINTENDED drift. A weave must always return what it borrowed — ∫ over a
+    // full sine period is 0 — so an area that declares no net turn finishes pointing
+    // exactly where it started, and the old forest drift-right cannot come back.
+    // The areas that DO turn are the ones that say so in TRAIL_LOBES.
+    const forestEnd = trail.slice(0, 2).reduce((s, id) => s + lengthOf(id), 0);
+    expect(at(forestEnd).heading).toBeCloseTo(0, 3); // summit + forest: pure weave
+    expect(at(forestEnd + lengthOf("lake")).heading).toBeCloseTo(0, 3); // lake too
+    // …and the trail as a whole HAS turned by the end, because the drawn map wraps
+    // the second mountain. This is the assertion that distinguishes "laid out as
+    // drawn" from "a fall line with a wiggle."
+    expect(Math.abs(at(trailLen).heading)).toBeGreaterThan(1.2);
+
+    // The weave stays a weave: on the areas that don't turn, the excursion off the
+    // fall line is a real visible curve but never runs away.
     let peakLateral = 0;
-    for (let d = 0; d <= trailLen; d++) peakLateral = Math.max(peakLateral, Math.abs(at(d).x));
-    expect(peakLateral).toBeGreaterThan(2); // a real, visible curve (not dead straight)
-    expect(peakLateral).toBeLessThan(LATERAL_LIMIT); // …but stays a gentle lean
+    for (let d = 0; d <= forestEnd; d++) peakLateral = Math.max(peakLateral, Math.abs(at(d).x));
+    expect(peakLateral).toBeGreaterThan(LATERAL_LIMIT); // the forest genuinely meanders
+    expect(peakLateral).toBeLessThan(40); // …without leaving the dressed ribbon
   });
 
   it("maps lateral onto the corridor normal, perpendicular to the tangent", () => {

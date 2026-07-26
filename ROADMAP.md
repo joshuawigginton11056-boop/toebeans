@@ -129,6 +129,56 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   call from Josh: the single trail will **end at the back of the forest** (forest = the
   bottom, for gauging its size). Still TODO for this redirect: the smooth single trail
   itself (item 1) + the drift-right (item 3, subsumed by item 1).
+- **The mountain has a SHAPE, laid out as Josh drew it (slope-mech, 2026-07-25) —
+  awaiting playtest.** Every area used to be 80–120 units long and ski at the same ~26°,
+  so the map had no terrain story and the frozen lake tilted down the fall line
+  (director: *"you currently have the frozen lake on the downhill slope"*, then *"the
+  proportions — forest is the long stretch, mountains are masses"*, then *"build my map
+  as i drew it"*). Four changes, all at today's 640-unit length:
+  - **Proportions from the drawn map.** Segment lengths re-cut to start mountain 100 /
+    forest **190** (the long meander, now the single longest area) / lake **80** (a short
+    crossing of the corner of a big body) / second mountain 180 / cliff 90. Every
+    same-clock balance still exact by construction: `water` = `yeti`+`cave` = 180,
+    `ledge`+`valley`+`ice-castle` = `cave`+`cliff` = 200, and all three full routes = 640.
+  - **A pitch per area** (`GRADE_PROFILE`): 26.5° steady plunge → forest that **ROLLS**
+    22–27° → **flat lake (0°)** → 21.5° second mountain → 26° cliff run-in. The forest's
+    character is undulation, NOT a lower mean: speed is grade here and a mellower forest
+    was rejected three times, so its mean stays at the summit's pitch and only the relief
+    changes. Total drop 259u, flag exactly 0.
+  - **The flat lake stays fast** — new `iceGlide` flag on `Segment`; `gradeSpeedFactor`
+    on an icy segment carries the factor you arrived with, bled 18% across the ice,
+    instead of reading the (zero) local grade. Still a pure function of
+    (segment, distance) — no new sim state, no `SAVE_VERSION` bump. Measured live:
+    arrive 1.257 → leave 1.031, so the lake never becomes the run's slow zone.
+  - **The trail's PLAN VIEW as drawn** (`slopePath.ts`): lobes gained a `netTurn`, so the
+    run coils off the start mountain, meanders ~34 units through the forest, crosses the
+    lake's corner nearly straight, **wraps ~160° around the second mountain** (a genuine
+    corkscrew descent — height still falls with route distance) and turns back out to the
+    flag. Curvature stays continuous BY CONSTRUCTION, which is what protects the old
+    "the path is jerky" fix: every weave amplitude is `TRAIL_WEAVE × its own span` (so a
+    lobe's end curvature is span-independent) and net turns run through a smoothstep (so
+    they add no curvature at a seam). The test now asserts *the seams are no more
+    eventful than any other metre*, rather than a fixed number an emboldened map would
+    keep loosening.
+
+  Measured on a real clean run through the live sim: 17.1 u/s off the summit, rolling
+  14–17 through the trees, onto level ice at 14.1 and off it at 12.7, 17.1 down the
+  cliff run-in, flag at **44.4 s**, both gaps cleared, nine lives intact. 164 tests green.
+
+  **Two things this forced, both worth knowing:**
+  - **Bank pinch in `addBranchTerrain`.** A cross-section swept round a curve folds
+    through itself once the turn radius drops under the section's own half-width, and the
+    ribbon is ±46. The flank columns are now pulled in on the *inside* of a turn (the
+    playable ±12 lane is never narrowed, so the piste stays exactly where the sim thinks
+    it is). Measured: **18 inverted quads without it, 0 with it.**
+  - **Cross-seam edit to `forestGraphics.ts`** (smallest additive change per PARALLEL.md;
+    polish parked in IDEAS.md for the forest session). The decor scatter pinned trees to
+    raw world X/Z, which only lines them up beside the run while the run is a straight
+    line down x = 0 — with the trail curving it left the forest bare AND put trunks inside
+    the piste at the meander's extremes. Trees are now placed trail-relative via a new
+    `trailPointAtRoute(routeDistance, lateral)` export. That also retires
+    `trailGroundHeightAtZ`'s "world Z ≈ −routeDistance" assumption, which the wrap breaks
+    outright (past it, one world Z maps to two route distances).
 - **Real 3D grade on the branching map (2026-07-24) — director-approved, now VARYING.**
   The run drops for real in world-Y: an elevated summit falling ~216 units to y=0 at
   the flag. The pitch is **no longer one constant — it varies down the route** (a
@@ -420,19 +470,8 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 ## Open — still to resolve
 
 ### M2 remaining
-- [ ] **⏭ NEXT (slope-mech): SHAPE THE MOUNTAIN (director's pick, 2026-07-25).** From
-      Josh's top-down map + his callout *"you currently have the frozen lake on the
-      downhill slope"*: the steepness profile is ~26° from the summit through the lake,
-      so every area skis the same and the lake tilts. Give each area its own character
-      at TODAY's length — steep start mountain, rolling forest, **flat lake**, a line
-      that descends around/through the second mountain while it rises beside you (no
-      uphill skiing exists — that's a sim change), gentle valley, cliff drop. Chosen
-      over stretching to §9's 3:30 (~6× longer) and over widening the route to the map's
-      meanders, both of which stay open behind it — shape first so we don't build six
-      times more of the wrong shape. Open questions for Josh at session start (flat vs
-      "reads flat" lake; how much steep/gentle contrast, given the profile sits at ~26°
-      while the locked reference is ~19°; whether the lake gap survives a flat lake).
-      Full brief: IDEAS.md START HERE.
+- [x] **SHAPE THE MOUNTAIN — DONE (slope-mech, 2026-07-25), awaiting playtest.** See
+      "the mountain has a shape" under *What exists now*.
 - [ ] **⚠ SLOPE_BRANCHINGv3 landed (director, 2026-07-25) — three jobs it created.**
       The spec was rewritten (`SLOPE_BRANCHING.md` → `SLOPE_BRANCHINGv3.md`) and it
       changes the design, not just the prose. Flagged by the (slope-mech) seamless-

@@ -47,6 +47,11 @@ export interface SegmentTrigger {
  * the flag. `chasms`/`checkpoints` are that segment's own hazards/respawns, in
  * segment-local distance (0 = the segment's entrance). `trigger`, if present,
  * is the fork that can override `next`.
+ *
+ * `iceGlide` marks a segment you SLIDE across rather than fall down — the frozen
+ * lake. On one, speed stops reading the local grade (which is flat there, so the
+ * coupling would drop you to a crawl) and instead carries the pace you arrived
+ * with, bleeding off gently. See `gradeSpeedFactor`.
  */
 export interface Segment {
   readonly id: string;
@@ -55,6 +60,7 @@ export interface Segment {
   readonly chasms: readonly Chasm[];
   readonly checkpoints: readonly number[];
   readonly trigger?: SegmentTrigger;
+  readonly iceGlide?: boolean;
 }
 
 // Where a fresh branching run starts — the shared summit descent.
@@ -102,27 +108,36 @@ export function singleTrailNext(segmentId: string): string | null {
 // The §4 map, as grayblock topology. Read as a resort trail map (sunset at the
 // summit, flag in the valley):
 //
-//   summit (120) ──▶ FOREST fork (Type A) ──▶ lake (100) ──▶ LAKE fork ──┐
-//        │           forest-road (120) ─┐                    │           │
-//        └─[tree]──▶ forest-tree (120) ─┴─▶ (lake)      around│    into  │[hole]
+//   summit (100) ──▶ FOREST fork (Type A) ──▶ lake (80) ───▶ LAKE fork ──┐
+//        │           forest-road (190) ─┐                    │           │
+//        └─[tree]──▶ forest-tree (190) ─┴─▶ (lake)      around│    into  │[hole]
 //                                                             ▼           ▼
-//                                            YETI fork (Type B)      water (200)
-//                                            yeti (80)                    │
+//                                            YETI fork (Type B)      water (180)
+//                                            yeti (70)                    │
 //                                        cave│    around│[ledge]          │
 //                                            ▼           ▼                │
-//                                        cave (120)   ledge (60)          │
+//                                        cave (110)   ledge (55)          │
 //                                            │           │                │
-//                                            │        valley (80)         │
+//                                            │        valley (75)         │
 //                                            ▼           │                ▼
-//                                         cliff (100) ◀──┼──────── (cliff, shared)
-//                                            │        ice-castle (80)
+//                                         cliff (90) ◀───┼──────── (cliff, shared)
+//                                            │        ice-castle (70)
 //                                          FLAG          │
 //                                                      FLAG
 //
+// PROPORTIONS FROM THE DRAWN MAP (slope-mech, 2026-07-25 director correction:
+// "the proportions — forest is the long stretch, mountains are masses"). The
+// segments used to be six near-equal 80–120 blocks, which is why the run read as
+// one undifferentiated ramp. Re-cut to the shares Josh's top-down map actually
+// shows — the forest is the long meander (30% of the route, the single longest
+// area), the mountains are big masses you spiral off and wrap around (16% + 28%),
+// and the frozen lake is a SHORT crossing of the corner of a big body (13%), not a
+// corridor of its own. Total stays exactly 640, so nothing about the clock moved.
+//
 // The three full routes to time-balance (§4), each 640 long by construction:
-//   Cave  — summit·forest·lake·yeti·cave·cliff            = 120+120+100+80+120+100
-//   Ice   — summit·forest·lake·yeti·ledge·valley·icecastle= 120+120+100+80+60+80+80
-//   Water — summit·forest·lake·water·cliff                = 120+120+100+200+100
+//   Cave  — summit·forest·lake·yeti·cave·cliff            = 100+190+80+70+110+90
+//   Ice   — summit·forest·lake·yeti·ledge·valley·icecastle= 100+190+80+70+55+75+70
+//   Water — summit·forest·lake·water·cliff                = 100+190+80+180+90
 // The forest Type A (road vs. tree) is a same-length no-op on any of the three.
 // Two reconvergences: Cave & Water share `cliff` (both reach it at offset 540 —
 // the same clock), and Ice runs its own tail (valley → ice-castle) to a second
@@ -136,24 +151,24 @@ export const BRANCH_SEGMENTS: Readonly<Record<string, Segment>> = {
   // swallows you into the tree world instead of the road.
   summit: {
     id: "summit",
-    length: 120,
+    length: 100,
     next: "forest-road",
     chasms: [],
     checkpoints: [],
-    trigger: { at: 90, halfWidth: 30, lateralMin: 4, lateralMax: 12, into: "forest-tree" },
+    trigger: { at: 75, halfWidth: 25, lateralMin: 4, lateralMax: 12, into: "forest-tree" },
   },
   // 1 · Enchanted Forest — Type A. The road and the tree world are the same
   // length and both flow into the lake, so the detour is a same-clock no-op.
   "forest-road": {
     id: "forest-road",
-    length: 120,
+    length: 190,
     next: "lake",
     chasms: [],
     checkpoints: [],
   },
   "forest-tree": {
     id: "forest-tree",
-    length: 120,
+    length: 190,
     next: "lake",
     chasms: [],
     checkpoints: [],
@@ -166,18 +181,22 @@ export const BRANCH_SEGMENTS: Readonly<Record<string, Segment>> = {
   // lake gap sits before the hole, so all three routes learn the jump here.
   lake: {
     id: "lake",
-    length: 100,
+    length: 80,
     next: "yeti",
-    chasms: [{ id: "lake-gap", start: 50, width: 3 }],
-    checkpoints: [45],
-    trigger: { at: 70, halfWidth: 25, lateralMin: 4, lateralMax: 12, into: "water" },
+    chasms: [{ id: "lake-gap", start: 40, width: 3 }],
+    checkpoints: [35],
+    trigger: { at: 56, halfWidth: 20, lateralMin: 4, lateralMax: 12, into: "water" },
+    // The one FLAT area on the mountain (director, 2026-07-25: "you currently have
+    // the frozen lake on the downhill slope"). Flat would normally mean slow — the
+    // speed coupling reads grade — so the lake glides instead; see gradeSpeedFactor.
+    iceGlide: true,
   },
   // 2b · Into the hole → drivable penguin → underwater penguin castle → surface
   // back on the normal trail (the Water Line). Built the same 200 as
   // yeti(80)+cave(120) so it rejoins the cliff at the same clock.
   water: {
     id: "water",
-    length: 200,
+    length: 180,
     next: "cliff",
     chasms: [],
     checkpoints: [],
@@ -188,17 +207,17 @@ export const BRANCH_SEGMENTS: Readonly<Record<string, Segment>> = {
   // reunion cliff run.
   yeti: {
     id: "yeti",
-    length: 80,
+    length: 70,
     next: "cave",
     chasms: [],
     checkpoints: [],
-    trigger: { at: 50, halfWidth: 25, lateralMin: 4, lateralMax: 12, into: "ledge" },
+    trigger: { at: 44, halfWidth: 22, lateralMin: 4, lateralMax: 12, into: "ledge" },
   },
   // 3a · Through the cave → the main road (your friend surfaces from their lake
   // run) → the cliff. The Cave Line, the reunion route.
   cave: {
     id: "cave",
-    length: 120,
+    length: 110,
     next: "cliff",
     chasms: [],
     checkpoints: [],
@@ -208,21 +227,21 @@ export const BRANCH_SEGMENTS: Readonly<Record<string, Segment>> = {
   // cave(120)+cliff(100), so the two Type B branches reach the flag same-clock.
   ledge: {
     id: "ledge",
-    length: 60,
+    length: 55,
     next: "valley",
     chasms: [],
     checkpoints: [],
   },
   valley: {
     id: "valley",
-    length: 80,
+    length: 75,
     next: "ice-castle",
-    chasms: [{ id: "valley-gap", start: 40, width: 3 }],
-    checkpoints: [35],
+    chasms: [{ id: "valley-gap", start: 38, width: 3 }],
+    checkpoints: [33],
   },
   "ice-castle": {
     id: "ice-castle",
-    length: 80,
+    length: 70,
     next: null,
     chasms: [],
     checkpoints: [],
@@ -233,10 +252,10 @@ export const BRANCH_SEGMENTS: Readonly<Record<string, Segment>> = {
   // "charged-jump-or-boost" cliff is §5 balancing).
   cliff: {
     id: "cliff",
-    length: 100,
+    length: 90,
     next: null,
-    chasms: [{ id: "cliff-gap", start: 50, width: 3 }],
-    checkpoints: [45],
+    chasms: [{ id: "cliff-gap", start: 45, width: 3 }],
+    checkpoints: [40],
   },
 };
 
@@ -250,21 +269,21 @@ export const BRANCH_SEGMENTS: Readonly<Record<string, Segment>> = {
 // hand-authored for this map.
 const SEGMENT_OFFSETS: Readonly<Record<string, number>> = {
   summit: 0,
-  "forest-road": 120,
-  "forest-tree": 120,
-  lake: 240,
-  // After the lake: around (→ yeti) and into (→ water) both start at 340.
-  yeti: 340,
-  water: 340,
-  // Yeti's Peak splits: cave and ledge both start at 420.
-  cave: 420,
-  ledge: 420,
+  "forest-road": 100,
+  "forest-tree": 100,
+  lake: 290,
+  // After the lake: around (→ yeti) and into (→ water) both start at 370.
+  yeti: 370,
+  water: 370,
+  // Yeti's Peak splits: cave and ledge both start at 440.
+  cave: 440,
+  ledge: 440,
   // The Ice tail continues from ledge.
-  valley: 480,
-  "ice-castle": 560,
-  // The shared cliff: cave ends at 540 and water ends at 540, so cliff is 540
+  valley: 495,
+  "ice-castle": 570,
+  // The shared cliff: cave ends at 550 and water ends at 550, so cliff is 550
   // whichever way you came — the load-bearing same-clock coincidence.
-  cliff: 540,
+  cliff: 550,
 };
 
 // The full summit → flag length every route shares.
@@ -354,13 +373,48 @@ export const REFERENCE_GRADE = 0.35;
 // it). KNOBS: nudge the 0.48 plateau if the trees still read slow (up) / out of control
 // (down); if BOOST specifically should out-run cruise on the fast stretches rather than
 // sitting at the shared 28 ceiling, raise GRADE_TOP_SPEED in skiing.ts (its own call).
+// SHAPE THE MOUNTAIN (slope-mech, 2026-07-25 — director: "you currently have the
+// frozen lake on the downhill slope"; every area skied the same ~26°, so the map
+// had no terrain story). Each area now has its own character, read off the drawn
+// map, at today's 640-unit length:
+//
+//   start mountain 0–100    the plunge, steepest and steady
+//   forest        100–290   ROLLING — the profile undulates instead of stepping down
+//   frozen lake   290–370   FLAT (the ease-down + the ice + the ramp back out)
+//   second mtn    370–550   moderate, the line descending around the mass
+//   cliff run-in  550–640   steep again, then easing to the flag
+//
+// THE FOREST IS ROLLING, NOT MELLOW. Speed IS grade here, and a gentler forest has
+// been rejected three times ("my speed still feels extremely slow through the
+// trees"). So the forest keeps a MEAN pitch right at the summit's — it just stops
+// being a straight ramp: the grade rolls between ~0.41 and ~0.52 over ~30-unit
+// waves, which reads as rolling ground under you and costs nothing in average
+// speed. Character without a slow zone. (Rounds 1–3 of the old forest-speed fight
+// are the reason this is a roll and not a step; see the git history of this file.)
+//
+// THE LAKE IS GENUINELY FLAT. The grade eases from the forest's 0.44 to 0 over the
+// lake's first 20 units, sits at 0 across the ice, and ramps back to the second
+// mountain's pitch after. Flat would normally mean a hard speed shed, so the lake
+// is `iceGlide` and its speed comes from what you arrived with — see
+// gradeSpeedFactor. The ease-down is INSIDE the lake segment on purpose, so the
+// glide covers it and the shore doesn't read as brakes.
 const GRADE_PROFILE: readonly (readonly [number, number])[] = [
-  [0, 0.5], // steep summit plunge (~26.6°, just under the camera's ~27°)
-  [60, 0.48], // ease the plunge's extreme off — but only to 0.48, so speed barely sheds
-  [180, 0.48], // the forest skis as fast as the summit — momentum carries through the trees
-  [340, 0.48], // …holds flat across the forest + frozen lake (no mellow-slow zone anymore)
-  [460, 0.43], // building back up through the mid detours (parked map; trims total drop)
-  [560, 0.5], // the steep lower pitch (ice valley / cliff run-in)
+  [0, 0.5], // start mountain: the plunge (~26.6°, just under the camera's ~27°)
+  [80, 0.5], // …held steady the whole way down the peak, not shed early
+  [100, 0.48], // the forest mouth — barely a step, so no "brakes" at the treeline
+  [130, 0.52], // ── the forest rolls: crest…
+  [160, 0.41], // …and hollow…
+  [195, 0.51], // …and crest…
+  [225, 0.41], // …and hollow…
+  [260, 0.5], // …and a last crest…
+  [290, 0.44], // …bottoming out onto the lake shore
+  [310, 0.0], // the ice begins — flat, and the glide carries you across
+  [360, 0.0], // …still flat: the lake does not tilt
+  [390, 0.42], // the second mountain picks the descent back up
+  [470, 0.38], // …its gentlest through the middle of the wrap
+  [520, 0.42],
+  [560, 0.5], // the steep lower pitch (the cliff run-in)
+  [610, 0.5],
   [640, 0.42], // ease a touch for the flag
 ];
 
@@ -428,8 +482,44 @@ export function routeHeightAt(routeDistance: number): number {
  * branching map — the flat Overlook's "main" segment has no grade, so it plays as
  * it always did. */
 export function gradeSpeedFactor(segmentId: string, distance: number): number {
-  if (!BRANCH_SEGMENTS[segmentId]) return 1;
+  const seg = BRANCH_SEGMENTS[segmentId];
+  if (!seg) return 1;
+  if (seg.iceGlide) return iceGlideFactor(seg, distance);
   return routeGradeAt(routeDistanceOf(segmentId, distance)) / REFERENCE_GRADE;
+}
+
+/** How much of the ice you have scrubbed off by the far shore — the lake is not
+ * frictionless, it just doesn't brake you. 0.18 = you leave the lake at ~82% of
+ * the pace you hit it with. Raise for a draggier lake, lower for slicker ice. */
+const ICE_DRAG = 0.18;
+
+/**
+ * Speed on an `iceGlide` segment (slope-mech, 2026-07-25 — director's call on the
+ * flat lake: "flat look, ice keeps speed").
+ *
+ * The frozen lake is the one FLAT area on the mountain, and speed here is grade:
+ * reading the local grade on flat ground would floor the coupling and drop cruise
+ * from ~16 u/s to the 8 u/s base the moment you touched the shore — the exact
+ * "slamming the brakes" the forest was retuned three times to avoid. So on the ice
+ * the factor is the one you ARRIVED with (the grade just above the lake, i.e. the
+ * forest's exit pitch), bled off linearly by ICE_DRAG across the crossing. You
+ * carry the mountain's momentum onto the lake, glide, and slowly lose it — which
+ * is what skating across a frozen lake actually does.
+ *
+ * Deliberately a pure function of (segment, distance) like every other factor
+ * here: no new sim state, nothing to serialize, no SAVE_VERSION bump, and a
+ * headless timing run over the route reproduces it exactly.
+ */
+function iceGlideFactor(seg: Segment, distance: number): number {
+  const entry = SEGMENT_OFFSETS[seg.id] ?? 0;
+  // The pitch you arrive at the shore with. GRADE_PROFILE carries a control point at
+  // the lake's entry holding the run-in's pitch, and only flattens to 0 over the
+  // following stretch — so sampling exactly at `entry` reads the mountain above the
+  // ice, not the ice. (Keep that control point if you retune the profile: without it
+  // this would read the flattening and the glide would start already half-scrubbed.)
+  const carried = routeGradeAt(entry) / REFERENCE_GRADE;
+  const u = seg.length > 0 ? Math.min(1, Math.max(0, distance / seg.length)) : 0;
+  return carried * (1 - ICE_DRAG * u);
 }
 
 /**
