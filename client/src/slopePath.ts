@@ -1253,3 +1253,211 @@ export function segmentToWorld(
     z: c.z + Math.sin(c.heading) * lateral,
   };
 }
+
+// ---------------------------------------------------------------------------
+// OFF-RIBBON SURFACES, AND THE ONE RULE THEY ALL OBEY (slope-mech, 2026-07-26).
+//
+// Nothing collides with terrain on this map: the sim rides `routeHeightAt`, a 1-D
+// height profile, and every terrain mesh is decoration hung near it. So a mesh that
+// stands above the ridden surface is not a hill you climb — it is a WALL YOU SKI
+// STRAIGHT THROUGH, which is exactly what the lake's shore lip turned out to be.
+//
+// THE RULE: **no off-ribbon surface may have an EDGE inside the lane.** Buried under
+// the corridor is fine. A continuous roof over it is fine too — the map has one, the
+// cave's ceiling. What is never fine is a surface that stands proud on part of the
+// lane's cross-section while sitting at or below it on another part: that surface has a
+// rim cutting up through the ground you ride, and you pass straight through the rim.
+//
+// Height is deliberately NOT the discriminator, though it was the obvious first guess.
+// The lake's lip stood 12.6 units up and the cave's ceiling comes down to 19.7 at the
+// tunnel's low shoulder, so any clearance threshold that catches the wall also condemns
+// the ceiling. What separates them is not how high but whether they CROSS: the lip
+// climbs out of the snow you're skiing on, the ceiling never touches it.
+//
+// Why it's stated here and not in the mesh builders: `slopePath.test.ts` asserts it
+// over every playable lane, and the builders in `skiRender.ts` call these same
+// functions — so a mesh cannot quietly drift away from the assertion. The mountain's
+// footprint was already solved against the lanes (`laneClearance`) and the basin was
+// solved against nothing; this is that same discipline, written down once for both.
+
+/** Half-width of the dressed ribbon — the corridor mesh's outer edge (skiRender's
+ * FLANK_HALF). The lane the sim clamps to is only ±LATERAL_LIMIT, but a wall standing
+ * in the snow at lateral 32 is exactly as wrong as one at lateral 0, so the rule and
+ * the gap both use the dressed width. */
+export const RIBBON_HALF_WIDTH = 46;
+/** How far a surface has to stand proud of the ridden lane before it counts as a step
+ * rather than a graze. The mountain's foot meets the ground tangentially at the lane
+ * edge (rise and slope both reach zero there), so it brushes 0 without ever being a
+ * wall; a metre of daylight is the smallest step you would actually ski into. */
+export const WALL_STEP = 1;
+/** How far past the ribbon a ducked surface takes to climb back to its own level. This
+ * is what makes the duck read as a GAP in the lake's rim — an outlet the run leaves
+ * through — rather than a slot cut with a knife. */
+export const LANE_GAP_FEATHER = 40;
+
+/** How much a surface must duck to clear the ribbon: 1 on it, easing to 0 a feather
+ * beyond. Continuous, so a ducked surface has no crease. */
+function laneDuck(distanceToCorridor: number): number {
+  const t = Math.max(
+    0,
+    Math.min(1, (distanceToCorridor - RIBBON_HALF_WIDTH) / LANE_GAP_FEATHER),
+  );
+  return 1 - t * t * (3 - 2 * t);
+}
+
+/**
+ * The trail the basin has to duck to — measured in THREE dimensions, not in plan.
+ *
+ * ⚠ THE WRAP PASSES UNDER THE LAKE (slope-mech, 2026-07-26 — the second bug the
+ * headroom test caught, before it was ever seen). Fork 3's outside branch and the cave
+ * come back within a lake-radius of the body in PLAN while running ~120 units below it,
+ * so a plan-distance duck would have hauled the disc's far edge down toward a corridor
+ * that isn't beneath the lake at all — the same class of mistake `lakeIceExtent`'s NEAR
+ * guard already documents. A sample only counts as trail-under-the-lake if it is within
+ * a radius of the point in space.
+ *
+ * Returns the nearest such sample's plan distance and an inverse-distance-weighted
+ * height over the relevant set (weighted, not nearest, for the reason
+ * `nearestCorridorGround` gives), or `null` where no trail is near.
+ */
+function lakeDuckReference(
+  x: number,
+  z: number,
+  samples: readonly { readonly x: number; readonly z: number; readonly y: number }[],
+): { readonly distance: number; readonly y: number } | null {
+  const reach2 = FROZEN_LAKE.radius * FROZEN_LAKE.radius;
+  const lakeY = lakeIceHeight();
+  let nearest = Infinity;
+  let wSum = 0;
+  let ySum = 0;
+  for (const s of samples) {
+    const dx = s.x - x;
+    const dz = s.z - z;
+    const dy = s.y - lakeY;
+    if (dx * dx + dz * dz + dy * dy > reach2) continue; // not under this lake
+    const d2 = dx * dx + dz * dz;
+    if (d2 < nearest) nearest = d2;
+    const w = 1 / ((d2 + 1) * (d2 + 1));
+    wSum += w;
+    ySum += s.y * w;
+  }
+  if (wSum === 0) return null;
+  return { distance: Math.sqrt(nearest), y: ySum / wSum };
+}
+
+/** How far the basin sits below the ice it carries, so the two can't z-fight. */
+export const BASIN_DROP = 0.25;
+
+/**
+ * THE FROZEN LAKE'S BASIN SURFACE at a world point — `null` off the body.
+ *
+ * Level across the body (ice is level), with a `shoreRise` lip ringing it so it reads
+ * as water held in a bowl, and an uphill shore that blends up to meet the hill instead
+ * of terracing against it.
+ *
+ * ⚠ AND A GAP AT THE CROSSINGS — the bug Josh rode into. The disc knew nothing about
+ * the trail that crosses it, so it stood above the ridden surface in two places: the
+ * uphill lip crossed the lane 12.6 units proud (a white wall across the piste just
+ * before the ice), and on the way out the level body itself stood 27.8 units above a
+ * lane that had already fallen below lake level. Both are one fault — a surface above
+ * the ground you ride — so both take one fix: where the body would stand above the
+ * ribbon it ducks to it and feathers back out. That is what a lake outlet is, and it is
+ * why the rim now has a notch at each crossing.
+ *
+ * Takes the corridor samples rather than reaching for them: sampling is the expensive
+ * part, and the mesh builder does it once for every off-ribbon feature.
+ */
+export function frozenLakeBasinHeight(
+  x: number,
+  z: number,
+  samples: readonly { readonly x: number; readonly z: number; readonly y: number }[],
+): number | null {
+  const c = lakeCenterWorld();
+  const { radius, shoreBand, shoreRise } = FROZEN_LAKE;
+  // Epsilon-tolerant, then clamped: the mesh builder's outermost ring sits at exactly
+  // `radius`, and cos/sin round-off there would otherwise report the rim as off-body.
+  const raw = Math.hypot(x - c.x, z - c.z);
+  if (raw > radius + 1e-6) return null;
+  const r = Math.min(raw, radius);
+  // Dropped a hair below the ice so it can't z-fight the corridor where the two
+  // coincide across the flat crossing — the corridor is at exactly this height there,
+  // which is the whole point: you ski straight out onto it.
+  const lakeY = lakeIceHeight();
+  const shoreT = Math.max(0, (r - (radius - shoreBand)) / shoreBand);
+  const lift = shoreRise * (shoreT * shoreT * (3 - 2 * shoreT));
+  let y = lakeY - BASIN_DROP + lift;
+  const ground = nearestCorridorGround(x, z, samples);
+  if (shoreT > 0 && ground.y > y) {
+    // Only the UPHILL shore gets pulled up to the hill: downhill of the lake the ground
+    // has fallen away, and following it there would drain the basin over a cliff.
+    y = y + (ground.y - y) * (shoreT * shoreT);
+  }
+  const under = lakeDuckReference(x, z, samples);
+  if (under) {
+    const duck = laneDuck(under.distance);
+    const floor = under.y - BASIN_DROP;
+    if (duck > 0 && y > floor) y = y + (floor - y) * duck;
+  }
+  return y;
+}
+
+// The cave's line in plan, sampled once — the doorway is cut relative to the corridor
+// it lets you into, so it has to know where that corridor runs.
+const CAVE_PLAN: readonly { readonly x: number; readonly z: number }[] = (() => {
+  const out: { x: number; z: number }[] = [];
+  const span = BRANCH_SEGMENTS[CAVE_ID]?.length ?? 0;
+  for (let d = 0; d <= span; d += 1) {
+    const p = segmentCenterline(CAVE_ID, d);
+    out.push({ x: p.x, z: p.z });
+  }
+  return out;
+})();
+
+/**
+ * Is this bit of mountainside cut away for the cave?
+ *
+ * The mass is a closed shell, so an arch standing inside it would be invisible from
+ * outside — the mountain draws over it. The mouth is therefore a genuine hole: shell
+ * that would sit UNDER THE LINTEL over the cave's own corridor is simply not emitted.
+ * You see into the dark, which is what makes it read as an entrance, and the short open
+ * cuttings at each end are the ravine that leads you in.
+ *
+ * ⚠ CUT AGAINST THE CORRIDOR, NOT A SLOT AT THE PORTAL (slope-mech, 2026-07-26 — the
+ * third thing the lane sweep caught, unseen). The doorway used to be a fixed 30-unit
+ * slot either side of each portal. Past the end of that slot the flank kept whatever
+ * low rise it had, so a lip of mountainside up to 3.75 units stood straight through the
+ * lane at the exit cutting — a small version of exactly the bug this file is about.
+ * Cutting wherever the shell is below the lintel AND within a mouth-width of the
+ * corridor is the same intent without the arbitrary length: the tunnel is bored open
+ * until there is a full lintel of rock above it. It self-limits, because deep inside
+ * the mass the low-rise shell is nowhere near the corridor.
+ *
+ * Shared by the mesh builder and the lane sweep so "is there mountain here" has one
+ * answer — otherwise the sweep reads the analytic dome and reports a wall standing
+ * exactly where the doorway already removed it.
+ */
+export function insideCaveDoorway(x: number, z: number, rise: number): boolean {
+  if (rise > FORK_MOUNTAIN.mouthHeight) return false; // above the lintel
+  const limit2 = FORK_MOUNTAIN.mouthHalfWidth * FORK_MOUNTAIN.mouthHalfWidth;
+  for (const p of CAVE_PLAN) {
+    const dx = p.x - x;
+    const dz = p.z - z;
+    if (dx * dx + dz * dz <= limit2) return true;
+  }
+  return false;
+}
+
+/**
+ * THE FORK MOUNTAIN'S SHELL SURFACE at a world point — the hill it stands on plus its
+ * rise. Zero rise outside the footprint, so out there this is just the ground.
+ *
+ * The mesh builder and the lane-headroom test read the same function, so "how high is
+ * the mountain over the cave" has exactly one answer.
+ */
+export function forkMountainShellHeight(
+  x: number,
+  z: number,
+  samples: readonly { readonly x: number; readonly z: number; readonly y: number }[],
+): number {
+  return nearestCorridorGround(x, z, samples).y + forkMountainRiseWorld(x, z);
+}

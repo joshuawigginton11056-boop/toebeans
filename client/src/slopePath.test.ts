@@ -18,15 +18,20 @@ import {
   forkMountainReach,
   forkMountainRiseAt,
   forkMountainRiseWorld,
+  forkMountainShellHeight,
+  frozenLakeBasinHeight,
   FROZEN_LAKE,
+  insideCaveDoorway,
   lakeCenterWorld,
   lakeIceExtent,
   lakeIceHeight,
+  playedCorridorSamples,
   segmentCenterline,
   segmentToWorld,
   slopeCenterline,
   slopeToWorld,
   trailRows,
+  WALL_STEP,
   type Bend,
 } from "./slopePath";
 
@@ -677,5 +682,111 @@ describe("slopePath — the trail is ONE surface (no seam at the segment joins)"
     );
     // One row per STEP down the trail + the runout, minus the shared join rows.
     expect(rows.length).toBeCloseTo((trailLength + RUNOUT) / STEP + 1, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NO OFF-RIBBON SURFACE MAY HAVE AN EDGE INSIDE THE LANE (slope-mech, 2026-07-26).
+//
+// Nothing collides with terrain here — the sim rides a 1-D height profile and every
+// terrain mesh is decoration hung near it — so a surface with a rim cutting up through
+// the ground you ride is a WALL YOU SKI THROUGH. The lake's shore lip was exactly that
+// for a day: 12.6 units proud of the lane at the ice's uphill shore, and the level body
+// itself 27.8 units above the lane on the way out. Both would have failed this sweep on
+// the day they landed.
+//
+// That is the point of writing it down: the mountain's footprint was already solved
+// against every lane (FORK_MOUNTAIN.laneClearance) and the basin was solved against
+// nothing. This closes the gap for every off-ribbon surface, present and future.
+//
+// WHY CROSSING AND NOT HEIGHT. The obvious test — "nothing within N units above the
+// lane" — cannot work: the lip stood 12.6 up and the cave's ceiling comes down to 19.7
+// at the tunnel's low shoulder, so every N that catches the wall also condemns the
+// ceiling. Tuning N between them would be fitting the test to the failures. What
+// actually separates a wall from a roof is whether the surface crosses the ground you
+// ride, so that is what gets asserted.
+//
+// SCOPE — the RIDDEN lane (±LATERAL_LIMIT), which is what "you ski through it" means;
+// the sim clamps you there. The FIX ducks across the whole dressed ribbon, so the walls
+// beside the lane go too; only the assertion is narrower. Judging the dressed ribbon
+// fairly needs the corridor's own banks (skiRender's `crossY`) extracted alongside
+// these surfaces — parked in IDEAS.md.
+describe("no off-ribbon surface has an edge inside the lane", () => {
+  const samples = playedCorridorSamples(4, 200);
+
+  /**
+   * Walk every playable lane. At each step, measure the surface across the lane's full
+   * width against the height ridden there, and report the worst place the surface is
+   * proud on one side of the cross-section while at or below it on another — the
+   * signature of a rim cutting through the lane.
+   */
+  function worstEdge(surface: (x: number, z: number) => number | null): {
+    step: number;
+    where: string;
+  } {
+    let step = 0;
+    let where = "nowhere";
+    for (const id of [...SINGLE_TRAIL, "cave"]) {
+      const seg = BRANCH_SEGMENTS[id];
+      if (!seg) continue;
+      for (let d = 0; d <= seg.length; d += 2) {
+        const y = segmentCenterline(id, d).y; // the lane is flat across its width
+        let highest = -Infinity;
+        let lowest = Infinity;
+        for (let lat = -LATERAL_LIMIT; lat <= LATERAL_LIMIT; lat += 2) {
+          const w = segmentToWorld(id, d, lat);
+          // Where a cave mouth is cut out of the mass there IS no surface, so the
+          // analytic dome must not be read as one — that hole is the entrance.
+          if (insideCaveDoorway(w.x, w.z, forkMountainRiseWorld(w.x, w.z))) continue;
+          const h = surface(w.x, w.z);
+          if (h === null) continue;
+          highest = Math.max(highest, h - y);
+          lowest = Math.min(lowest, h - y);
+        }
+        // A rim in the lane: proud on one side, buried on the other. A surface entirely
+        // below is buried; one entirely above is a roof.
+        if (lowest <= 0 && highest > step) {
+          step = highest;
+          where = `${id} d=${d}`;
+        }
+      }
+    }
+    return { step, where };
+  }
+
+  it("the frozen lake's basin never walls off the trail that crosses it", () => {
+    const r = worstEdge((x, z) => frozenLakeBasinHeight(x, z, samples));
+    expect(r.step, `basin rim cuts the lane at ${r.where}`).toBeLessThan(WALL_STEP);
+  });
+
+  it("the fork mountain's mass never walls off a lane", () => {
+    const r = worstEdge((x, z) => {
+      // Outside the footprint the dome has no surface — `forkMountainShellHeight`
+      // there is just the (smoothed) ground, not a mesh. Reading it as a surface makes
+      // the sweep measure the smoothing itself: the estimate wanders a couple of units
+      // across a lane's width, which looked like a 1.9-unit rim on the cliff run-in
+      // where in fact the mass's foot is 18 units clear of it (asserted separately, via
+      // FORK_MOUNTAIN.laneClearance). So: no rise, no surface.
+      if (forkMountainRiseWorld(x, z) <= 0) return null;
+      return forkMountainShellHeight(x, z, samples);
+    });
+    expect(r.step, `mass rim cuts the lane at ${r.where}`).toBeLessThan(WALL_STEP);
+  });
+
+  it("still roofs the cave — the shell is the tunnel's ceiling", () => {
+    // The double-sided shell is what gives the tunnel a roof. If a reshaping ever
+    // lifted the mass off the corridor, or the doorway cut ate the whole span, the
+    // tunnel would silently open to the sky and only this line would notice.
+    const { entryDistance, exitDistance } = cavePortals();
+    let tightest = Infinity;
+    for (let d = entryDistance + 10; d <= exitDistance - 10; d += 2) {
+      const c = segmentCenterline("cave", d);
+      for (let lat = -LATERAL_LIMIT; lat <= LATERAL_LIMIT; lat += 2) {
+        const w = segmentToWorld("cave", d, lat);
+        tightest = Math.min(tightest, forkMountainShellHeight(w.x, w.z, samples) - c.y);
+      }
+    }
+    expect(tightest).toBeGreaterThan(10); // real rock overhead, everywhere inside
+    expect(tightest).toBeLessThan(200); // a roof, not the sky
   });
 });

@@ -171,7 +171,47 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
     branches are deliberately gap-free, so the §10 assertion needs no tolerance at all.
     **182 tests green**, and the ±10-step tolerance was not touched.
 
-  **Four bugs this found, all in the new off-ribbon territory:**
+  **THE LANE-HEADROOM INVARIANT (2026-07-26, after Josh rode it).** He hit a white wall
+  standing across the piste just before the ice and skied straight through it. It was the
+  basin's own **shore lip** — a 14-unit rim ringing the disc so it reads as a bowl, which
+  knew nothing about the trail crossing it. Measured, it stood **12.6 units above the
+  lane** at the ice's uphill shore, and on the way out the level body itself stood **27.8
+  above** a lane that had already fallen below lake level. Nothing collides with terrain
+  here (the sim rides a 1-D height profile; every terrain mesh is decoration hung near
+  it), so a surface above the ridden ground is not a hill — it is a wall you pass through.
+  - **The fix is one rule for both:** where an off-ribbon surface would stand above the
+    dressed ribbon it **ducks to it and feathers back out** over 40 units. That is what a
+    lake outlet is, so the rim now has a notch at each crossing.
+  - **The invariant is now a test, which is the point.** The mountain's footprint was
+    already solved against every lane (`laneClearance`); the basin was solved against
+    nothing. `frozenLakeBasinHeight` / `forkMountainShellHeight` / `insideCaveDoorway`
+    moved into `slopePath.ts` as pure functions, so `slopePath.test.ts` sweeps every
+    playable lane and the mesh builders in `skiRender.ts` call the same functions they
+    are judged by. Confirmed to fail on the pre-fix geometry (12.3 at `lake d=112`).
+  - **HEIGHT IS NOT THE DISCRIMINATOR — worth carrying forward.** The obvious test
+    ("nothing within N units above the lane") cannot work: the wall stood 12.6 up and the
+    cave's ceiling comes *down* to 19.7 at the tunnel's low shoulder, so every N that
+    catches the wall also condemns the ceiling. What separates them is whether the surface
+    **crosses** the ground you ride. The rule asserted is therefore *no off-ribbon surface
+    may be proud on part of a lane's cross-section while at or below it on another* — a
+    rim in the lane. No tuned tolerance anywhere in it.
+
+  **Two more bugs the sweep found before anyone saw them:**
+  - **The doorway was a fixed 30-unit slot** either side of each portal, so past the end
+    of the slot the flank kept its low rise and a lip of mountainside up to **3.75 units**
+    stood through the lane at the exit cutting. Now cut against the corridor itself —
+    wherever the shell is below the lintel *and* within a mouth-width of the cave's line —
+    which is the same intent without the arbitrary length, and self-limits because deep
+    inside the mass the low-rise shell is nowhere near the corridor.
+  - **The wrap passes under the lake.** Fork 3's branches come back within a lake-radius
+    of the body in *plan* while running ~120 units below it, so a plan-distance duck would
+    have hauled the disc's far edge down toward a corridor that is not beneath it — the
+    same shape of mistake `lakeIceExtent`'s NEAR guard already documents. The duck's
+    reference is measured in three dimensions.
+
+  **185 tests green** (182 + 3), and no tolerance was moved.
+
+  **Four bugs the original build found, all in the new off-ribbon territory:**
   - **`lakeIceExtent` reported a lake band mid-wrap.** The outside branch turns 172°, so
     the *infinite* lateral line through the trail re-crossed the lake disc from hundreds
     of units away — at route 640–740 and again on the cliff. The terrain builder duly

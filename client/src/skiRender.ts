@@ -24,11 +24,13 @@ import {
   forkMountainReach,
   forkMountainRiseAt,
   forkMountainRiseWorld,
+  forkMountainShellHeight,
+  frozenLakeBasinHeight,
+  insideCaveDoorway,
   FROZEN_LAKE,
   lakeCenterWorld,
   lakeIceExtent,
   lakeIceHeight,
-  nearestCorridorGround,
   playedCorridorSamples,
   segmentCenterline,
   segmentPitch,
@@ -933,7 +935,7 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
   // so there is no closed form for "how high is world (x, z)").
   const groundSamples = playedCorridorSamples(4, RUNOUT);
 
-  addFrozenLakeBasin(handle, snow(), lakeY, groundSamples);
+  addFrozenLakeBasin(handle, snow(), groundSamples);
   addForkMountainMass(handle, snow(), groundSamples);
   addCavePortals(handle);
   // Fork-marker boulders are parked with the forks that are still parked (the
@@ -950,44 +952,30 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
 // on. The body is a disc (see FROZEN_LAKE) — level, because ice is level — with a shore
 // lip ringing it so it reads as water held in a basin rather than a sheet laid on air.
 //
-// Dropped a hair below the ice level so it can't z-fight the corridor where the two
-// overlap across the flat crossing (the corridor is at exactly this height there, which
-// is the whole point — you ski straight out onto it).
+// The SURFACE is `frozenLakeBasinHeight` (slopePath.ts) — including the gap it now cuts
+// in its own rim where the trail crosses, so the lip stops being a wall you ski through.
+// This function is only the tessellation; the shape, and the lane-headroom rule it obeys,
+// live beside the map's other solved geometry where the test can reach them.
 function addFrozenLakeBasin(
   handle: SkiSceneHandle,
   material: THREE.Material,
-  lakeY: number,
   groundSamples: readonly { readonly x: number; readonly y: number; readonly z: number }[],
 ): void {
-  const BASIN_DROP = 0.25;
   const RINGS = 26;
   const SPOKES = 72;
-  const { radius, shoreBand, shoreRise } = FROZEN_LAKE;
+  const { radius } = FROZEN_LAKE;
   const c = lakeCenterWorld();
 
   const positions = new Float32Array((RINGS + 1) * SPOKES * 3);
   for (let i = 0; i <= RINGS; i++) {
     const r = (i / RINGS) * radius;
-    // Flat across the body; the outer band lifts into a shore lip. Where the ground
-    // OUTSIDE the lake is higher still (the uphill shore), meet it instead, so the
-    // basin blends into the hill rather than terracing against it.
-    const shoreT = Math.max(0, (r - (radius - shoreBand)) / shoreBand);
-    const lift = shoreRise * (shoreT * shoreT * (3 - 2 * shoreT));
     for (let j = 0; j < SPOKES; j++) {
       const a = (j / SPOKES) * Math.PI * 2;
       const x = c.x + Math.cos(a) * r;
       const z = c.z + Math.sin(a) * r;
-      let y = lakeY - BASIN_DROP + lift;
-      if (shoreT > 0) {
-        const ground = nearestCorridorGround(x, z, groundSamples);
-        // Only the UPHILL shore gets pulled up to the hill: downhill of the lake the
-        // ground has fallen away, and following it there would drain the basin over a
-        // cliff. The lip stays, and the world beyond it is the run's own terrain.
-        if (ground.y > y) y = y + (ground.y - y) * (shoreT * shoreT);
-      }
       const k = (i * SPOKES + j) * 3;
       positions[k] = x;
-      positions[k + 1] = y;
+      positions[k + 1] = frozenLakeBasinHeight(x, z, groundSamples) ?? 0;
       positions[k + 2] = z;
     }
   }
@@ -1040,7 +1028,6 @@ function addForkMountainMass(
     // Rings are fractions of the reach, not fixed radii — the footprint is a teardrop
     // (see FORK_MOUNTAIN), so each spoke runs out to its own distance.
     const u = i / RINGS;
-    const rise = forkMountainRiseAt(u);
     for (let j = 0; j < SPOKES; j++) {
       const a = (j / SPOKES) * Math.PI * 2;
       const r = u * forkMountainReach(a);
@@ -1048,10 +1035,11 @@ function addForkMountainMass(
       const z = c.z + Math.sin(a) * r;
       // Stand on the hill, not on a plane: the base follows the surrounding ground,
       // so the mass leans down the mountainside the way the drawn map has it.
-      const base = nearestCorridorGround(x, z, groundSamples).y;
+      // (forkMountainShellHeight IS base + rise — the same function the lane-headroom
+      // test reads, so the mesh and the assertion cannot disagree.)
       const k = (i * SPOKES + j) * 3;
       positions[k] = x;
-      positions[k + 1] = base + rise;
+      positions[k + 1] = forkMountainShellHeight(x, z, groundSamples);
       positions[k + 2] = z;
     }
   }
@@ -1062,33 +1050,8 @@ function addForkMountainMass(
   // SPOT AND AIM AT on approach. So the mouth is a genuine hole: quads of the shell that
   // fall in the doorway's footprint, low enough to be under its lintel, are simply not
   // emitted. You see into the dark, which is what makes it read as an entrance.
-  const doorways = [cavePortals().entryDistance, cavePortals().exitDistance].map((d) => {
-    const p = segmentCenterline("cave", d);
-    return {
-      x: p.x,
-      z: p.z,
-      // The corridor's tangent (into the hill) and its normal (across the mouth).
-      fx: Math.sin(p.heading),
-      fz: -Math.cos(p.heading),
-      nx: Math.cos(p.heading),
-      nz: Math.sin(p.heading),
-    };
-  });
-  const inDoorway = (x: number, z: number, rise: number): boolean => {
-    if (rise > FORK_MOUNTAIN.mouthHeight) return false; // above the lintel
-    for (const d of doorways) {
-      const vx = x - d.x;
-      const vz = z - d.z;
-      const along = Math.abs(vx * d.fx + vz * d.fz);
-      const across = Math.abs(vx * d.nx + vz * d.nz);
-      // A slot along the corridor, so the hole goes THROUGH the shell rather than
-      // nicking its surface — the shell is one surface, but it crosses the corridor
-      // twice on a tangential pass, and both crossings have to go.
-      if (along <= 30 && across <= FORK_MOUNTAIN.mouthHalfWidth) return true;
-    }
-    return false;
-  };
-
+  // The doorway footprint is `insideCaveDoorway` (slopePath.ts) — shared with the
+  // lane-headroom sweep, so "is there mountain here" has exactly one answer.
   const indices: number[] = [];
   for (let i = 0; i < RINGS; i++) {
     for (let j = 0; j < SPOKES; j++) {
@@ -1102,7 +1065,7 @@ function addForkMountainMass(
       const cx = (positions[a * 3]! + positions[e * 3]!) / 2;
       const cz = (positions[a * 3 + 2]! + positions[e * 3 + 2]!) / 2;
       const cRise = forkMountainRiseAt((i + 0.5) / RINGS);
-      if (inDoorway(cx, cz, cRise)) continue;
+      if (insideCaveDoorway(cx, cz, cRise)) continue;
       indices.push(a, d, b, b, d, e);
     }
   }
