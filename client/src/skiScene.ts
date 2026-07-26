@@ -65,6 +65,20 @@ export {
 // preserved here — re-exported where a symbol now lives in a feature file — so
 // skiRender.ts / main.ts need no change.
 
+/**
+ * THE DISTANCE HAZE, as numbers anyone can build against (slope-mech additive,
+ * 2026-07-26 — smallest change per PARALLEL.md; these were inline literals).
+ *
+ * Exported because the fog plane is a CONTRACT, not a private look tweak: anything that
+ * spawns, streams or culls with distance has to agree with it or its work becomes
+ * visible. The forest scatter's window was sized "past the fog far plane (150)" and then
+ * the fog was pulled back to 300 in a different session's file — so trees began
+ * materialising 130 units inside clear air, in full view, and the map read as slowly
+ * loading in. Derive from these; don't copy the numbers.
+ */
+export const FOG_NEAR = 80;
+export const FOG_FAR = 300;
+
 // Art Style Bible palette (DESIGN.md) — every color in this scene comes
 // from these 12 (or a value shift of one, which the bible allows).
 export const PALETTE = {
@@ -460,7 +474,7 @@ export function createEnvironment(
   // crisp and lets the descending slope read most of the way to the far plane,
   // hazing gently into the peak vista instead of hitting a curtain. Still a real
   // aerial-perspective cue (farther = pinker), just over a believable depth.
-  scene.fog = new THREE.Fog(PALETTE.dawnPink, 80, 300);
+  scene.fog = new THREE.Fog(PALETTE.dawnPink, FOG_NEAR, FOG_FAR);
 
   // The bible's two snow colors define the lighting exactly: ambient
   // skylight alone must render flat snow as snow-shadow blue, and ambient

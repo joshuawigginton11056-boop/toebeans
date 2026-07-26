@@ -11,7 +11,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { BRANCH_SEGMENTS, LATERAL_LIMIT, routeDistanceOf } from "@toebeans/shared";
-import { LANE_EDGE, makeRandom } from "./skiScene";
+import { FOG_FAR, LANE_EDGE, makeRandom } from "./skiScene";
 import {
   lakeIceExtent,
   segmentCenterline,
@@ -171,11 +171,41 @@ const DECOR_BANDS: readonly DecorBand[] = [
   },
 ];
 
-// How far the window reaches from the anchor. Downhill covers past the fog
-// far plane (150) so trees materialize invisibly inside the haze; uphill is
-// short — the camera never looks back far.
-const DECOR_AHEAD = 170;
+// How far the window reaches from the anchor. Downhill has to cover past the fog far
+// plane so trees materialize invisibly inside the haze; uphill is short — the camera
+// never looks back far.
+//
+// ⚠ DERIVED FROM THE FOG, NOT TYPED IN (slope-mech additive, 2026-07-26 — director:
+// "instead of things slowly loading in, I want the whole map rendered from the start";
+// smallest change that works per PARALLEL.md, polish parked in IDEAS.md for forest).
+// This was the literal 170, correct against the fog far plane of 150 it was written
+// for. Mountain-graphics then pulled the haze back to 300 for the summit-visibility
+// pass, in their own file, and nothing connected the two — so trees started appearing
+// 130 units inside CLEAR AIR, in plain view, which is what read as the map slowly
+// loading in. Reading FOG_FAR means moving the haze can never strand the window again.
+//
+// The camera orbits up to MAX_RADIUS (skiRender, 40) off the skier and the fog is
+// measured from the CAMERA while this window is anchored on the SKIER, so the reach
+// carries that much slack — otherwise a fully-zoomed-out camera would see the spawn.
+// ⚠ A FUNCTION, NOT A CONST, AND IT HAS TO STAY ONE. skiScene imports this file, so
+// under ESM this module's body is evaluated BEFORE any of skiScene's top-level consts
+// exist — a top-level `const DECOR_AHEAD = FOG_FAR + …` throws "Cannot access 'FOG_FAR'
+// before initialization" and the game boots to a black screen. (LANE_EDGE and makeRandom
+// come across the same seam safely only because they're read inside functions.) Reading
+// it per call is free; this runs once a frame.
+const CAMERA_ORBIT_SLACK = 40;
+function decorAhead(): number {
+  return FOG_FAR + CAMERA_ORBIT_SLACK;
+}
 const DECOR_BEHIND = 30;
+
+// The mist banks and the moonlight rays used to share DECOR_AHEAD; they keep its old
+// value on purpose (slope-mech additive, 2026-07-26). Both are night-only ADDITIVE
+// sprites with their own distance fade tuned against this edge — MIST_FADE_START
+// dissolves them long before it — so unlike the trees they have no pop-in to fix, and
+// stretching them to the fog plane would only stack more transparent quads and shift a
+// look that isn't mine to shift. Parked in IDEAS.md for the forest session to decide.
+const EFFECT_WINDOW_AHEAD = 170;
 
 interface DecorState {
   readonly scene: THREE.Scene;
@@ -201,7 +231,7 @@ export function setDecorGrounded(on: boolean): void {
 export function updateSlopeDecor(anchorZ: number): void {
   if (!decorState) return;
   const { scene, templates, placed } = decorState;
-  const minZ = anchorZ - DECOR_AHEAD;
+  const minZ = anchorZ - decorAhead();
   const maxZ = Math.min(anchorZ + DECOR_BEHIND, -4); // forest starts at -4
   const live = new Set<string>();
   for (let bandIndex = 0; bandIndex < DECOR_BANDS.length; bandIndex++) {
@@ -370,7 +400,7 @@ const MIST_COLOR = 0x5a6e9c;
 
 // Distance falloff (fog-pass 2026-07-25). The banks are ADDITIVE, so without a
 // far fade the many cells the perspective stacks toward the end of the window
-// (DECOR_AHEAD 170, past the fog's far=150) sum into a bright wall that stops
+// (EFFECT_WINDOW_AHEAD 170, past the fog's old far=150) sum into a bright wall that stops
 // dead at the window edge — a hard "the fog ends here" line at the horizon, the
 // opposite of floating haze. Fade each bank out over this forward-distance band
 // so the mist thins into the distance and dissolves before it can pile up. Near
@@ -431,7 +461,7 @@ export function updateMistField(field: MistField, anchorZ: number): void {
   if (mistFactor <= 0.001 && field.placed.size === 0) return;
   const { group, placed, texture } = field;
   const t = mistClock.getElapsedTime();
-  const minZ = anchorZ - DECOR_AHEAD;
+  const minZ = anchorZ - EFFECT_WINDOW_AHEAD;
   const maxZ = Math.min(anchorZ + DECOR_BEHIND, -4);
   const live = new Set<string>();
   for (const side of [-1, 1]) {
@@ -724,7 +754,7 @@ export function updateRayField(field: RayField, anchorZ: number): void {
   if (rayFactor <= 0.001 && field.placed.size === 0) return;
   const { group, placed } = field;
   const t = rayClock.getElapsedTime();
-  const minZ = anchorZ - DECOR_AHEAD;
+  const minZ = anchorZ - EFFECT_WINDOW_AHEAD;
   const maxZ = Math.min(anchorZ + DECOR_BEHIND, -4);
   const live = new Set<string>();
   const first = Math.floor(-maxZ / RAY_CELL);

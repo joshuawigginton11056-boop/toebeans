@@ -190,6 +190,42 @@ another" — and it needed no tuned tolerance, which is the tell that it's the r
 
 ---
 
+## THE MAP ARRIVES WHOLE — LANDED (slope-mech, 2026-07-26); follow-ups below
+
+**Status: this block is CLOSED.** Director: *"instead of things slowly loading in, I want
+the whole map to be rendered from the start."* It was never streaming or LOD — two
+unrelated causes, both fixed. See the ROADMAP entry for the build and the numbers.
+
+**The one worth carrying forward:** the tree window was sized *"past the fog far plane
+(150)"* and then a different session moved the fog to 300, in a file this one doesn't
+own. Same shape as the lake wall: two features each solved correctly against a constraint
+that references the other, with nothing reconciling them. The fix is the same discipline —
+`FOG_NEAR`/`FOG_FAR` are exported from the core as a **contract**, and anything that
+spawns, streams or culls with distance derives from them instead of copying the number.
+
+**Follow-ups:**
+- **(forest) The whole-route scatter is still the bigger idea, and it's yours.** Josh's
+  literal ask was the entire map resident from the start. What landed instead makes the
+  window reach past the haze, which achieves the same *visible* result at a third of the
+  cost — ~201 objects live vs ~830 for the full spine (before the cave and outside
+  branches get their own planting), all individually shadow-casting with no instancing.
+  If you want the literal version, instancing the pines is probably the unlock, and it
+  would also make the per-area density profile below cheap.
+- **(forest) `EFFECT_WINDOW_AHEAD` (170) is a decision you should confirm.** The mist
+  banks and moonlight rays used to share `DECOR_AHEAD`; they were split off and left at
+  the old value on purpose — both are additive night sprites whose own fade dissolves
+  them well before the window edge, so they had no pop-in and stretching them just stacks
+  quads. But it *is* now a number nobody has looked at against the 300 fog.
+- **(mountain/forest) A pale blurred rectangle hangs in the mid-distance at the summit.**
+  Visible in the `?debug` start view, left of the skier, roughly where the ground would be
+  a few hundred units below and ahead — it reads as a flat panel floating in the haze. Not
+  from this change (the fog numbers are byte-identical and the scatter only got wider);
+  most likely one of the y=0-welded windows or a snowfield panel showing from an elevated
+  summit. Nobody has traced it yet — toggling `scene.children[i].visible` per CLAUDE.md is
+  the way in.
+
+---
+
 ## THE BIG LAKE AND THE FORK MOUNTAIN — LANDED (slope-mech, 2026-07-26); follow-ups below
 
 **Status: this block is CLOSED.** Both of Josh's 2026-07-26 calls shipped together —

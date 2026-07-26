@@ -213,6 +213,36 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 
   **185 tests green** (182 + 3), and no tolerance was moved.
 
+  **THE MAP NOW ARRIVES WHOLE (2026-07-26, director: "instead of things slowly loading
+  in, I want the whole map to be rendered from the start").** Two unrelated causes, both
+  fixed; neither was streaming or LOD.
+  - **The tree scatter's window was sized against a fog plane that no longer existed.**
+    `forestGraphics`' `DECOR_AHEAD` was the literal **170**, written when the haze ended
+    at 150 — *"downhill covers past the fog far plane (150) so trees materialize
+    invisibly."* Mountain-graphics then pulled the fog back to **80→300** for the
+    summit-visibility pass, in their own file, and nothing connected the two. Trees had
+    been spawning 130 units inside **clear air**, in plain view, for a day. `FOG_NEAR` /
+    `FOG_FAR` are now exported from `skiScene.ts` as a contract and the window derives
+    from them (+40 for the camera's orbit, since the fog measures from the camera while
+    the window is anchored on the skier). Measured after: reach **319** world units
+    against fog **300**, 201 objects in the window.
+  - **The decor load was fire-and-forget.** Harmless on the normal flow — you cross the
+    lobby while the GLBs arrive — but `?branch/?debug` calls `goSkiing()` at module init,
+    so a dev run began on bare snow and grew its forest around it. `createSkiScene` now
+    exposes `decorReady` and `goSkiing` waits on it, which covers all three ways onto the
+    slope with one check. The scatter fills its whole window in one synchronous pass, so
+    one frame after it resolves the world is complete.
+  - **A trap for the next person: the derivation must stay a FUNCTION.** `skiScene`
+    imports `forestGraphics`, so under ESM the feature file's body runs before any of the
+    core's top-level consts exist — a top-level `const DECOR_AHEAD = FOG_FAR + …` throws
+    "Cannot access 'FOG_FAR' before initialization" and the game boots to a black screen.
+    Caught live, on the first reload after the change.
+  - **The mist and moonlight-ray windows kept the old 170** (`EFFECT_WINDOW_AHEAD`). They
+    shared the constant but are night-only additive sprites with their own fade that
+    dissolves them long before the edge, so they have no pop-in to fix and stretching
+    them would only stack transparent quads and shift a look that isn't slope-mech's.
+    Parked for forest.
+
   **Four bugs the original build found, all in the new off-ribbon territory:**
   - **`lakeIceExtent` reported a lake band mid-wrap.** The outside branch turns 172°, so
     the *infinite* lateral line through the trail re-crossed the lake disc from hundreds

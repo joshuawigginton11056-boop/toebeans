@@ -182,8 +182,25 @@ function persist(): void {
   writeSave(createSave(mode, skiState, muted, appearance));
 }
 
+// THE MAP ARRIVES WHOLE (slope-mech, 2026-07-26 — director: "instead of things slowly
+// loading in, I want the whole map to be rendered from the start"). The decor models
+// load in the background, which is invisible on the normal flow — you cross the lobby
+// while they arrive — but ?branch/?debug drops straight onto the slope at module init,
+// so a dev run started on bare snow and grew its forest around it. Gating inside
+// goSkiing covers all three ways in (the Play button, the key, and the debug flag) with
+// one check; the wait shows the lobby a moment longer rather than an empty slope.
+// skiScene.decorReady never rejects, so a missing asset still gets you onto the hill.
+let decorReady = false;
+
 function goSkiing(): void {
   if (mode === "slope") return;
+  if (!decorReady) {
+    void skiScene.decorReady.then(() => {
+      decorReady = true;
+      goSkiing();
+    });
+    return;
+  }
   mode = "slope";
   // Every trip to the slope is a fresh run — full lives, back to the top.
   // This is also how you retry after a forfeit.

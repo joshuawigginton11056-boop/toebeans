@@ -170,6 +170,14 @@ export interface SkiSceneHandle {
    * camera.
    */
   readonly cameraMemory: CameraMemory;
+  /**
+   * Settles once the slope's decor models are loaded and the scatter can dress the
+   * world. Await it before showing the slope and the map arrives whole, rather than
+   * growing its forest around you — the scatter fills its entire window in one
+   * synchronous pass, so a single frame after this resolves the world is complete.
+   * Never rejects: a failed asset load is swallowed and leaves the run playable.
+   */
+  readonly decorReady: Promise<void>;
 }
 
 // How long the crash tip-over takes to hit the ground, inside the
@@ -258,9 +266,14 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
 
   scene.add(player);
 
-  // Real slope-side assets load in the background; the run is playable
-  // before they arrive.
-  void loadSlopeDecor(scene);
+  // Real slope-side assets load in the background. The promise is exposed on the handle
+  // (slope-mech, 2026-07-26 — director: "I want the whole map rendered from the start")
+  // so the caller can hold the run until the map is dressed. It used to be fire-and-
+  // forget, which is fine when you cross the lobby first — but ?branch/?debug drops
+  // straight onto the slope at module init, so a dev run began on bare snow and grew its
+  // forest around it. `loadSlopeDecor` swallows its own failures, so this always
+  // settles: a missing asset still leaves the run playable.
+  const decorReady = loadSlopeDecor(scene);
 
   const cameraMemory: CameraMemory = {
     radius: DEFAULT_RADIUS,
@@ -431,6 +444,7 @@ export function createSkiScene(container: HTMLElement): SkiSceneHandle {
     steerMemory: { skiing: true, speed: 0 },
     jumpMemory: { airborne: false, envelope: 0 },
     cameraMemory,
+    decorReady,
   };
 }
 
