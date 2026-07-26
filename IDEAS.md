@@ -25,12 +25,18 @@ reads great (arguably richer — the fine snow grain now shows). **Open follow-u
   The real lever is **camera pitch** (look further down) — the same slope-mech seam as
   follow-up #1 below. A graphics-only fog/relief pass can't reveal what the camera angle
   hides. **Needs Josh's call on raising/tilting the camera.**
-- **Ski-trail carving no longer shows on the branch run** — the carve target rides the
-  stranded y=0 window, not the dressed terrain. Was already true before this change (trails
-  were carving into the buried window). To restore: either make the window sit+tilt to the
-  grade (the original parked task) so it overlays the terrain, or move carving onto the
-  dressed terrain surface. Also: at the flat *runout* (y≈0) the window and terrain finally
-  coincide — watch for z-fighting there (looked clean in testing, but it's the one overlap).
+- **Ski-trail carving on the branch run — FIXED (mountain, 2026-07-25).** Took option two:
+  `createTerrainSnowMaterial` now samples the LIVE carve target (the same render-target the
+  moving window carves) instead of the zero-carve stub, so the grooves show on the dressed
+  terrain the skier actually rides — verified on the elevated summit (skier y≈83, well above
+  the buried y=0 window) that the terrain material's `carveMap` binds the live target and a
+  carved groove renders on it. Because the grade terrain grid is coarse (5u longitudinal),
+  the cm-scale groove doesn't DISPLACE the mesh — the window keeps that geometric depression
+  — so the terrain track is a per-fragment color/AO/normal cut only; it reads as painted-in
+  tracks, which is fine for the open run. **Open follow-ups:** (a) the track is subtle/thin
+  at the realism-snow settings — worth a look in the end-of-M2 tuning pass if Josh wants ski
+  tracks more prominent; (b) at the flat runout (y≈0) the window and terrain coincide — no
+  z-fighting seen, but it's the one overlap to watch.
 
 **Open follow-ups (mountain), in priority order:**
 1. **The camera fights drama — needs Josh's call.** The follow-camera looks ~18°

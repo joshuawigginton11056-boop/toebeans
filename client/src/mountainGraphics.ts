@@ -1255,25 +1255,6 @@ normal = normalize((viewMatrix * vec4(snowNormal(vSnowWorld.xz), 0.0)).xyz);`,
   return material;
 }
 
-// A carve map that carves NOTHING — a 1×1 black texel. Feeding this to
-// createSnowMaterial makes snowCarve() return 0 everywhere, so the material
-// collapses to pure dune + lump snow: relief, palette lit/shadow shading,
-// form-shading and sparkle, but no ski grooves. Used to DRESS the real
-// descending mountain surface (addBranchTerrain, slope-mech's geometry) —
-// see createTerrainSnowMaterial. Trails stay exclusive to the moving snow
-// window, whose carve target rides the skier.
-let zeroCarveTexture: THREE.DataTexture | null = null;
-function getZeroCarveTexture(): THREE.DataTexture {
-  if (zeroCarveTexture) return zeroCarveTexture;
-  zeroCarveTexture = new THREE.DataTexture(
-    new Uint8Array([0, 0, 0, 255]),
-    1,
-    1,
-  );
-  zeroCarveTexture.needsUpdate = true;
-  return zeroCarveTexture;
-}
-
 // DRESS THE REAL MOUNTAIN (mountain-graphics, 2026-07-25). The branching
 // run descends ~290 units from summit to flag, but the realism-snow window
 // is welded to y=0 (syncEnvironment only tracks the anchor's z), so on the
@@ -1287,10 +1268,27 @@ function getZeroCarveTexture(): THREE.DataTexture {
 // sculpted powder you can see dropping away, not a flat plate. One shared
 // material across every terrain segment (they all sample the same
 // world-space dune field, so the relief is continuous across seams).
+//
+// SKI TRAILS ON THE STARTING MOUNTAIN (mountain-graphics, 2026-07-25). This
+// surface now samples the LIVE carve target — the very render-target the moving
+// window carves — instead of a zero-carve stub, so the ski grooves show on the
+// ground the skier actually rides down, not on the buried y=0 window (IDEAS.md
+// "Ski-trail carving no longer shows on the branch run"). It just works in world
+// space: snowCarve() is a pure world-XZ lookup (Y-independent), so the groove
+// lands under the skis at the right world position however high the terrain
+// sits. On the coarse terrain grid the cm-scale groove doesn't displace the
+// mesh — the window keeps that geometric depression — but the per-fragment cut
+// (carved-snow #3 tint + AO + groove normal) reads as painted-in tracks, which
+// is exactly the look the open run wants. The carve is a 220u world-Z ring
+// (wrapT repeats), but the reclaim pass keeps the rows downhill of the skier
+// cleared and any uphill wrap sits >220u behind the downhill-looking camera, so
+// no ghost tracks show on the visible run.
 let terrainSnowMaterial: THREE.MeshStandardMaterial | null = null;
-export function createTerrainSnowMaterial(): THREE.MeshStandardMaterial {
+export function createTerrainSnowMaterial(
+  carveTexture: THREE.Texture,
+): THREE.MeshStandardMaterial {
   if (terrainSnowMaterial) return terrainSnowMaterial;
-  terrainSnowMaterial = createSnowMaterial(getZeroCarveTexture());
+  terrainSnowMaterial = createSnowMaterial(carveTexture);
   return terrainSnowMaterial;
 }
 

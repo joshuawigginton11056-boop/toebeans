@@ -780,8 +780,13 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
     // the descending open slope reads as sculpted powder instead of a flat,
     // pink-hazed wash. Shared across every segment (continuous world dune field,
     // so no seam). The road/detour tint is dropped — it was a dev aid; snow is
-    // one albedo. Trails stay window-only (this carves nothing).
-    const mesh = new THREE.Mesh(geo, createTerrainSnowMaterial());
+    // one albedo. The ski-trail carve now lands here too: the terrain material
+    // samples the live carve target (the moving window's render-target), so the
+    // grooves show on the ground the skier rides — see createTerrainSnowMaterial.
+    const mesh = new THREE.Mesh(
+      geo,
+      createTerrainSnowMaterial(handle.environment.trail.target.texture),
+    );
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     handle.scene.add(mesh);
