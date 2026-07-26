@@ -5,9 +5,6 @@ import {
   singleTrailNext,
   type Segment,
 } from "./route";
-// (map-editor) A director-authored map run carries its own steepness profile on
-// the state; the sim reads it exactly like the branching map reads route.ts.
-import { mapGradeFactor, type SlopeMap } from "./slopeMap";
 
 export interface SkiInput {
   readonly left: boolean;
@@ -163,13 +160,6 @@ export interface SkiState {
   // while "finished". Transient — not saved: a restore mid-coast resumes with
   // 0 and the client returns immediately, same spirit as respawnTimer's kin.
   readonly finishTimer: number;
-  // (map-editor) The steepness control points of a director-authored map run
-  // (segmentId "map"), carried on the state so the sim stays pure — it reads
-  // grade from here instead of route.ts. Undefined on every built-in run (the
-  // Overlook and the branching trail), so their tuned feel is untouched.
-  // Transient like the rest of the run shape (not saved): a restore rebuilds the
-  // Overlook, and a map is re-entered from the editor, which owns its own save.
-  readonly mapGrade?: readonly (readonly [number, number])[];
 }
 
 // Exported for the client: audio scales wind/carve loudness off these
@@ -500,29 +490,6 @@ export function createSingleTrailSkiState(): SkiState {
   return { ...createBranchingSkiState(), singleTrail: true };
 }
 
-// (map-editor) A fresh run on a director-authored map. Same body/feel as every
-// other run (it reuses createInitialSkiState) — it only swaps in the map's
-// skeleton: a single sentinel segment "map" (deliberately not in BRANCH_SEGMENTS,
-// so the fork graph never touches it), the map's own hazards/checkpoints/length,
-// and its steepness profile on the state for the sim to read. Reaching the map's
-// end (distance >= length) finishes the run like the Overlook — the client sends
-// you back to the editor.
-export function createMapSkiState(map: SlopeMap): SkiState {
-  return {
-    ...createInitialSkiState(),
-    segmentId: "map",
-    singleTrail: false,
-    distance: 0,
-    lateral: 0,
-    lastCheckpoint: 0,
-    checkpoints: map.checkpoints,
-    chasms: map.chasms,
-    divertTo: null,
-    finishDistance: map.length,
-    mapGrade: map.grade,
-  };
-}
-
 function fellIntoAChasm(
   chasms: readonly Chasm[],
   distance: number,
@@ -648,13 +615,7 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   const onGradedMap = BRANCH_SEGMENTS[state.segmentId] !== undefined;
   const gradeFactor = onGradedMap
     ? Math.max(1, gradeSpeedFactor(state.segmentId, state.distance) * SLOPE_SPEED_GAIN)
-    : // (map-editor) A director-authored map carries its own grade profile: read
-      // steepness from it the same way (steeper stretches ski faster), floored at
-      // 1 so a mellow stretch never deadens the controls. Off a map (mapGrade
-      // undefined) this is a hard 1 — the Overlook's locked feel is untouched.
-      state.mapGrade
-      ? Math.max(1, mapGradeFactor(state.mapGrade, state.distance) * SLOPE_SPEED_GAIN)
-      : 1;
+    : 1;
   const baseTarget = input.boost
     ? BOOST_SPEED
     : Math.max(
@@ -1012,8 +973,5 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
     finishDistance,
     // The coast-out clock starts the frame the line is crossed.
     finishTimer: finished ? FINISH_LINGER : 0,
-    // (map-editor) A map run's steepness profile rides along for its whole life,
-    // like segmentId/singleTrail; undefined on every built-in run.
-    mapGrade: state.mapGrade,
   };
 }

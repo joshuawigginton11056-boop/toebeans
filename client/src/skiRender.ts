@@ -1,21 +1,17 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   BASE_SPEED,
   BOOST_SPEED,
   BRANCH_SEGMENTS,
   JUMP_CHARGE_TIME,
   LATERAL_LIMIT,
-  mapHeightAt,
   MIN_SPEED,
   RESPAWN_DELAY,
   SINGLE_TRAIL,
   TIRED_HOP_DURATION,
   downhillHeading,
   singleTrailNext,
-  type MapProp,
   type SkiState,
-  type SlopeMap,
 } from "@toebeans/shared";
 import { createCatRig, type CatRig } from "./catModel";
 import { createSkierRig, type SkierRig } from "./skierModel";
@@ -790,191 +786,11 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     handle.scene.add(mesh);
-    // (map-editor) track it so a map run can hide the built-in mountain.
-    branchTerrainMeshes.push(mesh);
   }
   // Fork-marker boulders are parked with the forks (the "world grabs you" landmarks
   // at each trigger). They return when the map reopens — iterate the trigger
   // segments again then. Nothing to place on the single trail.
 }
-
-// ── (map-editor) Director-authored map terrain + props ──────────────────────
-// A map run (segmentId "map") gets its OWN snow surface + placed assets, built
-// from the SlopeMap on entry and torn down on exit. While a map run is active the
-// built-in mountain (addBranchTerrain's meshes) is hidden so the two never
-// overlap. The skier, camera, hazards, and checkpoints already follow
-// segmentCenterline/segmentPitch, which are map-aware for "map" (slopePath.ts),
-// so only the ground surface + props are built here.
-
-// The map corridor cross-section — mirrors addBranchTerrain: a flat lane out to
-// ±LANE_HALF, then flanks rising into snowbanks out to ±FLANK_HALF.
-const MAP_LANE_HALF = LATERAL_LIMIT;
-const MAP_FLANK_HALF = 46;
-const MAP_BERM_HEIGHT = 12;
-const MAP_COLS = [
-  -46, -38, -30, -22, -16, -MAP_LANE_HALF, -6, 0, 6, MAP_LANE_HALF, 16, 22, 30, 38, 46,
-];
-const MAP_STEP_LONG = 5;
-const MAP_RUNOUT = 120;
-
-const mapFlankRelief = (x: number, z: number): number =>
-  3.2 * Math.sin(x * 0.06 + z * 0.02) +
-  1.8 * Math.sin(x * 0.15 - z * 0.09) +
-  2.0 * Math.cos(z * 0.11 + x * 0.045);
-
-/** Ground Y for a (along, lateral) point on a map: the lane sits at the
- * centerline height (mapHeightAt), the flanks rise into noisy banks. Shared by
- * the surface builder and the prop placer so props sit flush on the banks. */
-function mapGroundYAt(map: SlopeMap, along: number, lateral: number): number {
-  const centerY = mapHeightAt(map, along);
-  const a = Math.abs(lateral);
-  if (a <= MAP_LANE_HALF) return centerY;
-  const t = Math.min(1, (a - MAP_LANE_HALF) / (MAP_FLANK_HALF - MAP_LANE_HALF));
-  const smooth = t * t * (3 - 2 * t);
-  return centerY + (MAP_BERM_HEIGHT + mapFlankRelief(lateral, -along)) * smooth;
-}
-
-function buildMapSurface(map: SlopeMap): THREE.Mesh {
-  const spanEnd = map.length + MAP_RUNOUT;
-  const rows = Math.max(2, Math.ceil(spanEnd / MAP_STEP_LONG) + 1);
-  const cols = MAP_COLS.length;
-  const positions = new Float32Array(rows * cols * 3);
-  for (let i = 0; i < rows; i++) {
-    const s = (i / (rows - 1)) * spanEnd;
-    for (let j = 0; j < cols; j++) {
-      const lat = MAP_COLS[j]!;
-      const k = (i * cols + j) * 3;
-      positions[k] = lat; // straight trail: world x = lateral
-      positions[k + 1] = mapGroundYAt(map, s, lat);
-      positions[k + 2] = -s; // downhill = -z
-    }
-  }
-  const indices: number[] = [];
-  for (let i = 0; i < rows - 1; i++) {
-    for (let j = 0; j < cols - 1; j++) {
-      const a = i * cols + j;
-      const b = i * cols + j + 1;
-      const c = (i + 1) * cols + j;
-      const d = (i + 1) * cols + j + 1;
-      indices.push(a, b, c, b, d, c);
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  const mesh = new THREE.Mesh(geo, createTerrainSnowMaterial());
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
-// Real slope GLBs (the same trees/rocks the scenery uses), reused as editor
-// props — variant chosen deterministically per placement so a map looks stable.
-const MAP_PINE_VARIANTS = [
-  "StylizedPine_1",
-  "StylizedPine_2",
-  "StylizedPine_3",
-  "StylizedPine_4",
-  "StylizedPine_5",
-];
-const MAP_ROCK_VARIANTS = [
-  "Rock_Snow_1",
-  "Rock_Snow_2",
-  "Rock_Snow_3",
-  "Rock_Snow_4",
-  "Rock_Snow_5",
-  "Rock_Snow_6",
-  "Rock_Snow_7",
-];
-const mapPropTemplates = new Map<string, Promise<THREE.Object3D | null>>();
-function loadMapPropTemplate(name: string): Promise<THREE.Object3D | null> {
-  let p = mapPropTemplates.get(name);
-  if (!p) {
-    p = new GLTFLoader()
-      .loadAsync(`${import.meta.env.BASE_URL}slope/${name}.glb`)
-      .then((g) => g.scene as THREE.Object3D)
-      .catch(() => null);
-    mapPropTemplates.set(name, p);
-  }
-  return p;
-}
-
-function variantFor(prop: MapProp, index: number): string {
-  const list = prop.type === "pine" ? MAP_PINE_VARIANTS : MAP_ROCK_VARIANTS;
-  return list[index % list.length]!;
-}
-
-/** Load + place a map's props into `group`. Async; a placement is dropped if the
- * group has since been torn down (switching maps), so late loads never leak. */
-function placeMapProps(group: THREE.Group, map: SlopeMap): void {
-  map.props.forEach((prop, i) => {
-    void loadMapPropTemplate(variantFor(prop, i)).then((template) => {
-      if (!template || mapTerrainGroup !== group) return;
-      const clone = template.clone(true);
-      // Normalize to a sensible size regardless of the source model's native
-      // scale, then sit its base flush on the (possibly banked) ground.
-      const target = prop.type === "pine" ? 6 : 2.5;
-      clone.scale.setScalar(1);
-      const raw = new THREE.Box3().setFromObject(clone);
-      const h = raw.max.y - raw.min.y || 1;
-      clone.scale.setScalar((target / h) * (prop.scale ?? 1));
-      clone.position.set(prop.lateral, 0, -prop.along);
-      clone.rotation.y = i * 2.399; // golden-angle spread, deterministic
-      const box = new THREE.Box3().setFromObject(clone);
-      clone.position.y = mapGroundYAt(map, prop.along, prop.lateral) - box.min.y;
-      clone.traverse((o) => {
-        if ((o as THREE.Mesh).isMesh) {
-          o.castShadow = true;
-          o.receiveShadow = true;
-        }
-      });
-      group.add(clone);
-    });
-  });
-}
-
-function disposeMapGroup(group: THREE.Group): void {
-  group.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (m.isMesh) m.geometry?.dispose();
-  });
-}
-
-let mapTerrainGroup: THREE.Group | null = null;
-
-/** Enter/leave a director-authored map run. Pass the map to build its terrain +
- * props (hiding the built-in mountain); pass null to tear it down and restore
- * the built-in mountain. Also clears cached hazard meshes so the new run's
- * chasms/checkpoints render fresh. */
-export function setMapTerrain(handle: SkiSceneHandle, map: SlopeMap | null): void {
-  if (mapTerrainGroup) {
-    handle.scene.remove(mapTerrainGroup);
-    disposeMapGroup(mapTerrainGroup);
-    mapTerrainGroup = null;
-  }
-  // Hazard meshes are cached per run keyed by id/distance — drop them so a new
-  // run (or a return to the mountain) doesn't inherit the old run's markers.
-  const chasmMeshes = handle.chasmMeshes as Map<string, THREE.Mesh>;
-  for (const m of chasmMeshes.values()) handle.scene.remove(m);
-  chasmMeshes.clear();
-  const checkpointMeshes = handle.checkpointMeshes as Map<number, THREE.Mesh>;
-  for (const m of checkpointMeshes.values()) handle.scene.remove(m);
-  checkpointMeshes.clear();
-
-  if (!map) {
-    for (const m of branchTerrainMeshes) m.visible = true;
-    return;
-  }
-  for (const m of branchTerrainMeshes) m.visible = false;
-  const group = new THREE.Group();
-  group.add(buildMapSurface(map));
-  handle.scene.add(group);
-  mapTerrainGroup = group;
-  placeMapProps(group, map);
-}
-
-const branchTerrainMeshes: THREE.Mesh[] = [];
 
 export function render(handle: SkiSceneHandle): void {
   // (slope-vis seam add, 2026-07-24) the draw goes through skiScene so the

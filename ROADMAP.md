@@ -362,38 +362,6 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 - **Save/load:** browser storage, `SAVE_VERSION 5`. Snapshots dynamic state only;
   static layout reloads from `createInitial*`; strict + self-healing decode.
 
-### Map editor (director tool) — (map-editor)
-- **Slice 1 landed (2026-07-25):** a **data-driven map format + a top-down editor
-  you play the real 3-D run from.** The slope was 100% hardcoded (route.ts grade +
-  slopePath.ts curves + procedural terrain); this pulls a slope's authoring inputs
-  out into a serializable **`SlopeMap`** (`shared/src/slopeMap.ts`: length, a
-  steepness control-point profile, placed props, chasms, checkpoints) that the
-  editor writes and the run reads — reusing the tuned skiing sim rather than
-  rebuilding it.
-  - **Editor** (`client/src/mapEditor.ts`, new `mode: "editor"` off the lobby's
-    **Map Editor** button): a Sims-style top-down plan view — drop **trees/rocks**,
-    place **chasms + checkpoints**, drag a **steepness graph** to shape the terrain
-    down the hill, set slope length, then **Play this slope**. Saved to its own
-    `toebeans-map` localStorage key (`client/src/mapStore.ts`), out of the game save.
-  - **Play** builds the real run: `createMapSkiState(map)` (skiing.ts) on a sentinel
-    `"map"` segment; the sim reads steepness from the map's profile (`mapGradeFactor`,
-    floored at 1) so **sculpted-steep stretches ski faster**; `setActiveMap` +
-    map-aware `segmentCenterline`/`segmentPitch` (slopePath.ts) give a straight
-    descending trail whose world-Y is the integrated grade; `setMapTerrain`
-    (skiRender.ts) builds the snow surface + loads the real slope GLBs as props and
-    hides the built-in mountain. Finishing returns you to the editor to tweak + replay.
-  - Seam edits (small/additive/flagged `// (map-editor)`): `SkiState.mapGrade` +
-    the grade read in `stepSkiing` (slope-mech); `setMapTerrain` + branch-terrain
-    hide (mountain/slope-mech); map cases in `segmentCenterline`/`segmentToWorld`/
-    `segmentPitch` (slope-mech); a lobby **Map Editor** button (lobby);
-    `SceneMode` gains `"editor"` (never persisted). 172 tests (13 new).
-  - **Verified** (real Chrome, prod build): editor renders + edits + persists; Play
-    loads a real 3-D run on the sculpted slope with placed pines; the run descends
-    grade-driven (`seg:"map"`, cruise ~14 u/s on a 0.42 stretch) and finishes at the
-    map's length → back to the editor. Chasm crash proven headlessly (real dt).
-  - **Next slices (IDEAS.md):** trail curve editing + more asset types + multiple
-    saved maps/slope-select (2); free-form 2-D terrain brush + collision (3).
-
 ### Tooling / assets
 - `tools/obj2glb_palette.py`, `tools/glb_palette.py`, `tools/gltf_character.py`
   (palette-recolor OBJ/GLB → bible palette). Every asset licensed in
