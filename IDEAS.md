@@ -216,13 +216,49 @@ spawns, streams or culls with distance derives from them instead of copying the 
   the old value on purpose — both are additive night sprites whose own fade dissolves
   them well before the window edge, so they had no pop-in and stretching them just stacks
   quads. But it *is* now a number nobody has looked at against the 300 fog.
-- **(mountain/forest) A pale blurred rectangle hangs in the mid-distance at the summit.**
-  Visible in the `?debug` start view, left of the skier, roughly where the ground would be
-  a few hundred units below and ahead — it reads as a flat panel floating in the haze. Not
-  from this change (the fog numbers are byte-identical and the scatter only got wider);
-  most likely one of the y=0-welded windows or a snowfield panel showing from an elevated
-  summit. Nobody has traced it yet — toggling `scene.children[i].visible` per CLAUDE.md is
-  the way in.
+- **(mountain) TRACED — the pale slab in the mid-distance is `createValleyVista()`**
+  (`mountainGraphics.ts`, added to the sky dome at line 142). Not a y=0 window, which was
+  my first guess and wrong. Bisected by toggling `visible` per the CLAUDE.md method:
+  scene child 3 is the sky dome, and its child 1 is the vista; hiding that one group
+  removes the band completely.
+
+  **What it is.** A baked "valley you're looking down into" bowl, parented to the sky
+  dome so it recenters on the camera every frame — `MeshBasicMaterial`, vertex-coloured,
+  `fog: false`, and deliberately `depthWrite: true` so (per its own comment) *"the near
+  rollover crest and the snowbanks naturally occlude its lower edge — you see the valley
+  through the run's opening, framed by the banks."* The green is its evergreen band
+  (`VISTA_FOREST_Y` −16); the pale vertical streaks are the treeline blend up to
+  `VISTA_SNOW_Y` +4.
+
+  **Why it fails here: the profile is written for a near-level world, and this map falls
+  ~0.5 units per unit travelled.** `VISTA_PROFILE` gives fixed heights relative to the
+  camera across radius 88 → 168, ending at −1.5 ("meets the peak feet at the horizon").
+  Measured against the real ground at the same radii:
+
+  | radius | vista sits at | real ground | vista floats |
+  |---|---|---|---|
+  | 88 | −10 | −44 | +34 |
+  | 120 | −46 | −60 | +14 |
+  | 168 | −1.5 | −81 | **+80** |
+
+  So the far half of the bowl hangs up to 80 units above the true valley, in clear air,
+  with fog off and depth-write on. That is the slab. It is NOT summit-only — the numbers
+  are within a few units of these at route 120, 420, 560 and 700. The one place it
+  inverts is the flat lake (route 300), where the real ground stays level and the bowl is
+  *buried* below it instead.
+
+  **It also occludes.** With depth-write on and the bowl floating above the real ground,
+  it covers the real descent from ~88 units out. Worth weighing against mountain
+  follow-up #1 above ("you still can't see ALL the way down", currently attributed to
+  camera pitch) — hiding the vista reveals real snowbanks and the run's fall line where
+  the slab had been, though the residual pink brow is still there behind it, so the
+  camera-pitch reading isn't wrong so much as incomplete.
+
+  **Suggested direction (mountain's call):** derive each ring's height from the real
+  profile — `routeHeightAt` at that radius — instead of fixed camera-relative offsets, so
+  the vista sits on the mountain it's pretending to be part of. That is the same
+  "solved, not typed in" discipline as v3 §12.3/§12.5, applied to the backdrop. Not
+  touched here: `mountainGraphics.ts` is yours.
 
 ---
 
