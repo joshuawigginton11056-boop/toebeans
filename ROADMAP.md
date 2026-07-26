@@ -371,10 +371,16 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   editor writes and the run reads — reusing the tuned skiing sim rather than
   rebuilding it.
   - **Editor** (`client/src/mapEditor.ts`, new `mode: "editor"` off the lobby's
-    **Map Editor** button): a Sims-style top-down plan view — drop **trees/rocks**,
-    place **chasms + checkpoints**, drag a **steepness graph** to shape the terrain
-    down the hill, set slope length, then **Play this slope**. Saved to its own
-    `toebeans-map` localStorage key (`client/src/mapStore.ts`), out of the game save.
+    **Map Editor** button): a **tilted bird's-eye view of the REAL 3-D slope** — the
+    actual sculpted snow terrain + real tree/rock GLBs, exactly what you'll ski
+    (director redirect 2026-07-25: "an actual top-down view of the map I was
+    creating," NOT the first pass's 2-D schematic/diagram). It reuses the live
+    `SkiSceneHandle` (camera + meshes): drag empty ground to **rotate**, wheel to
+    **zoom**, a "Down the hill" slider to **pan**; **drop/drag real trees & rocks**
+    straight onto the terrain (raycast placement + move/erase), place **chasms +
+    checkpoints**, drag a **steepness graph** panel to reshape the hill live, set
+    slope length, then **Play this slope**. Saved to its own `toebeans-map`
+    localStorage key (`client/src/mapStore.ts`), out of the game save.
   - **Play** builds the real run: `createMapSkiState(map)` (skiing.ts) on a sentinel
     `"map"` segment; the sim reads steepness from the map's profile (`mapGradeFactor`,
     floored at 1) so **sculpted-steep stretches ski faster**; `setActiveMap` +
