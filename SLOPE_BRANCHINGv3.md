@@ -88,9 +88,6 @@ in series, each rejoining before the next.
            |            /
             FINISH
 ```
-The director's top-down layout: ("C:\Users\joshu\OneDrive\Pictures\Screenshots 1\Screenshot 2026-07-25 222218.png") 
-The map is the layout reference; this file is authoritative. Where they disagree,
-the text wins — and any new map gets committed together with the §4 edit it implies.
 
 **Balance four fork-pairs, not eight routes.** Because every fork rejoins, the
 eight possible combinations do not need to be timed against each other. Each fork
