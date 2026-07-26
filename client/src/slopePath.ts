@@ -338,8 +338,14 @@ const SEGMENT_SHAPES: Readonly<Record<string, SegmentShape>> = {
   summit: { turn: -0.24, entry: { originX: 0, originZ: 0, heading: 0 } },
   "forest-road": { turn: 0.24 },
   lake: { turn: 0.34 },
-  yeti: { turn: -0.28 },
-  cave: { turn: -0.18 },
+  // The second mountain (slope-mech, 2026-07-26): `yeti` became the approach and its
+  // fork branches. The played run rides TRAIL_LINE / CAVE_LINE, so these arc shapes
+  // only matter to the still-parked graph — but `cave` needs an `entry` here so it
+  // registers as a placed segment at all (segmentCenterline's guard), and being a
+  // chain-start also stops the spine walk from chaining through it.
+  mountain: { turn: -0.14 },
+  outside: { turn: -0.34 },
+  cave: { turn: -0.2, entry: { originX: 46, originZ: -498, heading: 0.1 } },
   cliff: { turn: 0.12 },
   // The forest tree world: the great tree yanks you off to the right, the corridor
   // bulges out and curls back. Cut in/out (next = lake), so its entry just reads as
@@ -482,30 +488,48 @@ const TRAIL_WEAVE = 0.0031;
 // That keeps a lobe's END curvature independent of its net turn, so a wrapping area
 // can sit next to a straight one without a curvature step at the seam.
 const smoothstep = (u: number): number => u * u * (3 - 2 * u);
-// ONE LOBE PER AREA, laid out as the map is drawn (slope-mech, 2026-07-25). The
-// route spans match route.ts's re-proportioned segments — start mountain 0..100,
-// forest 100..290, lake 290..370, second mountain 370..550, cliff 550..640.
-// Weave amplitudes sit at the geometric ceiling described above (the tightest turn
-// each area can hold without crumpling the inner bank), so these are as bold as the
-// drawing gets at 640 units. Signs: − leans LEFT first, + turns RIGHT.
+// ONE LOBE PER AREA, laid out as the map is drawn (slope-mech, 2026-07-25; re-spanned
+// 2026-07-26 for the big lake + the fork mountain). The route spans match route.ts's
+// segments — start mountain 0..100, forest 100..290, lake 290..430, the second
+// mountain's approach 430..530, Fork 3's outside branch 530..830, cliff 830..920.
+// Signs: − leans LEFT first, + turns RIGHT.
+//
+// ⚠ WHY THE WRAP IS THREE LOBES, NOT ONE (slope-mech, 2026-07-26). A lobe's weave
+// amplitude is TRAIL_WEAVE × its own span — the rule that keeps curvature continuous
+// at the seams. The consequence is that a LONG lobe weaves hard: one 300-unit lobe
+// carries 0.93 rad of sine, whose curvature (~1/51) swamps the net turn's and swings
+// the line ~44 units in and out. Around a mountain that reads as a wobble, not a
+// wrap, and it repeatedly walks the ribbon toward the mass. Splitting the wrap into
+// three 100-unit lobes that each turn a third of the way keeps the same total sweep
+// with a third of the weave — and because the seam curvature is TRAIL_WEAVE·2π
+// whatever the span, continuity is untouched. Measured: the outside line then holds
+// 19–23 units off the mass's foot for the whole 172°, instead of 36–51 and wobbling.
 const TRAIL_LOBES: readonly TrailLobe[] = [
   // The start mountain: the drawn trail begins near the peak and coils off its
   // flank. A short area, so a short weave (~5 units) — it reads as peeling off the
   // summit rather than dropping straight down it.
   { from: 0, to: 100 },
   // The forest: the long meander, and the biggest curve on the run (~18 units of
-  // swing). The drawn map has three of these; one is what fits at 640 units.
+  // swing). The drawn map has three of these; one is what fits at this length.
   { from: 100, to: 290 },
-  // The frozen lake: the trail only clips the corner of the ice — the shortest area
-  // on the run, so very nearly a straight crossing (~3 units).
-  { from: 290, to: 370 },
-  // The second mountain: the WRAP. A sustained ~160° right-hand sweep around the
-  // mass — the line descending around the outside while the mountain stands beside
-  // you. This is the one place the trail stops being a fall line and becomes a
-  // spiral: height still drops with route distance, so you corkscrew down its side.
-  { from: 370, to: 550, netTurn: 2.8 },
+  // The frozen lake: the trail clips the corner of a big body of ice. Nearly a
+  // straight crossing, so the expanse opens out beside you rather than the trail
+  // wandering across it — the body itself is FROZEN_LAKE below.
+  { from: 290, to: 430 },
+  // The second mountain's APPROACH: deliberately no net turn. This is the stretch
+  // where the mass is in front of you and the cave mouth is a thing you can see and
+  // aim at (route.ts's Fork 3 trigger lives here), so the line runs AT the mountain
+  // rather than already curving away from it.
+  { from: 430, to: 530 },
+  // FORK 3, the outside branch: the WRAP, as three chained lobes (see the note
+  // above). ~172° of sustained right-hand sweep around the mass — the exposed line
+  // riding around the mountain's foot while it stands above you on your right.
+  // Height still drops with route distance, so you corkscrew down its flank.
+  { from: 530, to: 630, netTurn: 1.0 },
+  { from: 630, to: 730, netTurn: 1.0 },
+  { from: 730, to: 830, netTurn: 1.0 },
   // The cliff run-in: swing back out of the wrap and run out to the flag.
-  { from: 550, to: 640, netTurn: -1.1 },
+  { from: 830, to: 920, netTurn: -1.0 },
 ];
 const TRAIL_ROUTE_LEN = TRAIL_LOBES[TRAIL_LOBES.length - 1]!.to; // the whole spine
 // The heading each lobe STARTS at — the sum of every previous lobe's net turn, so
@@ -565,14 +589,130 @@ const TRAIL_LINE: Centerline = (() => {
   return { step, xs, zs, headings };
 })();
 
+// ---------------------------------------------------------------------------
+// FORK 3: THE CAVE BRANCH (slope-mech, 2026-07-26 — the fork mountain).
+//
+// The outside branch rides TRAIL_LINE (it's the default line). The cave is the one
+// corridor that leaves it and comes back, and it has two hard geometric jobs:
+//
+//   * START exactly where the fork fires — the end of the approach — so the mouth
+//     you aimed at is where you actually go in; and
+//   * END exactly where the outside branch ends, because both are 300 units and the
+//     cliff's entrance is one world point. A rejoin that misses is a visible tear in
+//     the terrain, not a diegetic cut.
+//
+// Both branches are the same LENGTH between the same two points with the same
+// tangents, which means the cave cannot be a "shortcut through" — it has the same
+// 300 units to spend, so it winds. That's what puts it inside the mass: the outside
+// line spends its 300 sweeping 172° around the foot, and the cave spends its 300 on
+// a deep S that crosses the interior.
+//
+// Shape: the same lobe algebra as the trail — the fork's net turn through a
+// smoothstep, plus a full-period sine that returns the heading to zero. The sine's
+// amplitude is the ONE free parameter, and it is SOLVED at load for the endpoint
+// match rather than hand-tuned, so retuning the wrap above re-solves the cave
+// instead of quietly tearing the rejoin. `slopePath.test.ts` pins the residual.
+const CAVE_ID = "cave";
+const CAVE_FROM = 530; // route distance where Fork 3 splits (the approach's end)
+const CAVE_TO = 830; // route distance where both branches rejoin (the cliff)
+
+// The heading down the cave at a fraction u of its length, for a given weave.
+const caveHeadingAt = (u: number, weave: number, from: number, net: number): number =>
+  from + net * smoothstep(u) + weave * Math.sin(2 * Math.PI * u);
+
+// Integrate the cave for a weave amplitude and return its sampled line.
+function buildCaveLine(weave: number): Centerline {
+  const entry = centerlineAt(TRAIL_LINE, CAVE_FROM);
+  const exitHeading = centerlineAt(TRAIL_LINE, CAVE_TO).heading;
+  const net = exitHeading - entry.heading;
+  const span = CAVE_TO - CAVE_FROM;
+  const step = STEP;
+  const n = Math.ceil(span / step) + 1;
+  const xs = new Float64Array(n);
+  const zs = new Float64Array(n);
+  const headings = new Float64Array(n);
+  let x = entry.x;
+  let z = entry.z;
+  xs[0] = x;
+  zs[0] = z;
+  headings[0] = entry.heading;
+  for (let i = 1; i < n; i++) {
+    const h0 = caveHeadingAt(((i - 1) * step) / span, weave, entry.heading, net);
+    const h1 = caveHeadingAt((i * step) / span, weave, entry.heading, net);
+    x += 0.5 * (Math.sin(h0) + Math.sin(h1)) * step;
+    z += 0.5 * (-Math.cos(h0) - Math.cos(h1)) * step;
+    xs[i] = x;
+    zs[i] = z;
+    headings[i] = h1;
+  }
+  return { step, xs, zs, headings };
+}
+
+// Solve the weave for the rejoin: a coarse sweep (the endpoint error is not monotone
+// in the weave — a big enough weave loops the line right past the target) followed by
+// a golden-section refine on the bracketing interval. Deterministic, ~160 integrations
+// at load. A NEGATIVE weave would bulge the cave away from the mountain, so the sweep
+// is restricted to the positive side that curls it inward.
+const CAVE_WEAVE: number = (() => {
+  const target = centerlineAt(TRAIL_LINE, CAVE_TO);
+  const errAt = (weave: number): number => {
+    const line = buildCaveLine(weave);
+    const last = line.xs.length - 1;
+    return Math.hypot(line.xs[last]! - target.x, line.zs[last]! - target.z);
+  };
+  let bestWeave = 0;
+  let bestErr = Infinity;
+  for (let w = 0; w <= 3; w += 0.02) {
+    const e = errAt(w);
+    if (e < bestErr) {
+      bestErr = e;
+      bestWeave = w;
+    }
+  }
+  // Refine inside ±0.02 of the coarse winner by ternary search.
+  let lo = Math.max(0, bestWeave - 0.02);
+  let hi = bestWeave + 0.02;
+  for (let i = 0; i < 40; i++) {
+    const a = lo + (hi - lo) / 3;
+    const b = hi - (hi - lo) / 3;
+    if (errAt(a) < errAt(b)) hi = b;
+    else lo = a;
+  }
+  return (lo + hi) / 2;
+})();
+
+const CAVE_LINE: Centerline = buildCaveLine(CAVE_WEAVE);
+
+/** How far the cave's rejoin misses the cliff's entrance, in world units — the
+ * residual of the solve above. Exported so the test can pin it (and so a future
+ * reshaping of the wrap can't silently tear the terrain). */
+export const caveRejoinError = (): number => {
+  const target = centerlineAt(TRAIL_LINE, CAVE_TO);
+  const last = CAVE_LINE.xs.length - 1;
+  return Math.hypot(CAVE_LINE.xs[last]! - target.x, CAVE_LINE.zs[last]! - target.z);
+};
+
 /** The centerline point (world x/z + tangent) at a distance down a segment.
  * Unknown segment ("main") → the Overlook's global road, so it's unchanged. The
- * single played trail (summit, forest-road, lake) rides the one smooth TRAIL_LINE
- * above instead of its per-segment arc — killing the seam kink and the drift; the
- * parked branching segments keep their constant-curvature arc placement. */
+ * played trail's default line (summit … outside, cliff) rides the one smooth
+ * TRAIL_LINE above instead of its per-segment arc — killing the seam kink and the
+ * drift. Fork 3's `cave` branch rides its own solved CAVE_LINE, which starts and
+ * ends on TRAIL_LINE so the fork and the rejoin are continuous. The still-parked
+ * branching segments keep their constant-curvature arc placement. */
 export function segmentCenterline(segmentId: string, distance: number): SlopePoint {
   const p = SEGMENT_PLACEMENTS[segmentId];
   if (!p) return slopeCenterline(distance);
+  if (segmentId === CAVE_ID) {
+    const c = centerlineAt(CAVE_LINE, distance);
+    return {
+      x: c.x,
+      z: c.z,
+      // y still comes from the shared depth-keyed profile, so the cave drops exactly
+      // what the outside branch drops — same clock, same flag, for free.
+      y: segmentGroundY(segmentId, distance),
+      heading: c.heading,
+    };
+  }
   if (SINGLE_TRAIL.includes(segmentId)) {
     const c = centerlineAt(TRAIL_LINE, routeDistanceOf(segmentId, distance));
     return {
@@ -685,6 +825,191 @@ export function trailPointAtRoute(
   }
   const w = segmentToWorld(id, local, lateral);
   return { x: w.x, y: segmentCenterline(id, local).y, z: w.z };
+}
+
+// ---------------------------------------------------------------------------
+// THE TWO BIG FEATURES (slope-mech, 2026-07-26 — v3 §12.3's two director calls).
+// Both are described HERE, trail-relative, rather than in the renderer: they have to
+// stay pinned to the trail through any future reshaping of the lobes, and both the
+// terrain builder (skiRender.ts) and the ice dressing (forestGraphics.ts) read one
+// source of truth. Everything is derived from `trailPointAtRoute`, never raw world
+// X/Z — raw XZ loses both the grade and the curve.
+
+/**
+ * THE FROZEN LAKE, as a BODY (director: ~15× too small; "you come out of the forest
+ * and it's spread out in front of you").
+ *
+ * It used to be a 64 × 26 ribbon of ice skinned onto the lane — a strip, not a lake.
+ * It is now a disc: ~180 units across, ~25k square units, which is 15× the ribbon's
+ * ~1.7k. The trail clips its corner, exactly as the map is drawn.
+ *
+ * The disc is centred OFF TO THE RIGHT of the crossing, and its radius is chosen so
+ * that the lane runs on ice for the whole flat span. That side is not arbitrary: the
+ * drawn map puts the lake body, the lake opening and the penguin castle all on that
+ * side of the trail, and route.ts's parked Fork 2 trigger already reads lateral
+ * +4..+12 for the yeti's hole.
+ *
+ * WHY IT IS A WORLD DISC AND NOT A ROUTE-SPAN BAND: the ice surface has to be LEVEL,
+ * and the only place the trail is level is the lake's flat (route 312–415, where
+ * GRADE_PROFILE sits at 0). A band that followed the route past 415 would float above
+ * a trail that has started dropping again. A disc puts the body's downhill shore
+ * exactly where the ground starts falling away — which is what a lake's outlet is.
+ */
+export const FROZEN_LAKE = {
+  /** Route distance the disc is centred on — the middle of the flat crossing. */
+  routeCenter: 363,
+  /**
+   * How far right of the lane the centre sits. Not free: it has to be near enough
+   * that the lane runs on ice for the WHOLE flat span (route 312–415, ±51 either side
+   * of the centre), which needs √(r² − 51²) ≥ lateralCenter + LATERAL_LIMIT. At r 90
+   * that caps it around 60. Mid-crossing the ice therefore reaches ~32 units to the
+   * LEFT of the lane too — which is right: mid-crossing you are properly out on the
+   * lake, and it is only at the two ends that the lane sits on the shore. That is what
+   * clipping a corner means.
+   */
+  lateralCenter: 58,
+  /** Disc radius. 90 ⇒ ~25.4k sq units ⇒ ~15× the old ribbon's ~1.7k. */
+  radius: 90,
+  /** How wide a shore lip rings the body, and how high it rises above the ice. */
+  shoreBand: 20,
+  shoreRise: 14,
+} as const;
+
+/** The lake's ice height — one level for the whole body, read off the trail at the
+ * middle of the flat. (Because GRADE_PROFILE is 0 across 312–415, every point of the
+ * flat is this same height; sampling the middle just makes that explicit.) */
+export function lakeIceHeight(): number {
+  return routeHeightAt(FROZEN_LAKE.routeCenter);
+}
+
+/** The lake's centre in world x/z. */
+export function lakeCenterWorld(): { readonly x: number; readonly z: number } {
+  const p = trailPointAtRoute(FROZEN_LAKE.routeCenter, FROZEN_LAKE.lateralCenter);
+  return { x: p.x, z: p.z };
+}
+
+/**
+ * The lateral band of ICE across the lane at a route distance: `null` off the body,
+ * otherwise the signed lateral range the ice sheet covers there.
+ *
+ * This is the seam the ice DRESSING reads (forestGraphics.ts owns the look; the body's
+ * shape is the map's, so it lives here). It also tells the decor scatter where not to
+ * stand — trees on a frozen lake was the first thing that broke when the berm opened.
+ *
+ * Derived by intersecting the trail's lateral axis at `routeDistance` with the disc,
+ * so it follows the body honestly even where the trail curves across it.
+ */
+export function lakeIceExtent(
+  routeDistance: number,
+): { readonly latMin: number; readonly latMax: number } | null {
+  const c = lakeCenterWorld();
+  const on = trailPointAtRoute(routeDistance, 0);
+  const across = trailPointAtRoute(routeDistance, 1);
+  // The unit lateral direction at this route distance, and where the centre projects
+  // onto it. (`across` − `on` is already unit length: lateral is in world units.)
+  const ax = across.x - on.x;
+  const az = across.z - on.z;
+  const toC = { x: c.x - on.x, z: c.z - on.z };
+  const along = toC.x * ax + toC.z * az; // the centre's lateral coordinate
+  const perp2 = toC.x * toC.x + toC.z * toC.z - along * along; // squared miss distance
+  const half2 = FROZEN_LAKE.radius * FROZEN_LAKE.radius - perp2;
+  if (half2 <= 0) return null; // this cross-section misses the body entirely
+  const half = Math.sqrt(half2);
+  return { latMin: along - half, latMax: along + half };
+}
+
+/**
+ * THE FORK MOUNTAIN'S MASS (director: *"its not a view only mountain. its got real
+ * purpose. the second mountain is the mountain that introduces the cave entrance and
+ * the ride around"*).
+ *
+ * A dome standing on the inside of Fork 3's wrap: ~170 units across and rising well
+ * above the line, so the outside branch rides around its foot and the cave branch runs
+ * through its middle. This is what answers "not another drop-off" WITHOUT flattening
+ * the area — the pitch stays honest (route.ts) and the mass supplies the shape.
+ *
+ * The numbers are not free. The radius is the largest that clears every open lane —
+ * the approach, the outside branch and the cliff run-in — by more than the playable
+ * half-width, measured against the trail as actually laid out. Grow it and the
+ * mountain buries the piste; shrink it and the wrap stops hugging anything.
+ * `slopePath.test.ts` asserts the clearance, so a future reshaping of the wrap fails
+ * a test rather than swallowing the run.
+ */
+export const FORK_MOUNTAIN = {
+  /** Placed relative to the trail at the middle of the wrap, on the inside. */
+  routeAnchor: 680,
+  lateralAnchor: 102,
+  /** Base radius: where the dome meets the surrounding ground. */
+  baseRadius: 85,
+  /**
+   * Height at the summit, above the ground it stands on.
+   *
+   * Sized to be SEEN, which on this mountain takes more than it sounds: the height
+   * profile only ever falls, so the mass stands on ground ~110 units below the lake
+   * you first see it from. At 175 its summit clears the eye line from the far shore
+   * by a good margin and it reads as a mountain standing beyond the water; at ~100 it
+   * would sit at eye level and read as a bump. (Real uphill would be the honest fix
+   * and is a SIM change — v3 §12.3 — so this is the cheap answer the drawing allows.)
+   */
+  peakHeight: 175,
+} as const;
+
+/** The mass's centre in world x/z, and the ground height it stands on. */
+export function forkMountainCenter(): {
+  readonly x: number;
+  readonly z: number;
+  readonly y: number;
+} {
+  return trailPointAtRoute(FORK_MOUNTAIN.routeAnchor, FORK_MOUNTAIN.lateralAnchor);
+}
+
+/**
+ * The dome's height above its base at a distance `r` from the centre. A raised
+ * cosine: zero height AND zero slope at the foot, so it blends into the surrounding
+ * banks with no crease, and a rounded summit. Steepest mid-flank (~70°), which is
+ * deliberate — it is a mass you ride around, not a slope you ski down.
+ */
+export function forkMountainRise(r: number): number {
+  if (r >= FORK_MOUNTAIN.baseRadius) return 0;
+  const u = r / FORK_MOUNTAIN.baseRadius;
+  return FORK_MOUNTAIN.peakHeight * 0.5 * (1 + Math.cos(Math.PI * u));
+}
+
+/**
+ * Where the cave's two portals sit: the first and last points of the cave branch that
+ * lie inside the mass's footprint. Measured rather than declared, so the mouths always
+ * land ON the mountainside even if the wrap or the mass is retuned.
+ *
+ * The residual open stretches (~36 units at each end) are a feature, not slop: a short
+ * cutting leads into the mountainside and out again, which is what makes the mouth a
+ * thing you can see and aim at from the approach rather than a hole that appears the
+ * instant the fork fires.
+ */
+export function cavePortals(): {
+  readonly entryDistance: number;
+  readonly exitDistance: number;
+} {
+  const c = forkMountainCenter();
+  const inside = (d: number): boolean => {
+    const p = segmentCenterline(CAVE_ID, d);
+    return Math.hypot(p.x - c.x, p.z - c.z) <= FORK_MOUNTAIN.baseRadius;
+  };
+  const span = CAVE_TO - CAVE_FROM;
+  let entryDistance = 0;
+  for (let d = 0; d <= span; d++) {
+    if (inside(d)) {
+      entryDistance = d;
+      break;
+    }
+  }
+  let exitDistance = span;
+  for (let d = span; d >= 0; d--) {
+    if (inside(d)) {
+      exitDistance = d;
+      break;
+    }
+  }
+  return { entryDistance, exitDistance };
 }
 
 /** World x/z for a (segmentId, distance, lateral) triple — the lane on a segment. */

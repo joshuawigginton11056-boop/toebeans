@@ -26,6 +26,8 @@ import {
 import {
   BRANCH_SEGMENTS,
   BRANCH_START,
+  PLAYED_FORKS,
+  playedForkArms,
   roadSegmentIds,
   routeDistanceOf,
   SINGLE_TRAIL,
@@ -1472,39 +1474,64 @@ describe("The branching map: same clock, same flag", () => {
 
   it("every full route is the same total length (same clock, by construction)", () => {
     const len = (id: string): number => BRANCH_SEGMENTS[id]!.length;
-    const cave = ["summit", "forest-road", "lake", "yeti", "cave", "cliff"];
-    const ice = ["summit", "forest-road", "lake", "yeti", "ledge", "valley", "ice-castle"];
+    // FOUR routes now (slope-mech, 2026-07-26): the second mountain became a real
+    // fork, so "through the cave" and "around the outside" are two full routes
+    // rather than one segment following another.
+    const cave = ["summit", "forest-road", "lake", "mountain", "cave", "cliff"];
+    const outside = ["summit", "forest-road", "lake", "mountain", "outside", "cliff"];
+    const ice = ["summit", "forest-road", "lake", "mountain", "ledge", "valley", "ice-castle"];
     const water = ["summit", "forest-road", "lake", "water", "cliff"];
-    for (const route of [cave, ice, water]) {
+    for (const route of [cave, outside, ice, water]) {
       expect(route.reduce((sum, id) => sum + len(id), 0)).toBe(TOTAL_ROUTE_LENGTH);
     }
     // The forest Type A is a same-length no-op: the tree world equals the road.
     expect(len("forest-tree")).toBe(len("forest-road"));
+    // FORK 3's own pair: the two lines around/through the second mountain are the
+    // same length, which is what makes the choice free of a time cost.
+    expect(len("cave")).toBe(len("outside"));
+  });
+
+  it("Fork 3's two branches rejoin the cliff at one clock (the fork mountain's law)", () => {
+    // The pair this session exists to make legible (v3 §5 fork 3, §10). Whichever
+    // line you pick off the mountain approach, you reach the cliff having skied
+    // exactly the same distance — so aiming at the cave mouth is a choice about what
+    // you see, never a shortcut.
+    expect(routeDistanceOf("cave", 0)).toBe(routeDistanceOf("outside", 0));
+    expect(routeDistanceOf("cave", BRANCH_SEGMENTS.cave!.length)).toBe(
+      routeDistanceOf("outside", BRANCH_SEGMENTS.outside!.length),
+    );
+    expect(routeDistanceOf("cliff", 0)).toBe(
+      routeDistanceOf("cave", BRANCH_SEGMENTS.cave!.length),
+    );
+    // Both branches hang off the approach's end, so the fork fires from one point.
+    expect(routeDistanceOf("mountain", BRANCH_SEGMENTS.mountain!.length)).toBe(
+      routeDistanceOf("cave", 0),
+    );
   });
 
   it("shared reconvergences sit at the same clock whichever fork reached them", () => {
-    // The cliff is shared by the Cave line (via yeti·cave) and the Water line
-    // (via water). routeDistanceOf reports the same progress there both ways —
-    // proof no line is a shortcut into the finale.
+    // The cliff is shared by both Fork 3 lines (via mountain·cave / mountain·outside)
+    // and the Water line (via water). routeDistanceOf reports the same progress there
+    // every way — proof no line is a shortcut into the finale.
     expect(routeDistanceOf("cave", BRANCH_SEGMENTS.cave!.length)).toBe(
       routeDistanceOf("water", BRANCH_SEGMENTS.water!.length),
     );
     expect(routeDistanceOf("cliff", 0)).toBe(
       routeDistanceOf("cave", BRANCH_SEGMENTS.cave!.length),
     );
-    // The forest fork shares an offset too (road and tree both at 120).
+    // The forest fork shares an offset too (road and tree both at 100).
     expect(routeDistanceOf("forest-tree", 50)).toBe(
       routeDistanceOf("forest-road", 50),
     );
   });
 
-  it("the Cave line runs summit → forest-road → lake → yeti → cave → cliff → flag", () => {
-    const { segments, final } = runToFlag(); // all defaults
+  it("the Cave line runs summit → forest-road → lake → mountain → cave → cliff → flag", () => {
+    const { segments, final } = runToFlag({ mountain: "cave" });
     expect(segments).toEqual([
       "summit",
       "forest-road",
       "lake",
-      "yeti",
+      "mountain",
       "cave",
       "cliff",
     ]);
@@ -1513,13 +1540,31 @@ describe("The branching map: same clock, same flag", () => {
     ).toBeGreaterThanOrEqual(TOTAL_ROUTE_LENGTH);
   });
 
-  it("the Ice line splits at the peak: … → yeti → ledge → valley → ice-castle → flag", () => {
-    const { segments, final } = runToFlag({ yeti: "ledge" });
+  it("the Outside line is the default: … → mountain → outside → cliff → flag", () => {
+    const { segments, final } = runToFlag(); // all defaults — steer nothing
     expect(segments).toEqual([
       "summit",
       "forest-road",
       "lake",
-      "yeti",
+      "mountain",
+      "outside",
+      "cliff",
+    ]);
+    expect(
+      routeDistanceOf(final.segmentId, final.distance),
+    ).toBeGreaterThanOrEqual(TOTAL_ROUTE_LENGTH);
+  });
+
+  it("the Ice line splits at the mountain: … → ledge → valley → ice-castle → flag", () => {
+    // Parked until Fork 4's speed-triggered shove exists — nothing STEERS into the
+    // ice tail any more (the mountain's one trigger slot is Fork 3's cave). Injecting
+    // the divert keeps the tail's same-clock identity under test regardless.
+    const { segments, final } = runToFlag({ mountain: "ledge" });
+    expect(segments).toEqual([
+      "summit",
+      "forest-road",
+      "lake",
+      "mountain",
       "ledge",
       "valley",
       "ice-castle",
@@ -1537,32 +1582,36 @@ describe("The branching map: same clock, same flag", () => {
     ).toBeGreaterThanOrEqual(TOTAL_ROUTE_LENGTH);
   });
 
-  it("all three routes (+ the tree no-op) reach the flag at the same clock (the law, behaviorally)", () => {
+  it("every route (+ the tree no-op) reaches the flag at the same clock (the law, behaviorally)", () => {
     // Identical dead-straight skiing — the ONLY difference is the fork — so all
     // finish at the same clock: 'no line is faster', proven end to end, not just
-    // asserted on the data. The Water/tree lines cross the SAME gaps at the same
-    // depths as the Cave line, so they match it to the step; the Ice line jumps
-    // the valley (route ~520) where the Cave/Water lines jump the cliff (~590),
-    // and because speed now varies with the grade, the brief airborne interval
-    // there (which pauses speed adaptation) lands at a slightly different depth —
-    // a sub-second timing artifact of WHERE the gap sits, not a shortcut. So the
-    // step counts match to within a hair; the exact equal-length law is the
-    // by-construction test above.
-    const cave = runToFlag();
-    const ice = runToFlag({ yeti: "ledge" });
+    // asserted on the data. The Cave/Water/tree lines cross the SAME gaps at the
+    // same depths as the default Outside line, so they match it to the step; the
+    // Ice line jumps the valley where the others jump the cliff, and because speed
+    // varies with the grade, the brief airborne interval there (which pauses speed
+    // adaptation) lands at a slightly different depth — a sub-second timing artifact
+    // of WHERE the gap sits, not a shortcut. So the step counts match to within a
+    // hair; the exact equal-length law is the by-construction test above.
+    const outside = runToFlag(); // the default line
+    const cave = runToFlag({ mountain: "cave" }); // Fork 3's other face
+    const ice = runToFlag({ mountain: "ledge" });
     const water = runToFlag({ lake: "water" });
-    const tree = runToFlag({ summit: "forest-tree" }); // Type A, then Cave line
-    // Water and the tree no-op share the Cave line's gaps → identical to the step.
-    expect(water.steps).toBe(cave.steps);
-    expect(tree.steps).toBe(cave.steps);
+    const tree = runToFlag({ summit: "forest-tree" }); // Type A, then the default
+    // FORK 3, behaviorally: neither line carries a chasm, so the pair is identical
+    // to the STEP. This is the §10 assertion for the fork this session built — and
+    // it needs no tolerance at all, which is why the branches were left gap-free.
+    expect(cave.steps).toBe(outside.steps);
+    // Water and the tree no-op share the default line's gaps → also step-identical.
+    expect(water.steps).toBe(outside.steps);
+    expect(tree.steps).toBe(outside.steps);
     // The Ice line matches to within a handful of steps (the jump-depth artifact).
-    for (const run of [ice, water, tree]) {
-      expect(Math.abs(run.steps - cave.steps)).toBeLessThanOrEqual(10);
+    for (const run of [cave, ice, water, tree]) {
+      expect(Math.abs(run.steps - outside.steps)).toBeLessThanOrEqual(10);
       // Every route finishes just past the flag, all within a unit of each other.
       const routeDist = routeDistanceOf(run.final.segmentId, run.final.distance);
       expect(routeDist).toBeGreaterThanOrEqual(TOTAL_ROUTE_LENGTH);
       expect(routeDist).toBeCloseTo(
-        routeDistanceOf(cave.final.segmentId, cave.final.distance),
+        routeDistanceOf(outside.final.segmentId, outside.final.distance),
         0,
       );
     }
@@ -1570,16 +1619,25 @@ describe("The branching map: same clock, same flag", () => {
 
   it("roadSegmentIds is the default line; the detour worlds are off it", () => {
     const road = roadSegmentIds();
-    expect([...road]).toEqual(["summit", "forest-road", "lake", "yeti", "cave", "cliff"]);
-    for (const detour of ["forest-tree", "water", "ledge", "valley", "ice-castle"]) {
+    expect([...road]).toEqual([
+      "summit",
+      "forest-road",
+      "lake",
+      "mountain",
+      "outside",
+      "cliff",
+    ]);
+    // The cave is now a DETOUR off the road, not a road segment — going around the
+    // outside is what happens if you steer nothing.
+    for (const detour of ["forest-tree", "water", "cave", "ledge", "valley", "ice-castle"]) {
       expect(road.has(detour)).toBe(false);
     }
   });
 
   it.each([
     ["summit", "forest-tree", 85], // the great tree
-    ["lake", "water", 70], // the yeti's hole
-    ["yeti", "ledge", 50], // the yeti's-son shove
+    ["lake", "water", 110], // the yeti's hole
+    ["mountain", "cave", 80], // aiming at the cave mouth (Fork 3)
   ])(
     "skiing into %s's trigger volume arms the %s fork",
     (segmentId, into, distance) => {
@@ -1625,21 +1683,21 @@ describe("The branching map: same clock, same flag", () => {
   });
 
   it("crossing a boundary loads the next segment and resets the respawn to its entrance", () => {
-    const yeti = BRANCH_SEGMENTS.yeti!;
+    const mountain = BRANCH_SEGMENTS.mountain!;
     let state: SkiState = {
       ...createBranchingSkiState(),
-      segmentId: "yeti",
-      distance: yeti.length - 0.05,
+      segmentId: "mountain",
+      distance: mountain.length - 0.05,
       speed: BASE_SPEED,
-      finishDistance: yeti.length,
-      chasms: yeti.chasms,
-      checkpoints: yeti.checkpoints,
+      finishDistance: mountain.length,
+      chasms: mountain.chasms,
+      checkpoints: mountain.checkpoints,
       lastCheckpoint: 0,
     };
     state = stepSkiing(state, noInput, dt);
-    expect(state.segmentId).toBe("cave"); // the default successor
-    expect(state.finishDistance).toBe(BRANCH_SEGMENTS.cave!.length);
-    expect(state.chasms).toEqual(BRANCH_SEGMENTS.cave!.chasms);
+    expect(state.segmentId).toBe("outside"); // the default successor (around the mass)
+    expect(state.finishDistance).toBe(BRANCH_SEGMENTS.outside!.length);
+    expect(state.chasms).toEqual(BRANCH_SEGMENTS.outside!.chasms);
     expect(state.lastCheckpoint).toBe(0);
     expect(state.distance).toBeGreaterThanOrEqual(0);
     expect(state.distance).toBeLessThan(1);
@@ -1672,30 +1730,94 @@ describe("The branching map: same clock, same flag", () => {
 });
 
 // The single played trail (slope-mech, 2026-07-24 redirect — IDEAS.md START HERE).
-// The §4 branching graph above is PARKED for the played path: the active run rides
-// ONE non-branching trail (route.ts SINGLE_TRAIL — summit → forest → the frozen
-// lake) and ends there, coasting off into the runout. These pin that the flag
-// reroutes the sim correctly and the forks stay off, WITHOUT touching the tested
-// graph.
-describe("The single played trail: summit → cliff down the spine, forks parked", () => {
+// Most of the §4 branching graph above stays PARKED for the played path: the active
+// run rides the default line summit → forest → lake → mountain → outside → cliff and
+// coasts off into the runout. FORK 3 IS THE EXCEPTION as of 2026-07-26 — the fork
+// mountain arms for real, so these also pin that a played run CAN take the cave and
+// that the other three forks still can't.
+describe("The single played trail: the default line, with Fork 3 live", () => {
   const dt = 0.02;
 
-  it("SINGLE_TRAIL / singleTrailNext describe summit → forest → lake → yeti → cave → cliff → (end)", () => {
+  it("SINGLE_TRAIL / singleTrailNext describe summit → forest → lake → mountain → outside → cliff → (end)", () => {
     expect(SINGLE_TRAIL).toEqual([
       "summit",
       "forest-road",
       "lake",
-      "yeti",
-      "cave",
+      "mountain",
+      "outside",
       "cliff",
     ]);
     expect(singleTrailNext("summit")).toBe("forest-road");
     expect(singleTrailNext("forest-road")).toBe("lake");
-    expect(singleTrailNext("lake")).toBe("yeti");
-    expect(singleTrailNext("yeti")).toBe("cave");
-    expect(singleTrailNext("cave")).toBe("cliff");
+    expect(singleTrailNext("lake")).toBe("mountain");
+    expect(singleTrailNext("mountain")).toBe("outside");
+    expect(singleTrailNext("outside")).toBe("cliff");
     expect(singleTrailNext("cliff")).toBeNull(); // the valley floor → the runout
-    expect(singleTrailNext("water")).toBeNull(); // a parked detour, off the trail → never wanders on
+    // A LIVE fork's branch is not on the list, but it still knows its way back to the
+    // default line — this is what rejoins the cliff after the cave.
+    expect(singleTrailNext("cave")).toBe("cliff");
+    expect(singleTrailNext("water")).toBeNull(); // a parked detour → never wanders on
+    expect(singleTrailNext("ledge")).toBeNull();
+  });
+
+  it("PLAYED_FORKS is exactly the built forks — Fork 3 only", () => {
+    // The allowlist, not "every trigger arms": the other three detours have no
+    // corridor or content yet, so arming them would strand a run in a void. Grow
+    // this as each fork lands.
+    expect(PLAYED_FORKS).toEqual({ mountain: "cave" });
+    expect(playedForkArms("mountain")).toBe(true);
+    for (const parked of ["summit", "lake", "forest-road", "outside", "cliff"]) {
+      expect(playedForkArms(parked)).toBe(false);
+    }
+  });
+
+  it("aiming at the cave mouth on a PLAYED run takes you through the mountain", () => {
+    // The director's call, behaviorally: the cave entrance is a thing you see and aim
+    // at. Sit in the mouth's lateral band over the approach's back half and the
+    // mountain takes you inside — then the cave rejoins the cliff at the same clock.
+    const mountain = BRANCH_SEGMENTS.mountain!;
+    let state: SkiState = {
+      ...createSingleTrailSkiState(),
+      segmentId: "mountain",
+      distance: mountain.trigger!.at - 4,
+      lateral: 8, // inside the mouth's window (4..12)
+      speed: BASE_SPEED,
+      finishDistance: mountain.length,
+      chasms: mountain.chasms,
+      checkpoints: mountain.checkpoints,
+    };
+    state = stepSkiing(state, noInput, dt);
+    expect(state.divertTo).toBe("cave");
+    // Ride out the approach and cross the fork boundary.
+    for (let i = 0; i < 3000 && state.segmentId === "mountain"; i++) {
+      state = stepSkiing(state, noInput, dt);
+    }
+    expect(state.segmentId).toBe("cave"); // inside the mountain, not around it
+    expect(state.singleTrail).toBe(true); // still a played run
+    // …and the cave hands you back to the shared cliff.
+    for (let i = 0; i < 6000 && state.segmentId === "cave"; i++) {
+      state = stepSkiing(state, noInput, dt);
+    }
+    expect(state.segmentId).toBe("cliff");
+  });
+
+  it("steering nothing on the approach rides around the outside (the default)", () => {
+    const mountain = BRANCH_SEGMENTS.mountain!;
+    let state: SkiState = {
+      ...createSingleTrailSkiState(),
+      segmentId: "mountain",
+      distance: mountain.trigger!.at - 4,
+      lateral: 0, // straight down the lane, well left of the mouth
+      speed: BASE_SPEED,
+      finishDistance: mountain.length,
+      chasms: mountain.chasms,
+      checkpoints: mountain.checkpoints,
+    };
+    for (let i = 0; i < 3000 && state.segmentId === "mountain"; i++) {
+      state = stepSkiing(state, noInput, dt);
+      expect(state.divertTo).toBeNull();
+    }
+    expect(state.segmentId).toBe("outside");
   });
 
   it("a fresh single-trail run is a summit run, flagged single-trail", () => {
@@ -1717,6 +1839,7 @@ describe("The single played trail: summit → cliff down the spine, forks parked
     // to prove the run reaches the valley floor and keeps going down the flat runout,
     // not onto a detour.
     const trailLen = SINGLE_TRAIL.reduce((s, id) => s + BRANCH_SEGMENTS[id]!.length, 0);
+    expect(trailLen).toBe(TOTAL_ROUTE_LENGTH); // the default line IS a full route
     for (
       let i = 0;
       i < 9000 &&
@@ -1725,8 +1848,8 @@ describe("The single played trail: summit → cliff down the spine, forks parked
     ) {
       // The trail's two hazards (the lake's `lake-gap` and the cliff's `cliff-gap`):
       // charge a jump timed to clear whichever is ahead, same technique as the
-      // branching runToFlag helper. yeti/cave/forest/summit have no gaps, so this
-      // only fires at the two jumps.
+      // branching runToFlag helper. The mountain approach, both fork branches, the
+      // forest and the summit have no gaps, so this only fires at the two jumps.
       const grounded = state.height <= 0;
       const speed = Math.max(1, Math.abs(state.speed));
       const approaching = state.chasms.some((c) => {
@@ -1738,7 +1861,14 @@ describe("The single played trail: summit → cliff down the spine, forks parked
     }
     // Rides the full spine in order — the water/ledge/other detours are never entered
     // (the segments' own forks stay parked on the single trail).
-    expect(segments).toEqual(["summit", "forest-road", "lake", "yeti", "cave", "cliff"]);
+    expect(segments).toEqual([
+      "summit",
+      "forest-road",
+      "lake",
+      "mountain",
+      "outside",
+      "cliff",
+    ]);
     expect(state.segmentId).toBe("cliff");
     // Cleared both gaps, never crashed off the trail.
     expect(state.status).toBe("skiing");

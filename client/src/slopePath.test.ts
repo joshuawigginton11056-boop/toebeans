@@ -8,8 +8,15 @@ import {
 } from "@toebeans/shared";
 import {
   buildCenterline,
+  cavePortals,
+  caveRejoinError,
   centerlineAt,
   centerlineToWorld,
+  FORK_MOUNTAIN,
+  forkMountainCenter,
+  FROZEN_LAKE,
+  lakeIceExtent,
+  lakeIceHeight,
   segmentCenterline,
   segmentToWorld,
   slopeCenterline,
@@ -109,10 +116,13 @@ describe("slopePath — the branching map's real grade (world-Y descent)", () =>
     expect(summitY).toBeGreaterThan(0);
     // Both terminal segments (cliff, ice-castle) end at the flag — route
     // distance TOTAL — so both land at y = 0: same clock, same flag, same floor.
-    expect(segmentCenterline("cliff", 100).y).toBeCloseTo(0, 6);
-    expect(segmentCenterline("ice-castle", 80).y).toBeCloseTo(0, 6);
+    // Lengths read off the registry, not baked in: the areas get re-proportioned
+    // whenever the map is reshaped (2026-07-25 and -26 were two such passes).
+    const endOf = (id: string) => segmentCenterline(id, BRANCH_SEGMENTS[id]!.length).y;
+    expect(endOf("cliff")).toBeCloseTo(0, 6);
+    expect(endOf("ice-castle")).toBeCloseTo(0, 6);
     // The total drop is the summit's height — every route falls the same amount.
-    expect(summitY - segmentCenterline("cliff", 100).y).toBeCloseTo(summitY, 6);
+    expect(summitY - endOf("cliff")).toBeCloseTo(summitY, 6);
   });
 
   it("embeds the shared route height profile as the ground Y", () => {
@@ -126,8 +136,12 @@ describe("slopePath — the branching map's real grade (world-Y descent)", () =>
       ["forest-tree", 60], // the Type A detour: same height as the road it parallels
       ["lake", 50],
       ["water", 100],
-      ["yeti", 40],
-      ["cave", 0],
+      ["mountain", 40],
+      // FORK 3's two branches: the cave rides its own corridor and the outside rides
+      // the default line, but BOTH read their height off the shared depth profile —
+      // which is exactly why the fork is same-clock in elevation as well as distance.
+      ["outside", 150],
+      ["cave", 150],
       ["ledge", 30],
       ["valley", 40],
     ] as const) {
@@ -227,9 +241,9 @@ describe("slopePath — the branching map's shaped (curved) corridors", () => {
     for (const [a, b] of [
       ["summit", "forest-road"],
       ["forest-road", "lake"],
-      ["lake", "yeti"],
-      ["yeti", "cave"],
-      ["cave", "cliff"],
+      ["lake", "mountain"],
+      ["mountain", "outside"],
+      ["outside", "cliff"],
     ] as const) {
       const aEnd = segmentCenterline(a, lengthOf(a));
       const bStart = segmentCenterline(b, 0);
@@ -314,6 +328,172 @@ describe("slopePath — the branching map's shaped (curved) corridors", () => {
       expect(segmentCenterline("main", d).heading).toBeCloseTo(0, 9);
       expect(segmentToWorld("main", d, 4)).toMatchObject({ x: 4 });
     }
+  });
+});
+
+// FORK 3 — the fork mountain (slope-mech, 2026-07-26). The fork's legibility rests on
+// geometry, so the geometry gets pinned: the cave has to start where the fork fires and
+// END where the outside branch ends (or the terrain tears at the rejoin), it has to
+// actually pass through the mass, and the mass has to be big without swallowing any
+// lane. All four are load-bearing, and all four would break silently the next time
+// somebody makes the wrap bolder — which is exactly what these are for.
+describe("slopePath — Fork 3: two lines around and through the mass", () => {
+  const CAVE_LEN = BRANCH_SEGMENTS.cave!.length;
+  const OUTSIDE_LEN = BRANCH_SEGMENTS.outside!.length;
+
+  it("splits both branches from one point and rejoins them at one point", () => {
+    // The fork mouth: the approach's exit is where BOTH branches begin.
+    const forkPoint = segmentCenterline("mountain", BRANCH_SEGMENTS.mountain!.length);
+    for (const branch of ["outside", "cave"] as const) {
+      const start = segmentCenterline(branch, 0);
+      expect(Math.hypot(start.x - forkPoint.x, start.z - forkPoint.z)).toBeCloseTo(0, 3);
+      expect(start.heading).toBeCloseTo(forkPoint.heading, 3);
+    }
+    // The rejoin: the cave's exit lands on the cliff's entrance, which is where the
+    // outside branch ends. This is the residual of the solve in slopePath.ts — if the
+    // wrap is retuned and the solver can no longer close it, this fails rather than
+    // leaving a visible tear in the ground.
+    expect(caveRejoinError()).toBeLessThan(1);
+    const cliffStart = segmentCenterline("cliff", 0);
+    const caveEnd = segmentCenterline("cave", CAVE_LEN);
+    expect(Math.hypot(caveEnd.x - cliffStart.x, caveEnd.z - cliffStart.z)).toBeLessThan(1);
+    // …and both branches are the same length, so it is a choice and not a shortcut.
+    expect(CAVE_LEN).toBe(OUTSIDE_LEN);
+  });
+
+  it("stays arc-length parameterized down the cave (travel ≈ distance)", () => {
+    // The cave is its own centerline, so it needs the same guarantee as the rest: a
+    // hazard at distance D sits D units of travel in, or the sim's spacing lies.
+    let travel = 0;
+    let prev = segmentCenterline("cave", 0);
+    for (let d = 1; d <= CAVE_LEN; d++) {
+      const p = segmentCenterline("cave", d);
+      travel += Math.hypot(p.x - prev.x, p.z - prev.z);
+      prev = p;
+    }
+    expect(travel).toBeCloseTo(CAVE_LEN, 0);
+  });
+
+  it("runs the cave THROUGH the mass and the outside branch AROUND its foot", () => {
+    const c = forkMountainCenter();
+    const distTo = (p: { x: number; z: number }) => Math.hypot(p.x - c.x, p.z - c.z);
+    // The cave crosses the interior — deep inside the footprint, not skimming it.
+    let deepest = Infinity;
+    for (let d = 0; d <= CAVE_LEN; d++) {
+      deepest = Math.min(deepest, distTo(segmentCenterline("cave", d)));
+    }
+    expect(deepest).toBeLessThan(FORK_MOUNTAIN.baseRadius * 0.6);
+    // The outside branch never enters the footprint, and hugs it the whole way round:
+    // "the ride around" has to stay beside the mountain, not wander off across the map.
+    let nearest = Infinity;
+    let farthest = 0;
+    for (let d = 0; d <= OUTSIDE_LEN; d++) {
+      const r = distTo(segmentCenterline("outside", d));
+      nearest = Math.min(nearest, r);
+      farthest = Math.max(farthest, r);
+    }
+    expect(nearest).toBeGreaterThan(FORK_MOUNTAIN.baseRadius);
+    expect(farthest - FORK_MOUNTAIN.baseRadius).toBeLessThan(40); // still hugging it
+    // …and it really does sweep around, rather than passing by: well over a third of
+    // a full turn of heading across the branch.
+    const swept = Math.abs(
+      segmentCenterline("outside", OUTSIDE_LEN).heading -
+        segmentCenterline("outside", 0).heading,
+    );
+    expect(swept).toBeGreaterThan(2.5); // > 143°
+  });
+
+  it("keeps the mass clear of every playable lane (it must not bury the piste)", () => {
+    // FORK_MOUNTAIN.baseRadius is the largest radius that clears the approach, the
+    // outside branch and the cliff run-in. The lane is ±LATERAL_LIMIT and IS the sim's
+    // ground, so the mountain's foot has to stay outside it with room to spare. Make
+    // the mass bigger, or the wrap tighter, and this is what says so.
+    const c = forkMountainCenter();
+    for (const [id, len] of [
+      ["mountain", BRANCH_SEGMENTS.mountain!.length],
+      ["outside", OUTSIDE_LEN],
+      ["cliff", BRANCH_SEGMENTS.cliff!.length],
+    ] as const) {
+      for (let d = 0; d <= len; d += 2) {
+        const p = segmentCenterline(id, d);
+        const clearance = Math.hypot(p.x - c.x, p.z - c.z) - FORK_MOUNTAIN.baseRadius;
+        expect(clearance).toBeGreaterThan(LATERAL_LIMIT);
+      }
+    }
+  });
+
+  it("puts both cave portals ON the mountainside, with a short cutting either end", () => {
+    const { entryDistance, exitDistance } = cavePortals();
+    // Not at the very fork point: a cutting leads in, which is what makes the mouth a
+    // thing you spot and aim at from the approach.
+    expect(entryDistance).toBeGreaterThan(10);
+    expect(entryDistance).toBeLessThan(80);
+    // And out the far side with a run-out to the rejoin, not straight into the cliff.
+    expect(CAVE_LEN - exitDistance).toBeGreaterThan(10);
+    expect(exitDistance).toBeGreaterThan(entryDistance + 100); // a real tunnel between
+    // Both mouths sit exactly on the footprint boundary, by construction.
+    const c = forkMountainCenter();
+    for (const d of [entryDistance, exitDistance]) {
+      const p = segmentCenterline("cave", d);
+      expect(Math.hypot(p.x - c.x, p.z - c.z)).toBeCloseTo(FORK_MOUNTAIN.baseRadius, 0);
+    }
+  });
+});
+
+// THE BIG LAKE (slope-mech, 2026-07-26). The body is a world disc rather than a band
+// down the route, because ice has to be LEVEL and the trail is only level across the
+// flat. These pin the two things that make it read as a lake at all: it is ~15× the
+// old ribbon, and the crossing is actually ON it.
+describe("slopePath — the frozen lake as a BODY", () => {
+  it("is about 15× the ice it replaced (the director's sizing)", () => {
+    const area = Math.PI * FROZEN_LAKE.radius ** 2;
+    // The old sheet was the lane ribbon: ~64 long × 26 wide ≈ 1.7k square units.
+    const oldArea = 64 * 26;
+    expect(area / oldArea).toBeGreaterThan(13);
+    expect(area / oldArea).toBeLessThan(18);
+    // …and it is a BODY, not a corridor: wider than the dressed ribbon is wide.
+    expect(FROZEN_LAKE.radius * 2).toBeGreaterThan(150);
+  });
+
+  it("carries the lane out onto the ice, with a shoreline at each end of the flat", () => {
+    // The crossing has to BE on the lake, not beside it. The flat spans route 312–415
+    // (GRADE_PROFILE); across its middle the lane is fully out on the ice — ice on both
+    // sides of you — and at the two ends the lane runs along the shore with ice only on
+    // the lake side. That asymmetry IS the corner clip the map draws, so it's asserted
+    // rather than tuned away: making the disc big enough to swallow the lane end to end
+    // would push it past the director's 15×.
+    for (let d = 325; d <= 405; d += 5) {
+      const band = lakeIceExtent(d);
+      expect(band).not.toBeNull();
+      expect(band!.latMin).toBeLessThan(-LATERAL_LIMIT); // out on the lake
+      expect(band!.latMax).toBeGreaterThan(LATERAL_LIMIT);
+    }
+    for (const d of [314, 413]) {
+      const band = lakeIceExtent(d);
+      expect(band).not.toBeNull(); // still on the body…
+      expect(band!.latMax).toBeGreaterThan(LATERAL_LIMIT); // …ice out to the right…
+      expect(band!.latMin).toBeGreaterThan(-LATERAL_LIMIT); // …shore on the left.
+    }
+    // The body reaches far out to ONE side (the drawn map's side) rather than being a
+    // symmetric widening of the corridor — that's what "spread out in front of you" is.
+    // …reaching far past the dressed ribbon's ±46 edge, which is what makes it read
+    // as an expanse rather than a wide bit of trail.
+    const mid = lakeIceExtent(FROZEN_LAKE.routeCenter)!;
+    expect(mid.latMax).toBeGreaterThan(135);
+    expect(mid.latMax - mid.latMin).toBeGreaterThan(150);
+    // Lopsided toward the drawn map's side: much more lake on the right than the left.
+    expect(mid.latMax).toBeGreaterThan(Math.abs(mid.latMin) * 3);
+  });
+
+  it("is level, and ends where the ground starts falling away again", () => {
+    // One height for the whole sheet — the flat's height. If the flat ever stops being
+    // flat, the ice would tilt, which is the bug that started the shaping pass.
+    for (const d of [315, 350, 380, 412]) {
+      expect(routeHeightAt(d)).toBeCloseTo(lakeIceHeight(), 6);
+    }
+    // Off the body entirely, well up in the forest and well down the approach.
+    expect(lakeIceExtent(200)).toBeNull();
+    expect(lakeIceExtent(520)).toBeNull();
   });
 });
 

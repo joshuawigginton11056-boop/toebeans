@@ -2,6 +2,7 @@ import {
   BRANCH_SEGMENTS,
   BRANCH_START,
   gradeSpeedFactor,
+  playedForkArms,
   singleTrailNext,
   type Segment,
 } from "./route";
@@ -876,11 +877,17 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   // window AND lateral window — you skied into the great tree), arm the fork.
   // Set once and it sticks to the segment boundary; a crash/respawn clears it.
   let divertTo = state.divertTo;
-  // Forks are PARKED on the single played trail (the redirect): a run flagged
-  // singleTrail never arms a divert, so steering into the great tree / hole / ledge
-  // does nothing and the run stays on the one trail. The full branching run (tests)
-  // and any future re-opened map still arm normally.
-  if (!state.singleTrail && seg?.trigger && divertTo === null && !crashed) {
+  // Most forks are still PARKED on the single played trail (the redirect): steering
+  // into the great tree / the lake hole does nothing, because those detours have no
+  // corridor, terrain or content yet and arming them would strand you in a void.
+  //
+  // FORK 3 IS LIVE (slope-mech, 2026-07-26 — the fork mountain). route.ts's
+  // PLAYED_FORKS is the allowlist of forks that DO arm on a played run; aiming at
+  // the cave mouth on the mountain approach now really takes you inside. Grow that
+  // map as each fork gets built rather than flipping the whole graph on. The full
+  // branching run (tests) and any future re-opened map arm every trigger, as before.
+  const forkArms = !state.singleTrail || playedForkArms(state.segmentId);
+  if (forkArms && seg?.trigger && divertTo === null && !crashed) {
     const t = seg.trigger;
     if (
       distance >= t.at - t.halfWidth &&
@@ -903,14 +910,16 @@ export function stepSkiing(state: SkiState, input: SkiInput, dt: number): SkiSta
   let finishDistance = state.finishDistance;
   let finished = false;
   if (!crashed && distance >= finishDistance) {
-    // The single played trail walks route.ts's SINGLE_TRAIL (summit → forest-road →
-    // lake), not the fork graph: at the lake's end singleTrailNext returns null, so
-    // the run drops through to the runout below (the back of the lake opens onto the
-    // flat coast-out — no finish line yet) instead of flowing on to the yeti. The
-    // full branching run keeps resolving next via the armed fork or the road.
-    const nextId = state.singleTrail
-      ? singleTrailNext(state.segmentId)
-      : (divertTo ?? seg?.next ?? null);
+    // An ARMED FORK WINS on either kind of run (slope-mech, 2026-07-26): it used to
+    // be checked only off the branching path, which is why a played run could never
+    // take a fork even in principle. Now the divert comes first, and the fallback is
+    // the played trail's own successor (route.ts's SINGLE_TRAIL, plus the rejoin off
+    // a live fork's branch) or the fork graph's road. At the played trail's terminal
+    // singleTrailNext returns null, so the run drops through to the runout below —
+    // the cliff opens onto the flat coast-out, since there is no finish line yet.
+    const nextId =
+      divertTo ??
+      (state.singleTrail ? singleTrailNext(state.segmentId) : (seg?.next ?? null));
     const nextSeg = nextId ? BRANCH_SEGMENTS[nextId] : undefined;
     if (nextSeg) {
       segmentId = nextSeg.id;

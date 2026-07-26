@@ -87,64 +87,127 @@ export const BRANCH_START = "summit";
 // The segments' own triggers (lake→water, yeti→ledge) stay parked with the forks
 // (guarded off for single-trail runs). Grow the trail by extending this list; the
 // terrain in skiRender.ts follows it automatically.
+// FORK 3 IS LIVE (slope-mech, 2026-07-26 — director: "the second mountain is the
+// mountain that introduces the cave entrance and the ride around"). The played
+// trail is no longer a pure list: `mountain` is a real fork, so the trail is a
+// LIST PLUS ONE LIVE BRANCH. The list below is the DEFAULT line (steer nothing and
+// this is your run); PLAYED_FORKS says which forks arm on it.
 export const SINGLE_TRAIL: readonly string[] = [
   "summit",
   "forest-road",
   "lake",
-  "yeti",
-  "cave",
+  "mountain",
+  "outside",
   "cliff",
 ];
 
+/**
+ * The forks that are LIVE on the played trail: segment id → the branch steering
+ * into its trigger volume takes you down. Everything not listed here stays parked
+ * (its trigger never arms on a played run) — so the forest tree, the lake hole and
+ * the ice tail are untouched by this, exactly as before.
+ *
+ * Why an allowlist rather than "all triggers arm": the other three forks have no
+ * corridor, no terrain and no content yet, so arming them would strand you in a
+ * void. Fork 3 has all three as of this session. Grow this map as each fork lands.
+ */
+export const PLAYED_FORKS: Readonly<Record<string, string>> = {
+  mountain: "cave",
+};
+
+/** The branch ids reachable from the played trail via a live fork — the corridors
+ * the renderer has to build beyond the default line. */
+export const PLAYED_FORK_BRANCHES: readonly string[] = Object.values(PLAYED_FORKS);
+
 /** The next segment along the single played trail, or null at the cliff — the
  * trail's terminal, where the run reaches the valley floor and opens into the
- * runout. Off the trail (an unlisted id) returns null too, so a single-trail run
- * never wanders onto the parked graph. */
+ * runout.
+ *
+ * Two cases now that Fork 3 is live: on the default line, the list's successor;
+ * on a live fork's BRANCH (e.g. inside the cave), the segment's own `next`, which
+ * is what rejoins the default line at the cliff. Anything else returns null, so a
+ * played run still never wanders onto the parked graph. */
 export function singleTrailNext(segmentId: string): string | null {
   const i = SINGLE_TRAIL.indexOf(segmentId);
-  return i >= 0 && i + 1 < SINGLE_TRAIL.length ? SINGLE_TRAIL[i + 1]! : null;
+  if (i >= 0) return i + 1 < SINGLE_TRAIL.length ? SINGLE_TRAIL[i + 1]! : null;
+  if (PLAYED_FORK_BRANCHES.includes(segmentId)) {
+    return BRANCH_SEGMENTS[segmentId]?.next ?? null;
+  }
+  return null;
+}
+
+/** Whether steering into this segment's trigger volume should divert a PLAYED run
+ * (as opposed to the full parked graph, where every trigger is live). */
+export function playedForkArms(segmentId: string): boolean {
+  return PLAYED_FORKS[segmentId] !== undefined;
 }
 
 // The §4 map, as grayblock topology. Read as a resort trail map (sunset at the
 // summit, flag in the valley):
 //
-//   summit (100) ──▶ FOREST fork (Type A) ──▶ lake (80) ───▶ LAKE fork ──┐
+//   summit (100) ──▶ FOREST fork (Type A) ──▶ lake (140) ──▶ LAKE fork ──┐
 //        │           forest-road (190) ─┐                    │           │
 //        └─[tree]──▶ forest-tree (190) ─┴─▶ (lake)      around│    into  │[hole]
 //                                                             ▼           ▼
-//                                            YETI fork (Type B)      water (180)
-//                                            yeti (70)                    │
-//                                        cave│    around│[ledge]          │
-//                                            ▼           ▼                │
-//                                        cave (110)   ledge (55)          │
-//                                            │           │                │
-//                                            │        valley (75)         │
-//                                            ▼           │                ▼
-//                                         cliff (90) ◀───┼──────── (cliff, shared)
-//                                            │        ice-castle (70)
-//                                          FLAG          │
-//                                                      FLAG
+//                                        THE SECOND MOUNTAIN          water (400)
+//                                        mountain (100) — the approach     │
+//                                            │                             │
+//                                     FORK 3 ├─[aim at the mouth]──▶ cave (300)
+//                                            └─(steer nothing)────▶ outside (300)
+//                                                     │       │             │
+//                                                     ▼       ▼             ▼
+//                                                  cliff (90) ◀──────── (cliff, shared)
+//                                                     │
+//                                                   FLAG
+//
+//   parked until Fork 4 (the cliff shove) is built — reachable only by injecting
+//   a divert on `mountain`, which is what the same-clock test does:
+//        ledge (105) ─▶ valley (150) ─▶ ice-castle (135) ─▶ FLAG
 //
 // PROPORTIONS FROM THE DRAWN MAP (slope-mech, 2026-07-25 director correction:
 // "the proportions — forest is the long stretch, mountains are masses"). The
 // segments used to be six near-equal 80–120 blocks, which is why the run read as
 // one undifferentiated ramp. Re-cut to the shares Josh's top-down map actually
-// shows — the forest is the long meander (30% of the route, the single longest
-// area), the mountains are big masses you spiral off and wrap around (16% + 28%),
-// and the frozen lake is a SHORT crossing of the corner of a big body (13%), not a
-// corridor of its own. Total stays exactly 640, so nothing about the clock moved.
+// shows — the forest is the long meander, the mountains are big masses you spiral
+// off and wrap around, and the frozen lake is a crossing of the corner of a big
+// body, not a corridor of its own.
 //
-// The three full routes to time-balance (§4), each 640 long by construction:
-//   Cave  — summit·forest·lake·yeti·cave·cliff            = 100+190+80+70+110+90
-//   Ice   — summit·forest·lake·yeti·ledge·valley·icecastle= 100+190+80+70+55+75+70
-//   Water — summit·forest·lake·water·cliff                = 100+190+80+180+90
-// The forest Type A (road vs. tree) is a same-length no-op on any of the three.
-// Two reconvergences: Cave & Water share `cliff` (both reach it at offset 540 —
-// the same clock), and Ice runs its own tail (valley → ice-castle) to a second
-// flag at the same total distance. Hazards are deliberately sparse grayblock
-// (one gap on the shared prefix, one on the shared cliff, one on the Ice tail):
-// enough to prove chasms fire on every route and across the handoffs; per-route
-// hazard balancing (the road tenser, the detours lower-stakes) is §5, deferred.
+// THE BIG LAKE AND THE FORK MOUNTAIN (slope-mech, 2026-07-26 — v3 §12.3, two
+// director calls). Two things changed here:
+//
+//   1. The lake's CROSSING grew 80 → 140 (director's pick of the three sizings:
+//      "body + longer corner"). The 15× is mostly the ice BODY, which is lateral
+//      and lives in the renderer — but a body that big skirted in 3.8 s read as
+//      nicking its edge, so the crossing grew with it (~7 s, 22% of the run).
+//   2. `yeti`(70) → `cave`(110) were SEQUENTIAL spine segments — which is exactly
+//      why the second mountain skied as two more slopes in a row with the fork
+//      parked and never arming. They become the real Fork 3: an APPROACH you see
+//      the mass and the cave mouth from, then TWO EQUAL BRANCHES, through the
+//      mountain or around its outside, rejoining at the cliff. This is v3 §8's
+//      parked "re-grayblock route.ts for v3's fork structure", done.
+//
+// ON THE CLOCK (director, 2026-07-26): §9's 3:30 is where the FINISHED map lands
+// once every area has its content, NOT a length to hit now — "so far we only have
+// the starting mountain, no forest, and a small lake." So each area is sized to
+// what its own content needs and the total falls out. It is now 920 (a clean run
+// ~45 s, up from ~31 s). Do not pad an area to chase the budget table in §9.
+//
+// The four full routes to time-balance (§4), each 920 long by construction:
+//   Cave    — summit·forest·lake·mountain·cave·cliff    = 100+190+140+100+300+90
+//   Outside — summit·forest·lake·mountain·outside·cliff = 100+190+140+100+300+90
+//   Water   — summit·forest·lake·water·cliff            = 100+190+140+400+90
+//   Ice     — summit·forest·lake·mountain·ledge·valley·ice-castle
+//                                                       = 100+190+140+100+105+150+135
+// The forest Type A (road vs. tree) is a same-length no-op on any of the four.
+// Three reconvergences: Fork 3's own pair (cave and outside are the same 300, so
+// they rejoin the cliff at one clock — the pair this session had to make legible),
+// Cave/Outside & Water sharing `cliff` (all reach it at offset 830), and Ice
+// running its own tail to a second flag at the same total distance. Hazards are
+// deliberately sparse grayblock (one gap on the shared prefix, one on the shared
+// cliff, one on the Ice tail): enough to prove chasms fire on every route and
+// across the handoffs. NOTE Fork 3's branches carry NO chasm each — deliberate, so
+// the pair is same-clock to the STEP and the §10 assertion needs no tolerance.
+// Per-route hazard balancing (the road tenser, the detours lower-stakes) is §5.
 export const BRANCH_SEGMENTS: Readonly<Record<string, Segment>> = {
   // 0 · Summit Descent (shared). Everyone drops in here. The great tree waits in
   // the back half on the right (lateral 4..12): steer into it and the forest
@@ -181,11 +244,17 @@ export const BRANCH_SEGMENTS: Readonly<Record<string, Segment>> = {
   // lake gap sits before the hole, so all three routes learn the jump here.
   lake: {
     id: "lake",
-    length: 80,
-    next: "yeti",
-    chasms: [{ id: "lake-gap", start: 40, width: 3 }],
-    checkpoints: [35],
-    trigger: { at: 56, halfWidth: 20, lateralMin: 4, lateralMax: 12, into: "water" },
+    // THE LONGER CORNER (slope-mech, 2026-07-26 — director's sizing call). 80 → 140.
+    // The 15× is mostly the ice BODY (lateral, in the renderer); this is the part of
+    // it that is route length, so the crossing reads as crossing a big lake (~7 s,
+    // 22% of the run) rather than nicking its edge in under four seconds.
+    length: 140,
+    next: "mountain",
+    // The gap sits mid-crossing, with its checkpoint just above it — both moved out
+    // with the shore (they were 40/35 on the old 80).
+    chasms: [{ id: "lake-gap", start: 74, width: 3 }],
+    checkpoints: [66],
+    trigger: { at: 100, halfWidth: 30, lateralMin: 4, lateralMax: 12, into: "water" },
     // The one FLAT area on the mountain (director, 2026-07-25: "you currently have
     // the frozen lake on the downhill slope"). Flat would normally mean slow — the
     // speed coupling reads grade — so the lake glides instead; see gradeSpeedFactor.
@@ -196,60 +265,92 @@ export const BRANCH_SEGMENTS: Readonly<Record<string, Segment>> = {
   // yeti(80)+cave(120) so it rejoins the cliff at the same clock.
   water: {
     id: "water",
-    length: 180,
+    // Re-lengthened with Fork 3 (180 → 400) so it still replaces everything the
+    // around-the-hole routes ski: mountain(100) + a branch(300). Same clock.
+    length: 400,
     next: "cliff",
     chasms: [],
     checkpoints: [],
   },
-  // 3 · Yeti's Peak — Type B (splits to the flag). Only the around-lake routes
-  // reach it. Ski it, then the yeti's son shoves you off the ledge (back half,
-  // right) into the Ice Line, or press through to the cave (the default) and the
-  // reunion cliff run.
-  yeti: {
-    id: "yeti",
-    length: 70,
-    next: "cave",
+  // 3 · THE SECOND MOUNTAIN — the approach, and Fork 3's trigger (§5 fork 3;
+  // director, 2026-07-26: "the second mountain is the mountain that introduces the
+  // cave entrance and the ride around"). This segment is not a slope that happens
+  // to curve — it is the stretch where the MASS is in front of you and the cave
+  // mouth is a thing you can see and aim at. Steer into the mouth's lateral band
+  // (right, +4..+12) over its back half and the mountain takes you inside; steer
+  // nothing and you carry on around the outside (`next`), which is the white line
+  // on the drawn map. Replaces the old `yeti`, whose trigger pointed at the ice
+  // tail — that tail belongs to Fork 4's shove (§5 fork 4), which is a SPEED
+  // condition the sim doesn't model yet, so it is parked (see `ledge`).
+  mountain: {
+    id: "mountain",
+    length: 100,
+    next: "outside",
     chasms: [],
     checkpoints: [],
-    trigger: { at: 44, halfWidth: 22, lateralMin: 4, lateralMax: 12, into: "ledge" },
+    // The mouth sits on the mass's flank at the fork point; the volume covers the
+    // back half of the approach, so you have the whole run-in to line up on it.
+    trigger: { at: 72, halfWidth: 28, lateralMin: 4, lateralMax: 12, into: "cave" },
   },
-  // 3a · Through the cave → the main road (your friend surfaces from their lake
-  // run) → the cliff. The Cave Line, the reunion route.
+  // 3a · THROUGH — the cave, the interior line: enclosed, the mountain overhead.
+  // 3b · AROUND — the outside, the exposed line over the shoulder: the mass above
+  // you on one side, open air on the other.
+  //
+  // Same length, therefore same clock; and because height is keyed to route DEPTH
+  // (see GRADE_PROFILE) they also share a pitch. Their character is deliberately
+  // ENCLOSURE vs EXPOSURE, not steepness — v3 §12.3's "let the cave carry the
+  // descent" is structurally unavailable (equal depth ⇒ equal grade), and making
+  // either line mellow to satisfy "not another drop-off" would repeat the forest
+  // mistake (speed IS grade here; a level area is a slow area). Both keep the
+  // mountain's honest pitch and the difference is what's around you.
   cave: {
     id: "cave",
-    length: 110,
+    length: 300,
     next: "cliff",
     chasms: [],
     checkpoints: [],
   },
-  // 3b · Around — the ledge → the steep valley → the Ice Castle → its own flag.
-  // The Ice Line, run blind to the finish. ledge+valley+ice-castle = 220 =
-  // cave(120)+cliff(100), so the two Type B branches reach the flag same-clock.
+  outside: {
+    id: "outside",
+    length: 300,
+    next: "cliff",
+    chasms: [],
+    checkpoints: [],
+  },
+  // 3c · PARKED: the Ice tail — ledge → the steep valley → the Ice Castle → its own
+  // flag. Nothing triggers into it any more: it used to hang off `yeti`, whose one
+  // trigger slot is now Fork 3's cave, and its real home is Fork 4's involuntary
+  // shove ("too slow → the yeti's son shoves you off"), which is a speed condition
+  // the sim doesn't model yet. It stays reachable by injecting a divert on
+  // `mountain` — which is exactly what the same-clock test does — so the tail keeps
+  // its structural identity: ledge+valley+ice-castle = 390 = cave(300)+cliff(90),
+  // and the Ice line still reaches its flag at the same total distance.
   ledge: {
     id: "ledge",
-    length: 55,
+    length: 105,
     next: "valley",
     chasms: [],
     checkpoints: [],
   },
   valley: {
     id: "valley",
-    length: 75,
+    length: 150,
     next: "ice-castle",
-    chasms: [{ id: "valley-gap", start: 38, width: 3 }],
-    checkpoints: [33],
+    chasms: [{ id: "valley-gap", start: 76, width: 3 }],
+    checkpoints: [68],
   },
   "ice-castle": {
     id: "ice-castle",
-    length: 70,
+    length: 135,
     next: null,
     chasms: [],
     checkpoints: [],
   },
-  // 4 · The Cliff jump — the shared finale for the Cave and Water lines. Reached
-  // from cave (yeti·cave, offset 540) and from water (offset 540) at the same
-  // clock. The signature gap lives here (grayblock width 3 for now — the wide
-  // "charged-jump-or-boost" cliff is §5 balancing).
+  // 4 · The Cliff jump — the shared finale for the Cave, Outside and Water lines.
+  // Reached from either Fork 3 branch (mountain·cave / mountain·outside, offset
+  // 830) and from water (offset 830) at the same clock. The signature gap lives
+  // here (grayblock width 3 for now — the wide "charged-jump-or-boost" cliff is §5
+  // balancing).
   cliff: {
     id: "cliff",
     length: 90,
@@ -272,22 +373,30 @@ const SEGMENT_OFFSETS: Readonly<Record<string, number>> = {
   "forest-road": 100,
   "forest-tree": 100,
   lake: 290,
-  // After the lake: around (→ yeti) and into (→ water) both start at 370.
-  yeti: 370,
-  water: 370,
-  // Yeti's Peak splits: cave and ledge both start at 440.
-  cave: 440,
-  ledge: 440,
+  // After the lake: around (→ the mountain approach) and into the hole (→ water)
+  // both start at 430.
+  mountain: 430,
+  water: 430,
+  // FORK 3 splits at the end of the approach: `cave` (through) and `outside`
+  // (around) both start at 530 — the pair whose same clock this session is for.
+  // The parked ice tail is injected at the same point, so it starts there too.
+  cave: 530,
+  outside: 530,
+  ledge: 530,
   // The Ice tail continues from ledge.
-  valley: 495,
-  "ice-castle": 570,
-  // The shared cliff: cave ends at 550 and water ends at 550, so cliff is 550
-  // whichever way you came — the load-bearing same-clock coincidence.
-  cliff: 550,
+  valley: 635,
+  "ice-castle": 785,
+  // The shared cliff: both Fork 3 branches end at 830 and water ends at 830, so
+  // cliff is 830 whichever way you came — the load-bearing same-clock coincidence.
+  cliff: 830,
 };
 
-// The full summit → flag length every route shares.
-export const TOTAL_ROUTE_LENGTH = 640;
+// The full summit → flag length every route shares. 640 → 920 (slope-mech,
+// 2026-07-26): the lake's longer corner (+60) and the second mountain becoming an
+// approach plus two 300-unit fork branches (+220). Not a step toward §9's 3:30 —
+// per the director that number is where the FINISHED map lands; areas are sized to
+// their own content and the total is whatever that sums to.
+export const TOTAL_ROUTE_LENGTH = 920;
 
 /** How far down the whole route you are, independent of which fork you took. */
 export function routeDistanceOf(segmentId: string, distance: number): number {
@@ -375,14 +484,25 @@ export const REFERENCE_GRADE = 0.35;
 // sitting at the shared 28 ceiling, raise GRADE_TOP_SPEED in skiing.ts (its own call).
 // SHAPE THE MOUNTAIN (slope-mech, 2026-07-25 — director: "you currently have the
 // frozen lake on the downhill slope"; every area skied the same ~26°, so the map
-// had no terrain story). Each area now has its own character, read off the drawn
-// map, at today's 640-unit length:
+// had no terrain story). Each area has its own character, read off the drawn map.
+// Re-spanned 2026-07-26 for the big lake + the fork mountain (route 640 → 920):
 //
 //   start mountain 0–100    the plunge, steepest and steady
 //   forest        100–290   ROLLING — the profile undulates instead of stepping down
-//   frozen lake   290–370   FLAT (the ease-down + the ice + the ramp back out)
-//   second mtn    370–550   moderate, the line descending around the mass
-//   cliff run-in  550–640   steep again, then easing to the flag
+//   frozen lake   290–430   FLAT (the ease-down + the ice + the ramp back out)
+//   second mtn    430–830   the approach + both fork branches, HONEST pitch
+//   cliff run-in  830–920   steep again, then easing to the flag
+//
+// THE SECOND MOUNTAIN IS NOT MELLOW (slope-mech, 2026-07-26). The director's call
+// is that it must not read as "another drop-off" — but speed IS grade here, so
+// flattening it would make it a slow area, which is the forest mistake made a
+// fourth time. It therefore keeps a pitch at or above the forest's mean (~0.44–0.46,
+// where the old profile dipped to 0.38 mid-wrap), and "not another drop-off" is
+// answered by GEOMETRY instead: the mountain's bulk stands beside and above the
+// line (the renderer's mass), the outside branch wraps around its foot, and the
+// cave branch runs inside it. Both branches sit at the same route depth, so they
+// necessarily share this pitch — the difference between them is enclosure vs
+// exposure, never steepness.
 //
 // THE FOREST IS ROLLING, NOT MELLOW. Speed IS grade here, and a gentler forest has
 // been rejected three times ("my speed still feels extremely slow through the
@@ -393,11 +513,12 @@ export const REFERENCE_GRADE = 0.35;
 // are the reason this is a roll and not a step; see the git history of this file.)
 //
 // THE LAKE IS GENUINELY FLAT. The grade eases from the forest's 0.44 to 0 over the
-// lake's first 20 units, sits at 0 across the ice, and ramps back to the second
+// lake's first ~22 units, sits at 0 across the ice, and ramps back to the second
 // mountain's pitch after. Flat would normally mean a hard speed shed, so the lake
 // is `iceGlide` and its speed comes from what you arrived with — see
 // gradeSpeedFactor. The ease-down is INSIDE the lake segment on purpose, so the
-// glide covers it and the shore doesn't read as brakes.
+// glide covers it and the shore doesn't read as brakes; the ramp back out straddles
+// the far shore for the same reason.
 const GRADE_PROFILE: readonly (readonly [number, number])[] = [
   [0, 0.5], // start mountain: the plunge (~26.6°, just under the camera's ~27°)
   [80, 0.5], // …held steady the whole way down the peak, not shed early
@@ -407,15 +528,20 @@ const GRADE_PROFILE: readonly (readonly [number, number])[] = [
   [195, 0.51], // …and crest…
   [225, 0.41], // …and hollow…
   [260, 0.5], // …and a last crest…
-  [290, 0.44], // …bottoming out onto the lake shore
-  [310, 0.0], // the ice begins — flat, and the glide carries you across
-  [360, 0.0], // …still flat: the lake does not tilt
-  [390, 0.42], // the second mountain picks the descent back up
-  [470, 0.38], // …its gentlest through the middle of the wrap
-  [520, 0.42],
-  [560, 0.5], // the steep lower pitch (the cliff run-in)
-  [610, 0.5],
-  [640, 0.42], // ease a touch for the flag
+  [290, 0.44], // …bottoming out onto the lake shore. ⚠ iceGlideFactor samples the
+  // grade at EXACTLY 290 to know what pace you arrived with — keep a control point
+  // here holding the forest's exit pitch, or the glide starts already half-scrubbed.
+  [312, 0.0], // the ice begins — flat, and the glide carries you across
+  [415, 0.0], // …still flat the whole 140-unit crossing: the lake does not tilt
+  [445, 0.47], // the second mountain picks the descent back up (ramp crosses the shore)
+  [530, 0.48], // …the fork point, at the mountain's honest pitch
+  [620, 0.46], // ── the wrap rolls a little rather than holding one dead pitch…
+  [720, 0.49],
+  [830, 0.47], // …but its MEAN (~0.475) stays above the forest's (~0.468). NOT mellow —
+  // route.test.ts pins that, because flattening this area is the standing trap.
+  [870, 0.5], // the steep lower pitch (the cliff run-in)
+  [900, 0.5],
+  [920, 0.42], // ease a touch for the flag
 ];
 
 function gradeProfileAt(routeDistance: number): number {

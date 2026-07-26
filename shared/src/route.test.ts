@@ -33,17 +33,56 @@ describe("route — the descent's grade profile (steepness → speed)", () => {
     }
     expect(crest - hollow).toBeGreaterThan(0.08); // real relief, not a flat plateau
     // Every PITCHED zone stays under the camera's ~27° framing (tan ≈ 0.51) and above
-    // a gentle floor. The lake is deliberately excluded: it is the one flat area.
-    for (const d of [0, 120, 230, 260, 400, 470, 560, 640]) {
+    // a gentle floor. The lake (290–430) is deliberately excluded: it is the one flat
+    // area. Samples re-spanned for the 920 route (slope-mech, 2026-07-26).
+    for (const d of [0, 120, 230, 260, 460, 530, 700, 830, 890, 920]) {
       expect(routeGradeAt(d)).toBeLessThan(0.51);
       expect(routeGradeAt(d)).toBeGreaterThan(0.15);
     }
   });
 
+  it("keeps the second mountain at or above the forest's mean — it is NOT the mellow area", () => {
+    // The fork mountain (slope-mech, 2026-07-26 — v3 §12.3 #2). The director's call is
+    // that it must not read as "another drop-off", and the trap is answering that by
+    // flattening it: speed IS grade here, so a mellow second mountain is a SLOW second
+    // mountain — the forest mistake, which has been rejected three times. "Not another
+    // drop-off" is answered by the renderer's mass standing beside and above the line,
+    // never by the profile. This pins that: the whole area 430–830 (the approach plus
+    // both fork branches) stays at least as steep as the forest's mean.
+    const meanOver = (from: number, to: number) => {
+      let sum = 0;
+      for (let d = from; d <= to; d++) sum += routeGradeAt(d);
+      return sum / (to - from + 1);
+    };
+    const forestMean = meanOver(100, 290);
+    // Measured past the lake's ramp-out (which finishes at 445) so this reads the
+    // mountain's own pitch, not the shore hand-off.
+    for (let d = 450; d <= 830; d += 10) {
+      expect(routeGradeAt(d)).toBeGreaterThanOrEqual(forestMean - 0.02);
+    }
+    expect(meanOver(450, 830)).toBeGreaterThan(forestMean);
+  });
+
+  it("gives Fork 3's two branches one identical pitch (equal depth ⇒ equal grade)", () => {
+    // cave and outside both span route 530–830, so they are the same segment of the
+    // shared depth-keyed profile. This is why "let the cave carry the descent while
+    // the outside stays flatter" (one of v3 §12.3's suggested options) is structurally
+    // unavailable: a per-branch pitch would break the equal-drop invariant that makes
+    // same-clock free. Their character is enclosure vs exposure instead.
+    for (let d = 0; d <= BRANCH_SEGMENTS["cave"]!.length; d += 25) {
+      expect(gradeSpeedFactor("cave", d)).toBe(gradeSpeedFactor("outside", d));
+      expect(routeHeightAt(530 + d)).toBe(routeHeightAt(530 + d));
+    }
+    // …and both drop exactly the same amount, entrance to rejoin.
+    const drop = routeHeightAt(530) - routeHeightAt(830);
+    expect(drop).toBeGreaterThan(100); // an honest descent, not a level shelf
+  });
+
   it("makes the frozen lake actually flat — and keeps it fast anyway (the ice glide)", () => {
     // The callout that started the shaping pass (director, 2026-07-25): "you
     // currently have the frozen lake on the downhill slope." It doesn't any more.
-    for (let d = 315; d <= 355; d += 5) {
+    // The flat now spans the whole 140-unit crossing (slope-mech, 2026-07-26).
+    for (let d = 315; d <= 415; d += 5) {
       expect(routeGradeAt(d)).toBe(0);
     }
     // Flat ground would normally mean a hard speed shed, because the coupling reads
@@ -99,9 +138,9 @@ describe("route — the descent's grade profile (steepness → speed)", () => {
       prev = h;
     }
     // The lake is level, not merely gentle: same height at both ends of the ice.
-    expect(routeHeightAt(355)).toBeCloseTo(routeHeightAt(315), 6);
+    expect(routeHeightAt(415)).toBeCloseTo(routeHeightAt(315), 6);
     // …and everywhere off the lake it really is descending.
-    for (const d of [40, 150, 250, 420, 500, 600]) {
+    for (const d of [40, 150, 250, 480, 600, 700, 800, 880]) {
       expect(routeHeightAt(d) - routeHeightAt(d + 20)).toBeGreaterThan(4);
     }
   });
@@ -109,17 +148,19 @@ describe("route — the descent's grade profile (steepness → speed)", () => {
   it("integrates the grade into the height (dH/dD ≈ −grade)", () => {
     // A central difference of the height table recovers the local grade — proof
     // the height IS the integral of the grade profile.
-    for (const d of [60, 200, 400, 500, 600]) {
+    for (const d of [60, 200, 380, 500, 700, 880]) {
       const slope = (routeHeightAt(d - 1) - routeHeightAt(d + 1)) / 2;
       expect(slope).toBeCloseTo(routeGradeAt(d), 2);
     }
   });
 
-  it("has a taller total drop since the forest was steepened for speed (the run's scale)", () => {
-    // The forest-speed round-2 raise (0.33 → 0.42 plateau, 2026-07-25) makes the mountain
-    // ~19% taller than the old ~238 — a genuinely steeper forest. Still a bounded scale.
-    expect(routeHeightAt(0)).toBeGreaterThan(250);
-    expect(routeHeightAt(0)).toBeLessThan(310);
+  it("has a total drop that scales with the 920 route (the run's scale)", () => {
+    // The mountain is as tall as the route is long, because height is the integral of
+    // the grade. The lake's longer corner + the fork mountain took the route 640 → 920
+    // (slope-mech, 2026-07-26), so the drop went ~285 → ~390. Bounded, and worth
+    // pinning: anything much bigger means an area got padded rather than shaped.
+    expect(routeHeightAt(0)).toBeGreaterThan(350);
+    expect(routeHeightAt(0)).toBeLessThan(430);
   });
 
   describe("gradeSpeedFactor", () => {
