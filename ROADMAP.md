@@ -28,7 +28,7 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 
 ### Foundation
 - TypeScript strict + Three.js + Vite; npm workspaces (`client`/`server`/`shared`);
-  Vitest. `npm run check` = typecheck + tests (~129 tests green).
+  Vitest. `npm run check` = typecheck + tests (185 tests green as of 2026-07-26).
 - All game logic = pure functions in `/shared` over a serializable `GameState`;
   rendering reads state, never mutates it (multiplayer-proofing).
 - Runs as **parallel git worktrees** — `lobby`, `slope-mechanics`,

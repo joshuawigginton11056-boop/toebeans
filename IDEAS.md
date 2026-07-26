@@ -105,88 +105,84 @@ is **unresolved** — Josh will decide. This is the natural unlock for follow-up
 (the peaks contrast much harder against a decided sky). Do NOT touch the sky/atmosphere
 until then.
 
-## ⏭ START HERE (slope-mech) — JOSH IS MID-PLAYTEST (2026-07-26)
+## ⏭ START HERE (slope-mech) — HANDOFF, end of 2026-07-26 session 3
 
-**Nothing is queued. Ask Josh what he wants before writing code.**
+**Nothing is queued. Ask Josh what he wants before writing code.** Everything below is
+either shipped-and-merged or parked; there is no work in flight and the worktree is
+clean.
 
-**Where the playtest got to.** He rode as far as the forest (route 276) and hit a white
-wall standing across the piste in front of the lake, which he skied straight through.
-That was real — the lake basin's shore lip — and it is **FIXED**, along with the
-invariant that lets it happen (see the block directly below). The rest of the ride is
-still unridden: **the lake crossing, the mountain approach, the cave fork and the cliff
-have not been seen at speed.** Two things I still could not settle for him, both now
-answered analytically but not by eye:
-- **The cave HAS a ceiling** — confirmed by geometry, not by squinting at a render. The
-  shell roofs the corridor continuously between the portals, with 38 units of headroom at
-  its tightest (the mouths) and up to 116 mid-tunnel. **That is the actual problem:** a
-  116-unit vault deep in fog reads as sky, not rock, which is exactly why the render was
-  ambiguous. The tunnel wants its own roof close overhead — a look job, see the
-  (mountain) note below, though a bored tube is arguably mechanics' grayblock.
+### What this session shipped (three items, all merged to master)
+
+1. **The lake's rim stopped walling off the trail**, and the invariant became v3 **§12.5**.
+2. **The map arrives whole** instead of loading in around you — the tree window now
+   derives from the fog contract, and the run waits for the decor load.
+3. **Traced the mid-distance slab** to `createValleyVista()` and parked it for mountain.
+
+Blocks for each are directly below; ROADMAP has the builds and the measured numbers.
+
+### THE THROUGH-LINE, and the most useful thing to carry forward
+
+All three were **the same failure**: a feature solved correctly against a constraint that
+had since moved in a file its author didn't own.
+
+| feature | assumed | reality now |
+|---|---|---|
+| lake basin's shore lip | nothing crosses the disc | the trail crosses it twice |
+| tree scatter window | fog ends at 150 | fog ends at 300 |
+| valley vista profile | a near-level world | ~0.5 units of drop per unit travelled |
+
+None was visible to any test, because all three are presentation geometry and the tests
+check the height profile. Two are now enforced (§12.5's lane sweep; `FOG_NEAR`/`FOG_FAR`
+exported as a contract that the window derives from). **The open question I put to Josh
+and he has not answered: does the whole backdrop layer deserve the same sweep the lane
+got?** That is the natural next move if these keep turning up.
+
+### The playtest — still the missing evidence
+
+Josh rode to route 276 on the first attempt and hit the wall. He started a second ride
+("ok riding it now, let's see the cave") and **never reported back**, so treat the whole
+map past the forest as unseen: **the lake crossing, the mountain approach, the cave fork
+and the cliff have no director verdict.** Ask him before assuming any of it is good.
+
+Two questions I answered analytically but which his eyes still have to settle:
+- **The cave HAS a ceiling** — geometry, not guesswork. The shell roofs the corridor
+  continuously between the portals: 38 units of headroom at its tightest (the mouths),
+  up to 116 mid-tunnel. **That is the actual problem** — a 116-unit vault in fog reads as
+  sky, not rock, which is why the render was ambiguous. The tunnel wants a roof close
+  overhead. Whether that is mountain's look job or mechanics' grayblock (a bored tube) is
+  an open seam call.
 - **The mouth is big enough but leaves the frame.** 19–29° wide across route 430–470
   (85–112 units out) — a large target. But the trigger volume is route **474–530**, and
-  across exactly that stretch the mouth swings from 32° off-axis to 80°, i.e. out of a
-  64° FOV. You get a clear look at it early, then it leaves the frame as you commit.
-  Measured off the trail tangent, so the follow camera's lag/lookahead could soften it —
-  **his eyes settle this one.** If it holds, it is a fork-geometry fix, not a size knob.
+  across exactly that stretch the mouth swings from 32° off-axis to 80°, outside a 64°
+  FOV. Measured off the trail tangent, so the follow camera's lag could soften it. If it
+  holds, it is a fork-geometry fix, not a size knob.
 
-**The standing candidates**, in the order I'd argue for them — his call:
+### The standing candidates, in the order I'd argue for them — his call
+
 1. **Fork 4, the cliff shove** (v3 §5 fork 4, §8 item 6). The only fork left with content
    already designed, and it gives the orphaned ice tail a steerable entrance. Needs a
-   **speed condition** — a new kind of trigger for the sim — and §5's open design
-   question is still his to answer: the shove is same-clock, so deliberately slowing down
-   is a free ticket to the ice castle. Route selector, or does it cost something?
-2. **What the cave is LIKE inside** (v3 §7 #8). Now sharper than it was: the ceiling
-   question is answered, and the answer says the interior needs real tunnel geometry
-   rather than a distant vault. Still nothing decides whether it is dark, lit, hazardous,
-   or what its exclusive reward is (§7 #6).
-3. **The §10 debug teleport.** Still doesn't exist, and this session is the argument for
-   it: every look at the cave or the cliff is a 30–45 second ride, and the map is only
-   getting longer. The spec says "not a nicety".
-4. **The forest scatter runs the whole route** — the biggest gap between clean renders
-   and what he actually sees riding it. Not slope-mech's file; see the (forest) note.
+   **speed condition** — a new kind of trigger for the sim — and §5's design question is
+   still his: the shove is same-clock, so deliberately slowing down is a free ticket to
+   the ice castle. Route selector, or does it cost something?
+2. **What the cave is LIKE inside** (v3 §7 #8). Sharper than it was: the ceiling question
+   is answered and the answer says the interior needs real tunnel geometry rather than a
+   distant vault. Nothing yet decides whether it is dark, lit, hazardous, or what its
+   exclusive reward is (§7 #6).
+3. **The §10 debug teleport.** Still doesn't exist, and three sessions running have paid
+   the 30–45 second ride to look at anything past the forest. The spec says "not a
+   nicety" and it is right.
+4. **The backdrop sweep** (new, from the through-line above). Would need the corridor
+   cross-section extracted too — see the §12.5 follow-up.
 
 **One thing NOT to do:** don't chase §9's 3:30. Josh retired that on 2026-07-26 — size
 each area to its own content and let the total fall out. Written into v3 §9 and §12.4.
 
----
+### Cross-session notes left for other worktrees
 
-## THE WALL IN FRONT OF THE LAKE — FIXED (slope-mech, 2026-07-26); follow-ups below
-
-**Status: this block is CLOSED.** Josh rode into a wall at route 276 and asked the right
-question after it — *"this whole map building has become glitchy, is our codebase bloated?
-are my prompts confusing?"* Neither: 17.4k lines across client+shared is lean, and the
-prompts have been precise. The cause was **a missing invariant**, and it is now a test.
-See the ROADMAP entry for the build and the measured numbers.
-
-**Now spec, not folklore:** the rule is written into v3 **§12.5** (director's call,
-2026-07-26), alongside why it can't be expressed as a clearance threshold.
-
-**The one thing worth carrying forward:** *height is not what makes a surface a wall.*
-The lip stood 12.6 units above the lane; the cave's ceiling comes down to 19.7. Any
-clearance threshold that catches the first condemns the second. What separates them is
-whether the surface **crosses** the ground you ride. The rule now asserted is "no
-off-ribbon surface may be proud on part of a lane's cross-section while at or below it on
-another" — and it needed no tuned tolerance, which is the tell that it's the right rule.
-
-**Follow-ups (slope-mech), for later sessions:**
-- **The invariant only covers the RIDDEN lane (±12), not the dressed ribbon (±46).** The
-  fix ducks across the whole ribbon, so the walls beside the lane went too — but the
-  *assertion* stops at the lane, because out on the ribbon the corridor's own banks climb
-  to BERM_HEIGHT + relief (~19) and the mountain's foot is deliberately allowed to crowd
-  in beside them. Judging those fairly needs skiRender's `crossY` cross-section extracted
-  into `slopePath.ts` alongside the other surfaces. Worth doing — it would let the sweep
-  cover everything a player can see, not just what they ride.
-- **The basin floats over the cave.** The disc overlaps Fork 3's branches in plan while
-  sitting ~52 units above them, so the lake's far edge hangs in the air over the mountain
-  area. Not a wall (it's overhead, and the sweep correctly reads it as a roof) and not
-  what Josh hit — but it is a floating rim you could see from the wrap. Bounding the disc
-  against the mass is the fix; it wasn't touched here to keep the change to one item.
-- **The world still stops dead beyond the ±46 ribbon.** Traced again this session while
-  hunting the wall: the hard vertical face visible from off-piste beside the lake outlet
-  is the ribbon's own edge, not the basin. Unchanged and still the map's biggest
-  structural gap once features live off the ribbon.
-- **The lake gap is still a formality** (3 units wide, unfailable) — deliberately
-  untouched again, so the playtest keeps judging the size and the fork.
+- **(forest)** the whole-route scatter (instancing is probably the unlock), and
+  `EFFECT_WINDOW_AHEAD` wants a look against the 300 fog.
+- **(mountain)** the valley vista's profile, and the cave interior's look.
+Both are written up in full in their own blocks below.
 
 ---
 
@@ -454,7 +450,7 @@ tools (ROADMAP Open lists all of it).
 
 ---
 
-## ⏭ START HERE (slope-mech) — ONE solid mountain, one SMOOTH trail summit → back of the forest (director look-pass, 2026-07-24)
+## (CLOSED 2026-07-25) ONE solid mountain, one SMOOTH trail summit → back of the forest (director look-pass, 2026-07-24)
 
 Director look-pass on the real-terrain build. **Redirect: stop branching. Build one
 solid mountain with a SINGLE trail going down toward the forest — no forks, no

@@ -146,6 +146,39 @@ Then screenshot. To find which mesh owns a visual artifact, toggle
 `h.scene.children[i].visible` and re-render — that is how a stray sliver was traced to
 a phantom lake band in one pass.
 
+**Bisect with a pixel read, not with screenshots** (2026-07-26 — how the mid-distance
+slab was pinned down in one call). A screenshot per candidate is slow and costs a
+round-trip each; instead sample the artifact's pixel and loop over the children:
+
+```js
+const gl = h.renderer.getContext();
+const W = h.renderer.domElement.width, H = h.renderer.domElement.height;
+const px = new Uint8Array(4);
+const sample = () => { h.renderer.render(h.scene, cam);
+  // NB readPixels' origin is BOTTOM-left, unlike the screenshot you picked the spot from.
+  gl.readPixels(W * 0.42 | 0, H * 0.74 | 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  return `${px[0]},${px[1]},${px[2]}`; };
+const base = sample();
+for (const [i, c] of h.scene.children.entries()) {
+  if (!c.visible) continue;
+  c.visible = false; const now = sample(); c.visible = true;
+  if (now !== base) console.log(i, c.name || c.type, 'OWNS IT');
+}
+```
+
+Then recurse into that object's `.children` the same way — the slab turned out to be a
+child of the sky dome, which no top-level sweep would have named. Once you have the
+object, `material.type/side/fog/depthWrite`, `renderOrder` and
+`geometry.boundingBox` usually identify it against the source without further rendering.
+
+**Two rig gotchas worth knowing before you start.** The in-app Browser pane often can't
+screenshot ("the pane is not displayed, so the page is not compositing frames") — drive
+the connected Chrome instead, which also matches how Josh looks at things. And a probe
+scene is NOT the game until you call `syncEnvironment(...)`: the decor scatter, the sky
+dome and the backdrop layers are all positioned from it, so without it the trees never
+appear and the camera-attached backdrop sits at the origin, far from your camera. More
+than one artifact has been invisible in a probe for exactly that reason.
+
 **For LAYOUT questions, skip the browser entirely.** `client/src/slopePath.ts` has no
 three.js dependency, so `npx tsx` a throwaway script that imports it directly and emits
 an SVG plan view — top-down, labelled, exact. Much faster than flying the map.
