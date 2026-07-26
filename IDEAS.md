@@ -3,6 +3,40 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## MAP EDITOR — slice 1 landed (map-editor, 2026-07-25); next slices + polish below
+
+Slice 1 (the data-driven pipeline + a top-down editor you play the real run from)
+is in — see ROADMAP.md → "Map editor". Parked for the next sessions:
+
+**Slice 2 — author more of the slope:**
+- **Trail curve editing.** The map trail is straight today (`segmentCenterline`'s
+  `"map"` case returns the identity centerline). Add editable bends (reuse the
+  `TRAIL_LOBES`/`buildCenterline` machinery) so a slope can wind.
+- **More asset types.** Only pine/rock now (`PropType`). Add the other slope GLBs
+  (stumps, logs, bushes), and hazards/props like tree-limbs once that hazard lands.
+- **Multiple saved maps + slope-select.** One `toebeans-map` slot today; add named
+  maps and a lobby slope-picker so an editor map can become a real game slope.
+
+**Slice 3 (the big one) — free-form terrain sculpting.** Josh's chosen destination:
+a paint-anywhere brush that raises/lowers/carves the surface in 2-D (side-to-side
+bumps you can hit), not just the down-hill steepness profile. Needs a real
+heightfield + collision model (the sim currently only knows `distance`/`lateral`
+on a lane), so it's deliberately last.
+
+**Slice-1 polish / known limits (map-editor):**
+- **Ambient forest decor overlays the map.** The scene's decor scatter
+  (forestGraphics `loadSlopeDecor`) still scatters trees around the run, so a
+  director's *placed* props sit amongst ambient trees — undercuts "I placed these."
+  Gate/replace the scatter for map runs (coordinate with forest-graphics).
+- **Finish banner says "lobby."** A finished map run returns to the *editor*, but
+  the HUD's finish copy (hud.ts, lobby-owned) still reads "Heading back to the
+  lobby." Wants an editor-aware message. (lobby)
+- **Thin chasms + big `dt`.** A one-frame `dt` spike can step the skier *over* a
+  narrow chasm without a crash — pre-existing sim behavior (not map-specific;
+  normal 60fps play never hits it). A `dt` clamp in the loop would harden it. (slope-mech)
+- **Props on banks sit at lane height where the flank rises steeply** (mapGroundYAt
+  handles most cases; extreme-lateral placements can float slightly). Minor.
+
 ## STARTING MOUNTAIN — first pass LANDED (mountain, 2026-07-25); open follow-ups below
 
 **Landed:** a distant snowy peak vista now fills the empty summit horizon —

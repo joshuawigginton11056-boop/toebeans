@@ -2,6 +2,7 @@ export * from "./skiing";
 export * from "./route";
 export * from "./save";
 export * from "./appearance";
+export * from "./slopeMap";
 
 export interface Vector3 {
   readonly x: number;

@@ -1,6 +1,7 @@
 import {
   createDefaultAppearance,
   createInitialSkiState,
+  createMapSkiState,
   createSingleTrailSkiState,
   createSave,
   cycleCharacter,
@@ -11,6 +12,7 @@ import {
   type Appearance,
   type SceneMode,
   type SkiInput,
+  type SlopeMap,
 } from "@toebeans/shared";
 import { createAudio } from "./audio";
 import { createBranchDebug, type BranchDebug } from "./branchDebug";
@@ -18,6 +20,7 @@ import { createGhosts } from "./ghosts";
 import { createHud } from "./hud";
 import { createLobbyScene, renderLobby, syncLobbyScene } from "./lobbyRender";
 import { createLobbyUi, type LobbyCycle } from "./lobbyUi";
+import { createMapEditor } from "./mapEditor";
 import {
   connectRoom,
   makePlayerId,
@@ -36,8 +39,10 @@ import {
   addBranchTerrain,
   createSkiScene,
   render,
+  setMapTerrain,
   syncSkiSceneToState,
 } from "./skiRender";
+import { setActiveMap } from "./slopePath";
 import { cycleTimeOfDay } from "./skiScene";
 
 // The mountain is the DEFAULT slope now (director, 2026-07-24: the graded "real
@@ -87,6 +92,9 @@ let mode: SceneMode = BRANCH_MAP ? "lobby" : (restored?.mode ?? "lobby");
 let skiState = restored?.ski ?? createInitialSkiState();
 let muted = restored?.muted ?? false;
 let appearance: Appearance = restored?.appearance ?? createDefaultAppearance();
+// (map-editor) When true, the current slope run is a director's map test — so
+// finishing (or leaving) it returns to the editor rather than the lobby.
+let returnToEditor = false;
 
 // Player preferences — volume, music, key bindings (see settings.ts). Kept
 // separate from the game save (they're settings, not progress). The live
@@ -173,18 +181,27 @@ function showActiveCanvas(): void {
     mode === "lobby" ? "" : "none";
   skiScene.renderer.domElement.style.display = mode === "slope" ? "" : "none";
   lobbyUi.setVisible(mode === "lobby");
+  // (map-editor) the editor is a DOM overlay screen, shown only in "editor" mode.
+  mapEditor.setVisible(mode === "editor");
 }
 
 // Persist the whole game as one snapshot. Called on scene switches, mute,
 // and appearance changes (the moments that feel like "progress"), every few
 // seconds as a safety net, and when the tab is hidden or closed.
 function persist(): void {
-  writeSave(createSave(mode, skiState, muted, appearance));
+  // (map-editor) "editor" is a runtime-only screen, never a saved scene — save
+  // it as "lobby" so decode (which only knows lobby/slope) always accepts it.
+  writeSave(createSave(mode === "editor" ? "lobby" : mode, skiState, muted, appearance));
 }
 
 function goSkiing(): void {
   if (mode === "slope") return;
   mode = "slope";
+  // (map-editor) A built-in run is never a map run — clear any active map so the
+  // sim/renderer stop consulting it and the built-in mountain shows again.
+  setActiveMap(null);
+  setMapTerrain(skiScene, null);
+  returnToEditor = false;
   // Every trip to the slope is a fresh run — full lives, back to the top.
   // This is also how you retry after a forfeit.
   if (BRANCH_MAP) {
@@ -210,6 +227,32 @@ function goSkiing(): void {
 function backToLobby(): void {
   if (mode === "lobby") return;
   mode = "lobby";
+  // (map-editor) leaving any run (or the editor) drops the active map + its
+  // terrain and restores the built-in mountain.
+  setActiveMap(null);
+  setMapTerrain(skiScene, null);
+  returnToEditor = false;
+  showActiveCanvas();
+  persist();
+}
+
+// (map-editor) Open the map editor screen from the lobby (a DOM overlay; the
+// 3-D scenes are hidden while it's up).
+function openEditor(): void {
+  mode = "editor";
+  returnToEditor = false;
+  showActiveCanvas();
+}
+
+// (map-editor) Play a director-authored map as the real 3-D run: point the
+// sim/renderer at the map, build its terrain + props, start a fresh run on it,
+// and remember to return to the editor when it ends.
+function goMapRun(map: SlopeMap): void {
+  mode = "slope";
+  setActiveMap(map);
+  setMapTerrain(skiScene, map);
+  skiState = createMapSkiState(map);
+  returnToEditor = true;
   showActiveCanvas();
   persist();
 }
@@ -239,6 +282,8 @@ const lobbyUi = createLobbyUi({
     persist();
   },
   onOpenSettings: () => settingsMenu.open(),
+  // (map-editor) build-your-own-slope screen.
+  onOpenEditor: openEditor,
   // Ghost racing (multiplayer session). Create hands back a fresh code to
   // show; join/leave open and tear down the relay room. Deliberately not
   // saved — a room is a per-sitting thing, not game progress.
@@ -251,6 +296,14 @@ const lobbyUi = createLobbyUi({
   onLeaveRoom: leaveRoom,
 });
 
+// (map-editor) The map editor screen. Play routes the built map into a real run
+// (goMapRun); Back returns to the lobby. Created before the first
+// showActiveCanvas() call, which toggles its visibility by mode.
+const mapEditor = createMapEditor({
+  onPlay: goMapRun,
+  onExit: backToLobby,
+});
+
 applyAppearance();
 showActiveCanvas();
 
@@ -258,7 +311,7 @@ showActiveCanvas();
 // never writes it. Synced once up front so the right panels show even
 // before the first animation frame (browsers pause frames in hidden tabs).
 const hud = createHud(settings);
-hud.sync(mode, skiState);
+hud.sync(mode === "slope" ? "slope" : "lobby", skiState);
 
 // Sound effects (see audio.ts). Reads state only, like the HUD.
 const audio = createAudio(muted);
@@ -328,6 +381,9 @@ window.addEventListener("keydown", (event) => {
   // release), wired in skiRender.ts. No keyboard camera control (V is gone).
   if (codeMatchesAction(settings, "lobby", event.code)) {
     if (mode === "lobby") goSkiing();
+    // (map-editor) on a map test-run, Enter returns to the editor (so you can
+    // tweak and re-play); from the editor screen or a built-in run, to the lobby.
+    else if (mode === "slope" && returnToEditor) openEditor();
     else backToLobby();
     return;
   }
@@ -376,7 +432,7 @@ function loop(now: number): void {
     // lobbyRender.ts): rigs animate, the camera sways, the cat strolls.
     syncLobbyScene(lobbyScene, dt);
     renderLobby(lobbyScene);
-  } else {
+  } else if (mode === "slope") {
     skiState = stepSkiing(skiState, readSkiInput(), dt);
     syncSkiSceneToState(skiScene, skiState, dt);
     // Ghost racing: place/animate the friend's skier(s) before drawing.
@@ -384,14 +440,16 @@ function loop(now: number): void {
     render(skiScene);
     // The branching map's live proof readout (dev-only, ?branch=1).
     branchDebug?.update(skiState, dt);
-    // Finishing the slope coasts to a stop and then auto-returns to the lobby
-    // (director call, 2026-07-23): once the post-finish linger runs out, head
-    // back. goSkiing() will start a fresh run next time Play is pressed.
+    // Finishing the slope coasts to a stop and then auto-returns (director call,
+    // 2026-07-23): once the post-finish linger runs out, head back — to the map
+    // editor for a director's map test (map-editor), else to the lobby.
     if (skiState.status === "finished" && skiState.finishTimer <= 0) {
-      backToLobby();
+      if (returnToEditor) openEditor();
+      else backToLobby();
     }
   }
-  hud.sync(mode, skiState);
+  // (map-editor) the HUD only knows lobby/slope; the editor screen shows as lobby.
+  hud.sync(mode === "slope" ? "slope" : "lobby", skiState);
   // audio.ts is slope-session territory and its AudioMode still says
   // "bedroom" for the quiet scene — map at the call site rather than edit
   // their file (IDEAS.md has a (slope) note to rename it at leisure).

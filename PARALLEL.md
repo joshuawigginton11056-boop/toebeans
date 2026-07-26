@@ -33,6 +33,22 @@ files.)*
 | **Slope-visuals** | `slope-visuals` | `C:\Users\joshu\Toebeans-slope-visuals` | launch config `toebeans-slope-visuals` (port 5303) |
 | **Mountain-graphics** | `mountain-graphics` | `C:\Users\joshu\Toebeans-mountain-graphics` | launch config `toebeans-mountain-graphics` (port 5306) |
 | **Forest-graphics** | `forest-graphics` | `C:\Users\joshu\Toebeans-forest-graphics` | launch config `toebeans-forest-graphics` (port 5307) |
+| **Map-editor** | `map-editor` | `C:\Users\joshu\Toebeans-map-editor` | launch config `toebeans-map-editor` (port 5308) |
+
+**Map-editor session owns** — the director's map-editor feature (a data-driven
+slope you build and play; see ROADMAP.md → "Map editor"):
+- `shared/src/slopeMap.ts` (+ `.test.ts`) — the `SlopeMap` format + pure helpers
+- `client/src/mapEditor.ts` (the editor screen), `client/src/mapStore.ts`
+- It reaches ACROSS seams into the tuned sim/terrain because a data-driven slope
+  inherently must. Those edits are small/additive/flagged `// (map-editor)`:
+  `SkiState.mapGrade` + the map grade read in `shared/src/skiing.ts`
+  (`createMapSkiState`); `"map"` cases in `client/src/slopePath.ts`
+  (`setActiveMap`/`segmentCenterline`/`segmentToWorld`/`segmentPitch`);
+  `setMapTerrain` + the branch-terrain hide in `client/src/skiRender.ts`; a
+  **Map Editor** button in `client/src/lobbyUi.ts`; `SceneMode` `"editor"` in
+  `shared/src/save.ts`; wiring in `client/src/main.ts`. Owning sessions: this is
+  additive — leave the flags in place; polish notes are parked in IDEAS.md tagged
+  for you.
 
 The main checkout at `C:\Users\joshu\Toebeans` stays on `master` and is
 **merge-target only** — no session edits files there. Josh's own dev

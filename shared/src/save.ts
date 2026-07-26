@@ -51,7 +51,10 @@ import {
 // the client returns to the lobby at once — an acceptable heal.
 export const SAVE_VERSION = 5;
 
-export type SceneMode = "lobby" | "slope";
+// "editor" (map-editor) is a runtime-only mode — the map editor screen. It is
+// never persisted (main.ts coerces it to "lobby" when saving) and decode still
+// only accepts "lobby"/"slope", so saves are unaffected.
+export type SceneMode = "lobby" | "slope" | "editor";
 
 export interface SaveData {
   readonly version: number;

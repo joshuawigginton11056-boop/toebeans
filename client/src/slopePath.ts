@@ -28,13 +28,31 @@
 
 import {
   BRANCH_SEGMENTS,
+  mapGradeAt,
+  mapHeightAt,
   REFERENCE_GRADE,
   routeDistanceOf,
   routeGradeAt,
   routeHeightAt,
   SINGLE_TRAIL,
   type Segment,
+  type SlopeMap,
 } from "@toebeans/shared";
+
+// (map-editor) The director-authored map for a "map" run — a single sentinel
+// segment. When set, the centerline helpers below give that run a straight
+// descending trail whose world-Y and pitch come from the map's sculpted
+// steepness (mapHeightAt / mapGradeAt), so the skier, camera, hazards, and
+// terrain all follow the map. null when no map run is active — the Overlook and
+// the branching trail are then bit-for-bit untouched. main.ts sets this before
+// entering the run and clears it on the way out.
+let activeMap: SlopeMap | null = null;
+export function setActiveMap(map: SlopeMap | null): void {
+  activeMap = map;
+}
+export function getActiveMap(): SlopeMap | null {
+  return activeMap;
+}
 
 /** A point on the centerline, in the same world axes the renderer uses. */
 export interface SlopePoint {
@@ -302,6 +320,10 @@ export const slopeGradePitch = Math.atan(REFERENCE_GRADE);
  * segment-local distance — atan of the varying route grade; 0 on the flat road /
  * Overlook, so pitching the rig/scenery never tilts the un-graded Overlook. */
 export function segmentPitch(segmentId: string, distance: number): number {
+  // (map-editor) A map run pitches to its own sculpted steepness.
+  if (segmentId === "map") {
+    return activeMap ? Math.atan(mapGradeAt(activeMap.grade, distance)) : 0;
+  }
   if (!SEGMENT_PLACEMENTS[segmentId]) return 0;
   return Math.atan(routeGradeAt(routeDistanceOf(segmentId, distance)));
 }
@@ -505,6 +527,13 @@ const TRAIL_LINE: Centerline = (() => {
  * above instead of its per-segment arc — killing the seam kink and the drift; the
  * parked branching segments keep their constant-curvature arc placement. */
 export function segmentCenterline(segmentId: string, distance: number): SlopePoint {
+  // (map-editor) A map run rides a straight descending trail (the Overlook's
+  // identity centerline for x/z/heading) whose world-Y comes from the map's
+  // sculpted grade, so steeper stretches visibly tilt steeper.
+  if (segmentId === "map") {
+    const base = slopeCenterline(distance);
+    return { ...base, y: activeMap ? mapHeightAt(activeMap, distance) : 0 };
+  }
   const p = SEGMENT_PLACEMENTS[segmentId];
   if (!p) return slopeCenterline(distance);
   if (SINGLE_TRAIL.includes(segmentId)) {

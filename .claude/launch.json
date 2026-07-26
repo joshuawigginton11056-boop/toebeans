@@ -35,6 +35,13 @@
       "runtimeArgs": ["vite", "--port", "5306", "--strictPort"],
       "cwd": "C:\\Users\\joshu\\Toebeans-mountain-graphics\\client",
       "port": 5306
+    },
+    {
+      "name": "toebeans-map-editor",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5308", "--strictPort"],
+      "cwd": "C:\\Users\\joshu\\Toebeans-map-editor\\client",
+      "port": 5308
     }
   ]
 }
