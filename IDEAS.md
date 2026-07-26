@@ -3,6 +3,39 @@
 Parked ideas and observations — not commitments. Per CLAUDE.md, tangents
 land here instead of in code.
 
+## FROZEN LAKE — first pass LANDED (forest, 2026-07-25); follow-ups below
+
+**Landed:** the §4 `lake` segment (route 240–340) is now dressed as a real sheet
+of ice — `buildFrozenLake` (`forestGraphics.ts`), built once beside
+`addBranchTerrain`. A glassy ice-blue surface skinned onto the graded lane via
+`segmentCenterline`/`segmentToWorld` (flush on the terrain the run rides), seeded
+canvas texture (frost blotches, branching cracks, sparkle), per-vertex ALPHA
+frosting the shores into the snow, split into ribbons around the `lake-gap` chasm
+so the jump reads as torn ice. Roughness 0.22 → catches a hard sun/moon glint, so
+it reads as glass by day and moonlit ice at night with no time-of-day special-case.
+Verified live day + dusk. (See the grade-seam note: slope scenery must sit on the
+graded terrain, NOT the y=0 snowfield.)
+
+**Follow-ups (forest), for a later session — all await Josh's eyeballs first:**
+- **Awaiting playtest verdict** — the whole thing is unseen by Josh at speed;
+  he'll ride it and call what's off.
+- **The gap could read stronger as OPEN WATER.** Today the torn ribbon edges just
+  frost off and the (mountain-owned) `lake-gap` chasm mesh shows through. A dark
+  water pool + a jagged bright-ice rim at the gap would sell "hole in the ice you
+  jump" harder. Needs a look-pass; the rim is forest's, the chasm mesh is mountain's.
+- **Ice is a flat painted sheet — no reflection.** Cheap wins if wanted: a faint
+  moving shimmer/sparkle drift, or a dim moon/tree reflection streak (a mirrored
+  fade, no real planar reflection). Roughness already gives one glint band.
+- **Lake follows the ~23° grade** (it's a sloped icy stretch, not a flat basin).
+  Reads fine, but if Josh wants a believable FLAT lake nestled in the hill, that's a
+  terrain change (mountain/mechanics own `addBranchTerrain`'s cross-section) — flag
+  it, don't force it from forest.
+- **No lake-specific audio / trail feel** — ice cracking on the jump, a different
+  ski hiss on ice vs. snow (audio is slope-vis-owned; park a tagged note there if pursued).
+- **Could widen into a basin** beyond the ±12 lane if the terrain flanks open there
+  (again a mountain terrain call).
+
+
 ## STARTING MOUNTAIN — first pass LANDED (mountain, 2026-07-25); open follow-ups below
 
 **Landed:** a distant snowy peak vista now fills the empty summit horizon —
