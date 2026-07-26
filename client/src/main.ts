@@ -179,10 +179,7 @@ function applyAppearance(): void {
 function showActiveCanvas(): void {
   lobbyScene.renderer.domElement.style.display =
     mode === "lobby" ? "" : "none";
-  // (map-editor) the editor is a bird's-eye view of the REAL slope scene, so it
-  // shares the ski canvas — visible on the slope AND in the editor.
-  skiScene.renderer.domElement.style.display =
-    mode === "slope" || mode === "editor" ? "" : "none";
+  skiScene.renderer.domElement.style.display = mode === "slope" ? "" : "none";
   lobbyUi.setVisible(mode === "lobby");
   // (map-editor) the editor is a DOM overlay screen, shown only in "editor" mode.
   mapEditor.setVisible(mode === "editor");
@@ -302,7 +299,7 @@ const lobbyUi = createLobbyUi({
 // (map-editor) The map editor screen. Play routes the built map into a real run
 // (goMapRun); Back returns to the lobby. Created before the first
 // showActiveCanvas() call, which toggles its visibility by mode.
-const mapEditor = createMapEditor(skiScene, {
+const mapEditor = createMapEditor({
   onPlay: goMapRun,
   onExit: backToLobby,
 });
@@ -450,11 +447,6 @@ function loop(now: number): void {
       if (returnToEditor) openEditor();
       else backToLobby();
     }
-  } else if (mode === "editor") {
-    // (map-editor) drive the overhead camera + rebuild edited terrain, then draw
-    // the real slope scene (the editor's live 3-D view).
-    mapEditor.frame(dt);
-    render(skiScene);
   }
   // (map-editor) the HUD only knows lobby/slope; the editor screen shows as lobby.
   hud.sync(mode === "slope" ? "slope" : "lobby", skiState);

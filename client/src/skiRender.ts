@@ -929,8 +929,6 @@ function placeMapProps(group: THREE.Group, map: SlopeMap): void {
           o.receiveShadow = true;
         }
       });
-      // Tag for the editor's raycast picking (select/move/erase a placed asset).
-      clone.userData.mapPropIndex = i;
       group.add(clone);
     });
   });
@@ -944,18 +942,6 @@ function disposeMapGroup(group: THREE.Group): void {
 }
 
 let mapTerrainGroup: THREE.Group | null = null;
-let mapSurfaceMesh: THREE.Mesh | null = null;
-
-/** The map's snow surface mesh (for the editor's raycast onto the ground), or
- * null when no map terrain is built. (map-editor) */
-export function getMapSurface(): THREE.Mesh | null {
-  return mapSurfaceMesh;
-}
-/** The group holding the map's terrain + placed props — the editor raycasts its
- * children to pick a placed asset (userData.mapPropIndex). (map-editor) */
-export function getMapTerrainGroup(): THREE.Group | null {
-  return mapTerrainGroup;
-}
 
 /** Enter/leave a director-authored map run. Pass the map to build its terrain +
  * props (hiding the built-in mountain); pass null to tear it down and restore
@@ -966,7 +952,6 @@ export function setMapTerrain(handle: SkiSceneHandle, map: SlopeMap | null): voi
     handle.scene.remove(mapTerrainGroup);
     disposeMapGroup(mapTerrainGroup);
     mapTerrainGroup = null;
-    mapSurfaceMesh = null;
   }
   // Hazard meshes are cached per run keyed by id/distance — drop them so a new
   // run (or a return to the mountain) doesn't inherit the old run's markers.
@@ -983,10 +968,7 @@ export function setMapTerrain(handle: SkiSceneHandle, map: SlopeMap | null): voi
   }
   for (const m of branchTerrainMeshes) m.visible = false;
   const group = new THREE.Group();
-  const surface = buildMapSurface(map);
-  surface.userData.mapSurface = true;
-  group.add(surface);
-  mapSurfaceMesh = surface;
+  group.add(buildMapSurface(map));
   handle.scene.add(group);
   mapTerrainGroup = group;
   placeMapProps(group, map);
