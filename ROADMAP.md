@@ -420,6 +420,19 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 ## Open — still to resolve
 
 ### M2 remaining
+- [ ] **⏭ NEXT (slope-mech): SHAPE THE MOUNTAIN (director's pick, 2026-07-25).** From
+      Josh's top-down map + his callout *"you currently have the frozen lake on the
+      downhill slope"*: the steepness profile is ~26° from the summit through the lake,
+      so every area skis the same and the lake tilts. Give each area its own character
+      at TODAY's length — steep start mountain, rolling forest, **flat lake**, a line
+      that descends around/through the second mountain while it rises beside you (no
+      uphill skiing exists — that's a sim change), gentle valley, cliff drop. Chosen
+      over stretching to §9's 3:30 (~6× longer) and over widening the route to the map's
+      meanders, both of which stay open behind it — shape first so we don't build six
+      times more of the wrong shape. Open questions for Josh at session start (flat vs
+      "reads flat" lake; how much steep/gentle contrast, given the profile sits at ~26°
+      while the locked reference is ~19°; whether the lake gap survives a flat lake).
+      Full brief: IDEAS.md START HERE.
 - [ ] **⚠ SLOPE_BRANCHINGv3 landed (director, 2026-07-25) — three jobs it created.**
       The spec was rewritten (`SLOPE_BRANCHING.md` → `SLOPE_BRANCHINGv3.md`) and it
       changes the design, not just the prose. Flagged by the (slope-mech) seamless-

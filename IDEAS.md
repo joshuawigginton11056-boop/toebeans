@@ -105,6 +105,61 @@ is **unresolved** — Josh will decide. This is the natural unlock for follow-up
 (the peaks contrast much harder against a decided sky). Do NOT touch the sky/atmosphere
 until then.
 
+## ⏭ START HERE (slope-mech) — SHAPE THE MOUNTAIN (director's pick, 2026-07-25)
+
+Josh's callout, looking at his own top-down map (`slope-map.png`, now embedded in
+SLOPE_BRANCHINGv3.md §4): **"you currently have the frozen lake on the downhill
+slope."** He's right. `GRADE_PROFILE` (shared/src/route.ts) is ~0.48 (≈26°) from the
+summit to route 340 — the plunge, the forest and the frozen lake all ski at the same
+pitch, so the map has no terrain story and a lake that tilts.
+
+**Director's call (2026-07-25), asked as a choice of four:** shape the mountain FIRST,
+at today's 640-unit length — before stretching to §9's 3:30 (~6× longer) and before
+widening the route to the map's meanders. Rationale he was given: shaping first means
+we don't build six times more of the wrong shape.
+
+**Target shape, read off his map:**
+- **start mountain** — steepest; the plunge.
+- **forest** — rolling, gentler, still carries speed through the trees.
+- **frozen lake** — **FLAT** (see the open question below).
+- **second mountain** — the line **descends** around the outside / through the cave
+  while the mountain **rises beside and above** you. ⚠ There is no uphill skiing today:
+  the height profile only falls and speed comes from falling, so an actual climb is a
+  SIM change, not a map change. The wrap reads like the drawing without one.
+- **valley + ice castle** — gentle.
+- **cliff** — a drop into the run-in to the flag.
+
+**Open questions — ASK JOSH at the start of that session, don't guess:**
+1. **The lake:** true flat (honest, but you glide and bleed speed — wants a fast steep
+   run-in) vs. "reads flat" at 3–4° that keeps feeding you. His answer sets the feel of
+   the whole middle of the map.
+2. **How much contrast** between the steep and gentle areas — the profile currently sits
+   at ~26° while `REFERENCE_GRADE` (the director-locked "invigorating" baseline, and the
+   no-op point for the steepness→speed coupling) is 0.35 ≈ 19°. Those two want
+   reconciling as part of the shaping, and it is a FEEL change, so it ends in a playtest.
+3. **The lake gap** (the run's only hazard) — does the jump survive a flat lake, and does
+   a flat approach still give enough speed to clear it?
+
+**Constraints that bind this work:** the same-clock law (§3) — the height profile is
+keyed to ROUTE distance so every route falls the same total; changing its shape must
+keep the same-clock tests green (if it can't, stop and report, don't move the tolerance).
+Steepness feeds speed via `gradeSpeedFactor`, so every shape change is a feel change.
+
+**Acceptance (browser, <1 min):** ride the run — the lake sits flat instead of tilting,
+the forest rolls, and the pitch visibly changes area to area instead of one uniform ramp.
+
+**⚠ The spec has no terrain-shape section.** SLOPE_BRANCHINGv3.md covers topology (§4),
+the clock (§9) and instrumentation (§10) but says nothing about the map's height story —
+which is exactly what this session decides. Per §11 ("never fix a design point in chat"),
+the outcome should be written INTO that file, as Josh's own edit, once he's happy.
+
+**The other two gaps stay open behind this one:** stretch to the §9 budgets (~6× today's
+35 s), and widen the route to the map's meanders + the fold back to the finish. Also
+still open from v3: the re-grayblock for v3's fork structure and §10's teleport/timing
+tools (ROADMAP Open lists all of it).
+
+---
+
 ## ⏭ START HERE (slope-mech) — ONE solid mountain, one SMOOTH trail summit → back of the forest (director look-pass, 2026-07-24)
 
 Director look-pass on the real-terrain build. **Redirect: stop branching. Build one
