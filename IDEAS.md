@@ -133,7 +133,48 @@ Two numbers the tool prints and holds itself to, because both are felt:
 - **smoothing pulls the line ≤10.2 units off the painted stroke**, which is still inside
   it (the drawn stroke is ~±14 units wide at this scale). The line never leaves the paint.
 
-### ⚠ THE THREE PLACES THE DRAWING DISAGREES WITH EARLIER TUNING — DIRECTOR'S CALL
+### ✅ THE READING RULE, settled by the director 2026-07-26
+
+> *"the picture isn't drawn to scale. i want a big ass beautiful lake."*
+> *"the trail going through the second mountain is the cave (yes, you ski through the cave)."*
+
+**The drawing is authoritative for TOPOLOGY and POSITION — what is where, in what order
+down the run, and which side of the trail it sits on. The director is authoritative for
+SIZE.** That single rule settles all three conflicts below and should be the first thing
+anyone reads before touching the map again.
+
+Its one consequence worth understanding: a feature's lateral offset and its radius are not
+independent — they decide whether the trail clips a lake's corner or crosses its middle.
+Keep the drawn offset while tripling the radius and the body swallows the lane. So the
+offset scales with the size, in `drawnLateralAt` (slopePath.ts), and that is the only place
+the two authorities meet. Lake radius is back to 90 (`LAKE_RADIUS`, in route.ts because the
+grade has to agree with it); the fork mountain keeps 190 and stands BESIDE the lane with the
+cave bored through it, which is the model the code already had.
+
+### ⚠ WHAT IS STILL RED, AND THE ONE CAUSE BEHIND IT
+
+16 tests fail, and it is not 16 problems. **The segment boundaries are the last hand-typed
+numbers in the map** — summit 100 / forest-road 190 / lake 140 / mountain 100 / outside 300 /
+cliff 90 — and they no longer describe the drawn trail:
+
+| measured off the drawing | the segment graph still says |
+|---|---|
+| the cave line leaves at route **520**, rejoins at **898** | fork at 530, rejoin at 830 (`cave` is 300 long, the drawn line is 378) |
+| the lake centres at route **432** | the `lake` segment is 290–430 |
+| the second mountain's mass centres at route **626** | the approach is 430–530 |
+
+Every fork-mountain failure (portals at zero clearance, the cave unroofed, the mass over the
+lane) is that one mismatch: features re-anchored to the drawing, hung on segments that were
+not. **Do not chase them individually.**
+
+**The next chunk, and it is mechanical:** measure the segment boundaries the same way
+everything else was measured — walk the drawn trail in the image and record the route
+distances at which the colour underneath it changes (green → cyan → dark). That gives where
+the run actually enters the forest, reaches the ice, and meets the mountain, and it is the
+last thing standing between the map and being fully derived. It touches route.ts's segment
+lengths, so it shifts chasm/checkpoint placement and the run's timing — its own session.
+
+### (superseded — kept for the record) The three disagreements, as found
 
 These are why the suite is not green. They are NOT bugs; each is a real question, and
 guessing at them is the exact failure this session exists to stop. **Do not answer them

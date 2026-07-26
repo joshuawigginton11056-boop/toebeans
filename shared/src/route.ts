@@ -20,6 +20,10 @@
 // skiing.ts imports the registry from here at runtime, never the reverse.
 
 import type { Chasm } from "./skiing";
+// The measured map (tools/extract_map.py reads slope-map.png). Imported here because
+// the GRADE has to agree with where the lake actually is — see LAKE_ROUTE_CENTER below.
+// Still a leaf: the generated module is plain data and imports nothing.
+import { MAP_LAYOUT } from "./mapLayout.generated";
 
 /**
  * A trigger volume on a segment: "the world reaches out and grabs you"
@@ -519,6 +523,46 @@ export const REFERENCE_GRADE = 0.35;
 // gradeSpeedFactor. The ease-down is INSIDE the lake segment on purpose, so the
 // glide covers it and the shore doesn't read as brakes; the ramp back out straddles
 // the far shore for the same reason.
+/**
+ * The lake's size, and where it sits.
+ *
+ * Split on purpose, because the two come from different authorities (2026-07-26):
+ * the DRAWING says where the lake is — `MAP_LAYOUT.lake.route` is the drawn cyan
+ * body's centroid projected onto the drawn trail — and the DIRECTOR says how big it
+ * is: *"the picture isn't drawn to scale. i want a big ass beautiful lake."* The drawn
+ * body is only ~3 lane-widths across; 90 is the ~15× the ride verdict asked for.
+ *
+ * It lives here rather than beside FROZEN_LAKE in slopePath.ts because the GRADE has
+ * to agree with it: the flat below is flat *because* there is a lake there, and the two
+ * silently disagreeing is precisely the failure the measured map exists to end. (The
+ * old flat sat at 312–415 while the drawn lake centres at 432.)
+ */
+export const LAKE_RADIUS = 90;
+export const LAKE_ROUTE_CENTER = MAP_LAYOUT.lake.route;
+/** How far the lateral offset puts the lane off the lake's centre, at LAKE_RADIUS —
+ * mirrors slopePath's `drawnLateralAt`, which scales the drawn offset with the size. */
+const LAKE_LATERAL =
+  MAP_LAYOUT.lake.radius > 0
+    ? (MAP_LAYOUT.lake.lateral * LAKE_RADIUS) / MAP_LAYOUT.lake.radius
+    : MAP_LAYOUT.lake.lateral;
+/**
+ * How much of the crossing is dead flat.
+ *
+ * NOT the full chord through the disc, deliberately. A radius-90 lake crossed near
+ * its middle is ~170 units of ice, and 170 units at zero grade is a long time with no
+ * gravity — the flat is the one stretch where speed comes only from what you carried
+ * in (see iceGlideFactor). The tuned figure was 103 units, inside a wider sheet of
+ * ice, and that pacing is kept: the flat MOVES with the lake but does not GROW with it.
+ * Widen this only against a ride, not against the geometry.
+ */
+const LAKE_FLAT_SPAN = 103;
+const LAKE_FLAT_HALF = Math.min(
+  LAKE_FLAT_SPAN / 2,
+  Math.sqrt(Math.max(0, LAKE_RADIUS * LAKE_RADIUS - LAKE_LATERAL * LAKE_LATERAL)),
+);
+export const LAKE_FLAT_FROM = Math.round(LAKE_ROUTE_CENTER - LAKE_FLAT_HALF);
+export const LAKE_FLAT_TO = Math.round(LAKE_ROUTE_CENTER + LAKE_FLAT_HALF);
+
 const GRADE_PROFILE: readonly (readonly [number, number])[] = [
   [0, 0.5], // start mountain: the plunge (~26.6°, just under the camera's ~27°)
   [80, 0.5], // …held steady the whole way down the peak, not shed early
@@ -531,10 +575,13 @@ const GRADE_PROFILE: readonly (readonly [number, number])[] = [
   [290, 0.44], // …bottoming out onto the lake shore. ⚠ iceGlideFactor samples the
   // grade at EXACTLY 290 to know what pace you arrived with — keep a control point
   // here holding the forest's exit pitch, or the glide starts already half-scrubbed.
-  [312, 0.0], // the ice begins — flat, and the glide carries you across
-  [415, 0.0], // …still flat the whole 140-unit crossing: the lake does not tilt
-  [445, 0.47], // the second mountain picks the descent back up (ramp crosses the shore)
-  [530, 0.48], // …the fork point, at the mountain's honest pitch
+  // The flat is DERIVED from the lake now, not typed. It used to be a fixed 312–415,
+  // which stopped being under the lake the moment the map came off the drawing — the
+  // ice would have been a level sheet floating over ground that was still falling.
+  [LAKE_FLAT_FROM, 0.0], // the ice begins — flat, and the glide carries you across
+  [LAKE_FLAT_TO, 0.0], // …flat right across the crossing: the lake does not tilt
+  [LAKE_FLAT_TO + 33, 0.47], // the second mountain picks the descent back up
+  [LAKE_FLAT_TO + 60, 0.48], // …toward the fork, at the mountain's honest pitch
   [620, 0.46], // ── the wrap rolls a little rather than holding one dead pitch…
   [720, 0.49],
   [830, 0.47], // …but its MEAN (~0.475) stays above the forest's (~0.468). NOT mellow —

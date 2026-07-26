@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   BRANCH_SEGMENTS,
   gradeSpeedFactor,
+  LAKE_FLAT_FROM,
+  LAKE_FLAT_TO,
   REFERENCE_GRADE,
   routeGradeAt,
   routeHeightAt,
@@ -33,9 +35,18 @@ describe("route — the descent's grade profile (steepness → speed)", () => {
     }
     expect(crest - hollow).toBeGreaterThan(0.08); // real relief, not a flat plateau
     // Every PITCHED zone stays under the camera's ~27° framing (tan ≈ 0.51) and above
-    // a gentle floor. The lake (290–430) is deliberately excluded: it is the one flat
-    // area. Samples re-spanned for the 920 route (slope-mech, 2026-07-26).
-    for (const d of [0, 120, 230, 260, 460, 530, 700, 830, 890, 920]) {
+    // a gentle floor. The lake's flat is deliberately excluded: it is the one flat area.
+    //
+    // The excluded span is DERIVED, not typed (slope-mech, 2026-07-26 session 4). It used
+    // to be the literal 290–430 with hand-picked samples around it, and when the map came
+    // off the director's drawing the lake moved to route 432 — so two of those "pitched"
+    // samples landed on the ice and this failed for the right reason in the wrong place.
+    // Deriving the exclusion means a redrawn map moves the samples with the lake.
+    const pitched = [0, 120, 230, 260, 460, 530, 700, 830, 890, 920].filter(
+      (d) => d < LAKE_FLAT_FROM - 20 || d > LAKE_FLAT_TO + 20,
+    );
+    expect(pitched.length).toBeGreaterThan(6); // still a real spread of the run
+    for (const d of pitched) {
       expect(routeGradeAt(d)).toBeLessThan(0.51);
       expect(routeGradeAt(d)).toBeGreaterThan(0.15);
     }

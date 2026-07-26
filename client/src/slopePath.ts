@@ -28,6 +28,7 @@
 
 import {
   BRANCH_SEGMENTS,
+  LAKE_RADIUS,
   LATERAL_LIMIT,
   MAP_LAYOUT,
   PLAYED_FORK_BRANCHES,
@@ -743,6 +744,33 @@ export function trailPointAtRoute(
   return { x: w.x, y: segmentCenterline(id, local).y, z: w.z };
 }
 
+/**
+ * THE RULE FOR READING THE DRAWN MAP (director, 2026-07-26): *"the picture isn't
+ * drawn to scale."*
+ *
+ * So the drawing is authoritative about TOPOLOGY and POSITION — what is where, in what
+ * order down the run, and which side of the trail it sits on — and NOT about size. Sizes
+ * are the director's, given by verdict after riding.
+ *
+ * That split leaves one thing to reconcile. A feature's lateral offset and its radius are
+ * not independent: they are what decide whether the trail clips a lake's corner or crosses
+ * its middle. Keep the drawn offset while tripling the radius and the body swallows the
+ * lane; keep the drawn ratio and the drawn RELATIONSHIP survives the resize. So the offset
+ * scales with the size:
+ *
+ *     lateral = drawnLateral × (actualRadius / drawnRadius)
+ *
+ * Same geometry, bigger world. This is the only place the two authorities have to meet,
+ * and it is worth it being one line rather than a number somebody re-picks.
+ */
+function drawnLateralAt(
+  drawn: { readonly lateral: number; readonly radius: number },
+  actualRadius: number,
+): number {
+  if (drawn.radius <= 0) return drawn.lateral;
+  return Math.round(drawn.lateral * (actualRadius / drawn.radius) * 10) / 10;
+}
+
 // ---------------------------------------------------------------------------
 // THE TWO BIG FEATURES (slope-mech, 2026-07-26 — v3 §12.3's two director calls).
 // Both are described HERE, trail-relative, rather than in the renderer: they have to
@@ -787,21 +815,12 @@ export const FROZEN_LAKE = {
    * lake, and it is only at the two ends that the lane sits on the shore. That is what
    * clipping a corner means.
    */
-  lateralCenter: MAP_LAYOUT.lake.lateral,
+  lateralCenter: drawnLateralAt(MAP_LAYOUT.lake, LAKE_RADIUS),
   /**
-   * Disc radius, MEASURED off the drawing (the cyan footprint's mean radius).
-   *
-   * ⚠ THIS IS THE ONE PLACE THE DRAWING AND A PREVIOUS DIRECTOR CALL DISAGREE, and
-   * the disagreement is ~3×. It used to be 90 — "~25.4k sq units, ~15× the old
-   * ribbon's ~1.7k" — set after the verdict that the lake was far too small. The
-   * drawn lake is about three lane-widths across, which at this scale is ~41.
-   *
-   * The drawing wins here on purpose: the whole reason this file now reads a measured
-   * map is that overriding it with remembered verbal notes is what failed. If the lake
-   * rides small, the fix is to draw it bigger and re-run the tool — one round, visible
-   * — rather than another number picked in here. Logged in IDEAS.md for Josh's call.
+   * Disc radius — the DIRECTOR'S number, not the drawing's. See LAKE_RADIUS: "i want
+   * a big ass beautiful lake", and "the picture isn't drawn to scale" (2026-07-26).
    */
-  radius: MAP_LAYOUT.lake.radius,
+  radius: LAKE_RADIUS,
   /** How wide a shore lip rings the body, and how high it rises above the ice. */
   shoreBand: 20,
   shoreRise: 14,
@@ -886,7 +905,9 @@ export const FORK_MOUNTAIN = {
    * what makes the outside branch hug the mountain: measured, the line holds ~20
    * units off the foot for the whole 172°.
    */
-  lateralAnchor: MAP_LAYOUT.mountains[1]?.lateral ?? 102,
+  lateralAnchor: MAP_LAYOUT.mountains[1]
+    ? drawnLateralAt(MAP_LAYOUT.mountains[1], 190)
+    : 102,
   /**
    * The footprint is NOT a circle (slope-mech, 2026-07-26, after looking at it).
    *
