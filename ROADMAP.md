@@ -170,7 +170,13 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   shore, split into ribbons around the `lake-gap` chasm so the jump reads as torn
   open ice. Branching-map only, built once beside `addBranchTerrain` (main.ts).
   Verified live day + dusk.
-- **Realism snow:** procedural displaced surface + GPU-carved ski trails. Plus
+- **Realism snow:** procedural displaced surface + GPU-carved ski trails. The
+  **ski trails now show on the ridden terrain** (mountain, 2026-07-25): the
+  descending run's dressed surface (`createTerrainSnowMaterial`) samples the live
+  carve target instead of a zero-carve stub, so the grooves land on the starting
+  mountain the skier actually rides, not just on the buried y=0 window (verified
+  on the elevated summit). Coarse grade grid ⇒ the track is a per-fragment cut
+  (no mesh displacement); reads subtle — flagged for the tuning pass. Plus
   **coarse dune form-shading** (mountain, 2026-07-25): the big wind-dunes get a
   self-cast blue (#2) shade on their sun-away faces so their form reads on open,
   shadowless ground — the summit, which has no trees to rake the shadows the
