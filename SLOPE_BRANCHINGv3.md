@@ -68,20 +68,20 @@ in series, each rejoining before the next.
 ```
          START · SUMMIT  (shared, sunset)
                 |
-         ENCHANTED FOREST — Fork 1 (Type A)
+         ENCHANTED FOREST — Fork 1 (Type A)          [parked]
            |            \
         (road)       tree world → tallest tree → bird → back to road
            |            /
-         FROZEN LAKE — Fork 2 (Type A)   [yeti smashes a hole]
+         FROZEN LAKE — Fork 2 (Type A)   [yeti smashes a hole — parked]
            |            \
      (around hole)   into hole → drivable penguin → underwater
            |             penguin castle → surface on the road
            |            /
-      SECOND MOUNTAIN — Fork 3 (Type A)
+      SECOND MOUNTAIN — Fork 3 (Type A)              [BUILT + LIVE 2026-07-26]
            |            \
     (around outside)   through the CAVE
            |            /
-          THE CLIFF — Fork 4 (Type A, involuntary)
+          THE CLIFF — Fork 4 (Type A, involuntary)   [next]
            |            \
       (jump it clean)   too slow → yeti's son shoves you → steep
            |             face → VALLEY → ICE CASTLE → back to spine
@@ -117,23 +117,28 @@ through the ice in front of you.
 - *Exclusive reward:* penguin-castle collectibles.
 - **Open:** the yeti that causes this is not yet placed on the map, and the exact
   resurface point is undrawn. Both needed before this fork can be built.
-- **SIZE (director, 2026-07-26): the lake is ~15× too small.** It is one of the
-  biggest features on the map, not a short icy stretch — you should come out of the
-  forest and see it spread out in front of you. See §12.3 #1 (including the blocking
-  question of whether 15× means the ice body or the crossing).
+- **SIZE — BUILT (2026-07-26).** The director's *"~15× too small"* was answered
+  **"body + longer corner"**: the ice is now a ~180-unit disc (15× the old area) with
+  its own basin, and the crossing runs 140 units across its corner. See §12.3 #1.
 
-**3 · Second Mountain — Type A.** Through the mountain, or around the outside.
-Both arrive at the cliff.
+**3 · Second Mountain — Type A. BUILT 2026-07-26** (the first fork that actually arms
+on the played trail). An approach, then through the mountain or around the outside; both
+arrive at the cliff, 300 units either way.
 
-- *Through — the cave:* the interior line.
-- *Around — the outside:* the exposed line over the shoulder.
-- **PURPOSE + POSITION (director, 2026-07-26): this mountain stands beyond the lake and
-  it is what INTRODUCES this fork.** *"its not a view only mountain. its got real
-  purpose. the second mountain is the mountain that introduces the cave entrance and
-  the ride around."* The mass is the fork's structure — the cave entrance is a thing
-  you see and aim at, the outside line is a thing you see going around. It is NOT a
-  backdrop and NOT a third descending slope (which is all it is today, with this fork
-  parked). See §12.3 #2.
+- *Through — the cave:* the interior line. Enters a real doorway cut in the flank, winds
+  through the interior, exits the far side. Trigger: aim at the mouth (lateral +4..+12)
+  over the approach's back half — a ~4-second window at cruise.
+- *Around — the outside:* the exposed line, and the DEFAULT (steer nothing and this is
+  your run, matching the white trail on the drawn map). Sweeps 172° around the mass's
+  foot, ~20 units off it the whole way.
+- **They share a pitch, and that is structural.** Both occupy route depth 530–830, so the
+  depth-keyed height profile gives them the same grade — the *"let the cave carry the
+  descent"* idea is impossible without breaking equal-drop. They differ by **enclosure vs
+  exposure**. See §12.3 #3.
+- **PURPOSE + POSITION (director, 2026-07-26), delivered:** *"its not a view only
+  mountain. its got real purpose. the second mountain is the mountain that introduces the
+  cave entrance and the ride around."* The mass is the fork's structure, and it is what
+  makes "not another drop-off" true without flattening the area.
 - **Open:** the cave has no exclusive reward assigned. Previously the ice castle
   justified this fork; it no longer sits here.
 
@@ -143,6 +148,11 @@ Both arrive at the cliff.
 - *Too slow:* the yeti's son shoves you off the side — **no life lost** — down the
   steep face into the valley, through the Ice Castle, back to the spine at the flag.
 - *Exclusive reward:* ice-castle collectibles.
+- **⏭ This is the natural next fork.** As of 2026-07-26 the ice tail (`ledge` → `valley`
+  → `ice-castle`) keeps its same-clock identity but has **no steerable entrance**: it used
+  to hang off the second mountain's trigger slot, which Fork 3's cave now occupies, and
+  its real trigger is this speed condition — which the sim does not model yet. The tail is
+  still exercised end-to-end by the same-clock test via an injected divert.
 - **Director call:** the shove is same-clock, so slowing down at the cliff costs
   nothing, and deliberately slowing is the reliable way to reach the ice castle.
   Either accept that (the shove is a route selector, not a hazard), give it a small
@@ -179,21 +189,27 @@ Both arrive at the cliff.
    See §9 and §10.
 6. **New: the cave's exclusive reward.** Fork 3 lost its reward when the ice castle
    moved. Assign one or accept that the cave is scenery-only.
-7. **New (2026-07-26): the map's SIZE story.** The shape work exposed that §9's
-   near-equal segment budget and §4's drawn proportions disagree, and that the run is
-   too short and the dressed ribbon too wide for the drawn map's meanders. See §12.4.
-   **This is what makes the §9 stretch to 3:30 the next big job rather than a
-   someday-job.**
+7. **The map's SIZE story. Resolved 2026-07-26** — the director's call is that 3:30 is
+   where the finished map lands, not a length to chase, so areas are sized to their own
+   content. See the note in §9 and §12.4. There is no stretch job.
+8. **New (2026-07-26): what is the cave actually LIKE inside?** Fork 3's mass and mouths
+   are built, but the interior is a corridor under a shell. Nothing decides whether the
+   cave is dark and tense, lit by something, has water, has its own hazard — and §5 still
+   owes it an exclusive reward (#6 above). It is now a place players can go, so it needs
+   to be a place.
 
 ## 8. Build order
 
 1. ✅ Type A handoff de-risked on a throwaway tree fork.
-2. ✅ Whole topology grayblocked, 134 tests. **Needs re-grayblocking for v3** — the
-   Type B split in `route.ts` becomes a fourth Type A fork.
-3. ⏭ First playable slice — the summit → forest ride, dressed.
-4. Frozen lake fork + the yeti trigger.
-5. Second mountain fork (cave + outside).
-6. Cliff fork + the shove.
+2. ✅ Whole topology grayblocked, 134 tests. **Re-grayblocked for v3 on 2026-07-26** —
+   the second mountain became a fourth Type A fork (§12.3 #2), and forks can now arm on
+   the played trail via an allowlist rather than all-or-nothing.
+3. ✅ First playable slice — summit → forest → the lake, dressed and ridden.
+4. Frozen lake fork + the yeti trigger. *(The lake itself is built at full size; the
+   fork into the hole is still parked — no penguin world to arrive in.)*
+5. ✅ Second mountain fork (cave + outside) — 2026-07-26, awaiting playtest.
+6. ⏭ Cliff fork + the shove — **now the next fork**, and the one that gives the orphaned
+   ice tail its entrance back (§5 fork 4). Needs a speed condition, not a lateral trigger.
 7. Detour content: animal world, bird, penguin castle, ice castle.
 8. Multiplayer, collectibles, achievements, art.
 
@@ -232,6 +248,14 @@ per segment:
 The 3:30 is a director decision: long enough that four forks each get room to have
 their own character, and long enough that the discovery loop in §1 has somewhere to
 happen. A 90-second run wouldn't justify four worlds.
+
+> **⚠ IT IS AN OUTCOME, NOT A TARGET TO HIT NOW (director, 2026-07-26).** *"The 3:30 will
+> only be achieved when the entire map is finished. so far, we only have the starting
+> mountain, no forest, and a small lake. so no, don't worry about hitting the time right
+> now."* So the table above describes the **finished** map. **Size each area to what its
+> own content needs and let the total fall out** — never pad an area to fill a budget row,
+> and don't read the current total as being behind. It is 920 units / ~45 s as of
+> 2026-07-26, and it should grow as each area gets its content, not before.
 
 ### Difficulty stance
 
@@ -312,17 +336,18 @@ that made the map read as one undifferentiated ramp. This is that missing sectio
 > its own size, and its own shape in plan. An area you can't identify by how it
 > skis, with your eyes shut, isn't an area yet.
 
-### 12.2 What's built (2026-07-25, awaiting playtest)
+### 12.2 What's built (2026-07-26, awaiting playtest)
 
-At today's 640-unit length. Proportions are read off the top-down map in §4.
+Route length **920**. Proportions are read off the top-down map in §4.
 
 | Area | Length | Share | Pitch | Plan shape |
 |---|---|---|---|---|
-| Start mountain | 100 | 16% | 26.5°, steady | coils off the peak |
-| Enchanted forest | 190 | **30%** | 22–27°, **rolling** | one big meander (~34u) |
-| Frozen lake | 80 | 13% | **0° — flat** | near-straight corner crossing |
-| Second mountain | 180 | 28% | 21.5° | ~160° wrap around the mass |
-| Cliff run-in | 90 | 14% | 26° | turns back out to the flag |
+| Start mountain | 100 | 11% | 26.5°, steady | coils off the peak |
+| Enchanted forest | 190 | 21% | 22–27°, **rolling** | one big meander (~34u) |
+| Frozen lake | 140 | 15% | **0° — flat** | corner crossing of a 180u disc |
+| Second mtn — approach | 100 | 11% | 25.6° | straight AT the mass |
+| Second mtn — Fork 3 | 300 | 33% | 24.7–26.1° | 172° wrap / a winding tunnel |
+| Cliff run-in | 90 | 10% | 26.6° | turns back out to the flag |
 
 Three load-bearing decisions inside that:
 
@@ -336,60 +361,76 @@ Three load-bearing decisions inside that:
   its own zero grade. Note for anyone retuning the profile: the coupling floors at 1,
   and that floor bites below ~13°, so **any shallow grade is mechanically identical
   to true flat** — "gentle but still fast" does not exist via grade alone.
+- **Every area's mean pitch stays at or above the forest's** (~0.468). The forest was
+  made slow three times and rejected three times; the second mountain nearly became the
+  fourth. Speed IS grade here, so there is no such thing as a gentle-but-fast area —
+  character has to come from relief, shape, or a mechanic like `iceGlide`.
 - **Curvature is continuous by construction**, not by tuning: each lobe's weave
   amplitude is a shared constant × its own span, and net turns run through a
   smoothstep. This is what protects the earlier "the path is jerky" fix from being
   reintroduced the next time someone makes a curve bolder.
 
-### 12.3 Director calls still to build (2026-07-26)
+### 12.3 The big lake and the fork mountain (built 2026-07-26)
 
-1. **The frozen lake is far too small — roughly 15× too small.** It currently reads
-   as a short icy stretch of trail; the map draws it as one of the biggest features
-   on the mountain, a body you come out of the forest and see spread out in front of
-   you. **Open and BLOCKING for the next session: 15× of *what*?** The two readings
-   build differently:
-   - *the ice BODY* (its footprint) — ~4× linear, the trail still clips its corner.
-     Cheap-ish; mostly the ice sheet's extent plus a wide basin in the terrain.
-   - *the CROSSING* (trail length on the ice) — 80 → 1200 units, which is longer than
-     the entire current route and would make the lake ~68% of the run. Only coherent
-     alongside the §9 stretch.
+Both 2026-07-26 director calls, built together — they are one job. Route **640 → 920**
+(a clean run ~31 s → ~45 s). Read the ROADMAP entry for the build; what belongs in the
+spec is the three decisions and the two rules they establish.
 
-   Which reading is right is still open — ask, don't infer.
+1. **The lake is a BODY.** *"15× too small"* was answered **"body + longer corner"**:
+   a ~180-unit disc (~25k sq units, 15× the old ribbon's ~1.7k) that the trail clips
+   the corner of, and the crossing grew 80 → **140** so riding it matches how big it
+   looks. Its ice is level and its downhill shore therefore lands exactly where the
+   ground starts falling away — which is what a lake's outlet is, and the reason the
+   body is a world DISC rather than a band down the route.
 
-2. **The second mountain is the FORK mountain, and it stands beyond the lake.** Its
-   job is structural, not scenic (director, 2026-07-26: *"its not a view only mountain.
-   its got real purpose. the second mountain is the mountain that introduces the cave
-   entrance and the ride around"*). It **is** Fork 3 of §5: the mass is what makes
-   "through the cave" and "around the outside" two legible lines rather than an
-   abstract choice, and the cave entrance has to be something you can see and aim at
-   on approach. Today it is none of that — 180 units of 21.5° descent that happens to
-   curve, with the fork itself still parked and never armed. So this call is two jobs
-   joined: **build the mass, and light up Fork 3 on it.** That pulls §8's parked
-   "re-grayblock `route.ts` for v3's fork structure" into this work rather than leaving
-   it separate. Two things it constrains:
-   - **"Not a drop-off" fights the speed model.** Height is keyed to route distance
-     and speed comes from grade, so a near-level second mountain is a slow second
-     mountain unless it gets an `iceGlide`-style carry (§12.2) or the cave itself
-     carries the descent. Pick one deliberately.
-   - **Real uphill is a sim change, not a map change.** The height profile only ever
-     falls. A mountain that genuinely rises in front of you needs either terrain mass
-     *beside* the line (cheap, reads right from the drawing) or a change to the
-     one-way height profile (expensive, touches same-clock).
+2. **The second mountain IS Fork 3.** `yeti` → `cave` were sequential spine segments,
+   which is precisely why the area skied as two more slopes with the fork parked. They
+   are now an **approach** you see the mass and the cave mouth from, then **two equal
+   300-unit branches** — through the mountain, or around its outside — rejoining at the
+   cliff. §8's parked re-grayblock is done, and forks now arm on the played trail for
+   the first time (via an allowlist, one entry, since the other three detours still have
+   no content).
 
-### 12.4 Known conflicts in this file, unresolved
+3. **"Not another drop-off" was answered by SHAPE, not by pitch.** This is the rule
+   worth keeping: the second mountain's mean grade now sits *above* the forest's, and
+   the mass beside the line supplies the character. The two options this section used to
+   offer are both closed — an `iceGlide` carry wasn't needed, and *"let the cave carry
+   the descent while the outside stays flatter"* turns out to be **structurally
+   impossible**: both branches occupy the same route depth, so the depth-keyed height
+   profile gives them the same pitch by construction. Their difference is **enclosure vs
+   exposure**. Real uphill remains a sim change; terrain mass beside the line remains
+   the cheap answer, and it works.
 
-- **§9's segment budget contradicts §4's map.** §9 gives every area ~40–45 s, i.e.
-  near-equal. The map's proportions plus per-area speed give the forest ~12 s and the
-  second mountain ~13.5 s against the start mountain's ~5.9 s. One of the two has to
-  move; §9 is the newer number but §4 is the drawing. **Director's call.**
+**A rule this established, worth applying to the whole map: geometry that has to hold
+gets SOLVED, not typed in.** The cave's shape has one free parameter solved at load for
+its rejoin (a miss is a visible tear in the ground); the mass's footprint is solved per
+azimuth against every playable lane and the lake; the portals are measured as where the
+branch crosses enough mountainside to hole. Reshaping the wrap re-solves the rest instead
+of quietly breaking it, and each property has a test. Prefer this to hand-tuned constants
+anywhere the map's shape and its features have to agree.
+
+### 12.4 Known conflicts in this file
+
+- **§9's segment budget vs §4's map — RESOLVED (director, 2026-07-26).** *"The 3:30 will
+  only be achieved when the entire map is finished. so far, we only have the starting
+  mountain, no forest, and a small lake. so no, don't worry about hitting the time right
+  now."* So §9's numbers describe the **finished** map and are not a constraint on the
+  grayblock. **Size each area to what its own content needs and let the total fall out.**
+  Do not pad an area to hit a budget row, and do not treat the total as a target until
+  every area has its content.
 - **"Gentle valley, steep cliff" is not expressible.** Height is keyed to route
   DEPTH so that every branch drops the same amount (the same-clock guarantee). The
   valley (on the ledge branch) and the cliff sit at the same depth, so they must
   share a pitch. A per-branch pitch would break the equal-drop invariant. Either
-  accept a shared pitch there, or accept that same-clock loosens.
-- **Size is capped by the ribbon, not by taste.** The dressed ground is 92 units wide
-  and the run is 640 long — about seven ribbon-widths end to end, where the drawn
-  trail is nearer a hundred. That is why the forest has one meander instead of the
-  drawn three and the wrap is ~160° rather than ~180°, and it is the same reason the
-  lake can't grow 15× in crossing length here. **The stretch to §9's 3:30 is the
-  unlock for all of it**, which makes it the natural next big job.
+  accept a shared pitch there, or accept that same-clock loosens. **Fork 3 hit exactly
+  this** (§12.3 #3) and accepted the shared pitch — the branches differ by enclosure
+  instead. Treat that as the precedent.
+- **Size is capped by the ribbon, not by taste — still true, but no longer gating.** The
+  dressed ground is 92 units wide, which is why the forest still has one meander instead
+  of the drawn three. It eases on its own as areas grow to fit their content (the second
+  mountain's branches at 300 units each already wrap 172° with no bank pinch at all,
+  where 180 units could only manage 160° and did pinch). No stretch job needed.
+- **One trigger per segment.** `Segment.trigger` is singular, so four forks need four
+  distinct trigger segments. Fork 3 taking the second mountain's slot is what orphaned
+  the ice tail from any *steerable* entrance (§5 fork 4); the tail keeps its same-clock
+  identity but now waits on Fork 4's speed-triggered shove, which the sim doesn't model.

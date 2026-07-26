@@ -8,13 +8,18 @@ import {
 } from "@toebeans/shared";
 import {
   buildCenterline,
+  caveMouthFraction,
   cavePortals,
   caveRejoinError,
   centerlineAt,
   centerlineToWorld,
   FORK_MOUNTAIN,
   forkMountainCenter,
+  forkMountainReach,
+  forkMountainRiseAt,
+  forkMountainRiseWorld,
   FROZEN_LAKE,
+  lakeCenterWorld,
   lakeIceExtent,
   lakeIceHeight,
   segmentCenterline,
@@ -374,26 +379,56 @@ describe("slopePath — Fork 3: two lines around and through the mass", () => {
     expect(travel).toBeCloseTo(CAVE_LEN, 0);
   });
 
+  // Where the cave gets deepest into the mass, as a world point.
+  function caveDeepest(): [number, number] {
+    const c = forkMountainCenter();
+    let best: [number, number] = [0, 0];
+    let bestU = Infinity;
+    for (let d = 0; d <= BRANCH_SEGMENTS.cave!.length; d++) {
+      const p = segmentCenterline("cave", d);
+      const u =
+        Math.hypot(p.x - c.x, p.z - c.z) /
+        forkMountainReach(Math.atan2(p.z - c.z, p.x - c.x));
+      if (u < bestU) {
+        bestU = u;
+        best = [p.x, p.z];
+      }
+    }
+    return best;
+  }
+
   it("runs the cave THROUGH the mass and the outside branch AROUND its foot", () => {
     const c = forkMountainCenter();
-    const distTo = (p: { x: number; z: number }) => Math.hypot(p.x - c.x, p.z - c.z);
+    // "How far inside the mountain" is a FRACTION of the reach in that direction now,
+    // because the footprint is a teardrop rather than a circle (see FORK_MOUNTAIN).
+    const depthOf = (p: { x: number; z: number }): number =>
+      Math.hypot(p.x - c.x, p.z - c.z) /
+      forkMountainReach(Math.atan2(p.z - c.z, p.x - c.x));
     // The cave crosses the interior — deep inside the footprint, not skimming it.
     let deepest = Infinity;
     for (let d = 0; d <= CAVE_LEN; d++) {
-      deepest = Math.min(deepest, distTo(segmentCenterline("cave", d)));
+      deepest = Math.min(deepest, depthOf(segmentCenterline("cave", d)));
     }
-    expect(deepest).toBeLessThan(FORK_MOUNTAIN.baseRadius * 0.6);
+    expect(deepest).toBeLessThan(0.6); // past halfway to the summit
+    // …with real mountain overhead where it's deepest.
+    const [dx, dz] = caveDeepest();
+    expect(forkMountainRiseWorld(dx, dz)).toBeGreaterThan(
+      FORK_MOUNTAIN.peakHeight * 0.35,
+    );
     // The outside branch never enters the footprint, and hugs it the whole way round:
     // "the ride around" has to stay beside the mountain, not wander off across the map.
     let nearest = Infinity;
     let farthest = 0;
     for (let d = 0; d <= OUTSIDE_LEN; d++) {
-      const r = distTo(segmentCenterline("outside", d));
-      nearest = Math.min(nearest, r);
-      farthest = Math.max(farthest, r);
+      const p = segmentCenterline("outside", d);
+      const gap =
+        Math.hypot(p.x - c.x, p.z - c.z) -
+        forkMountainReach(Math.atan2(p.z - c.z, p.x - c.x));
+      nearest = Math.min(nearest, gap);
+      farthest = Math.max(farthest, gap);
     }
-    expect(nearest).toBeGreaterThan(FORK_MOUNTAIN.baseRadius);
-    expect(farthest - FORK_MOUNTAIN.baseRadius).toBeLessThan(40); // still hugging it
+    expect(nearest).toBeGreaterThan(0); // never inside the footprint
+    expect(farthest).toBeLessThan(50); // …and never far from its foot
     // …and it really does sweep around, rather than passing by: well over a third of
     // a full turn of heading across the branch.
     const swept = Math.abs(
@@ -404,21 +439,70 @@ describe("slopePath — Fork 3: two lines around and through the mass", () => {
   });
 
   it("keeps the mass clear of every playable lane (it must not bury the piste)", () => {
-    // FORK_MOUNTAIN.baseRadius is the largest radius that clears the approach, the
-    // outside branch and the cliff run-in. The lane is ±LATERAL_LIMIT and IS the sim's
-    // ground, so the mountain's foot has to stay outside it with room to spare. Make
-    // the mass bigger, or the wrap tighter, and this is what says so.
+    // The footprint is SOLVED against the lanes, per azimuth — this is the assertion
+    // that solve has to satisfy. The lane is ±LATERAL_LIMIT and IS the sim's ground, so
+    // the mountain's foot stays outside it with room to spare. Reshape the wrap or grow
+    // the mountain and this fails, rather than the piste quietly disappearing under a
+    // hill.
     const c = forkMountainCenter();
     for (const [id, len] of [
       ["mountain", BRANCH_SEGMENTS.mountain!.length],
       ["outside", OUTSIDE_LEN],
-      ["cliff", BRANCH_SEGMENTS.cliff!.length],
+      ["cliff", BRANCH_SEGMENTS.cliff!.length + 200], // include the flat runout
     ] as const) {
       for (let d = 0; d <= len; d += 2) {
         const p = segmentCenterline(id, d);
-        const clearance = Math.hypot(p.x - c.x, p.z - c.z) - FORK_MOUNTAIN.baseRadius;
-        expect(clearance).toBeGreaterThan(LATERAL_LIMIT);
+        const reach = forkMountainReach(Math.atan2(p.z - c.z, p.x - c.x));
+        expect(Math.hypot(p.x - c.x, p.z - c.z) - reach).toBeGreaterThanOrEqual(
+          LATERAL_LIMIT,
+        );
+        // …so nothing on a playable lane is ever underneath the mountain.
+        expect(forkMountainRiseWorld(p.x, p.z)).toBe(0);
       }
+    }
+  });
+
+  it("is a MASS, not a spire — wide enough for its height, and lopsided", () => {
+    // The first build used ONE radius for every direction. A single radius has to obey
+    // the tightest constraint (the wrap, ~85 units), and paired with a peak tall enough
+    // to see from across the lake that rendered as a literal needle. The fix was the
+    // per-azimuth footprint; this is what stops it regressing to a spike.
+    const N = 96;
+    const reach: number[] = [];
+    for (let i = 0; i < N; i++) reach.push(forkMountainReach((i / N) * Math.PI * 2));
+    const min = Math.min(...reach);
+    const max = Math.max(...reach);
+    const mean = reach.reduce((a, b) => a + b, 0) / N;
+    // Height against the MEAN half-width is the honest "is it a mountain or a spike"
+    // ratio. The circle version was 175 over 85 (2.06 — a needle); this is well under.
+    expect(FORK_MOUNTAIN.peakHeight / mean).toBeLessThan(1.6);
+    // Widest span straight through the centre: the mountain is bigger across than the
+    // whole dressed ribbon is wide, which is what makes it a mass you go around.
+    let widest = 0;
+    for (let i = 0; i < N; i++) widest = Math.max(widest, reach[i]! + reach[(i + N / 2) % N]!);
+    expect(widest).toBeGreaterThan(240);
+    // And it is genuinely lopsided: the bulk piles up away from the wrap.
+    expect(max).toBeGreaterThan(min * 2);
+    expect(mean).toBeGreaterThan(85);
+    // Still tall enough to be a mountain you can see from across the lake — the height
+    // profile only falls, so it stands on ground well below the shore you see it from.
+    expect(FORK_MOUNTAIN.peakHeight).toBeGreaterThan(100);
+  });
+
+  it("stands at the lake's shore, not in it", () => {
+    // The map draws the mountain immediately beyond the water. If its foot reached into
+    // the body, the flat ice would cut through the flank (and the flank would float over
+    // the ice), so the solve treats the lake as an obstacle too.
+    const c = forkMountainCenter();
+    const lc = lakeCenterWorld();
+    for (let i = 0; i < 96; i++) {
+      const a = (i / 96) * Math.PI * 2;
+      const r = forkMountainReach(a);
+      const x = c.x + Math.cos(a) * r;
+      const z = c.z + Math.sin(a) * r;
+      expect(Math.hypot(x - lc.x, z - lc.z)).toBeGreaterThanOrEqual(
+        FROZEN_LAKE.radius - 1,
+      );
     }
   });
 
@@ -427,15 +511,19 @@ describe("slopePath — Fork 3: two lines around and through the mass", () => {
     // Not at the very fork point: a cutting leads in, which is what makes the mouth a
     // thing you spot and aim at from the approach.
     expect(entryDistance).toBeGreaterThan(10);
-    expect(entryDistance).toBeLessThan(80);
+    expect(entryDistance).toBeLessThan(120);
     // And out the far side with a run-out to the rejoin, not straight into the cliff.
     expect(CAVE_LEN - exitDistance).toBeGreaterThan(10);
-    expect(exitDistance).toBeGreaterThan(entryDistance + 100); // a real tunnel between
-    // Both mouths sit exactly on the footprint boundary, by construction.
-    const c = forkMountainCenter();
+    expect(exitDistance).toBeGreaterThan(entryDistance + 80); // a real tunnel between
+    // The mouths sit where the mass has real flank above them — not out at the foot,
+    // where the dome has flattened to nothing and there'd be nothing to put a hole in.
+    expect(forkMountainRiseAt(caveMouthFraction())).toBeCloseTo(
+      FORK_MOUNTAIN.mouthRise,
+      4,
+    );
     for (const d of [entryDistance, exitDistance]) {
       const p = segmentCenterline("cave", d);
-      expect(Math.hypot(p.x - c.x, p.z - c.z)).toBeCloseTo(FORK_MOUNTAIN.baseRadius, 0);
+      expect(forkMountainRiseWorld(p.x, p.z)).toBeCloseTo(FORK_MOUNTAIN.mouthRise, 0);
     }
   });
 });
@@ -494,6 +582,23 @@ describe("slopePath — the frozen lake as a BODY", () => {
     // Off the body entirely, well up in the forest and well down the approach.
     expect(lakeIceExtent(200)).toBeNull();
     expect(lakeIceExtent(520)).toBeNull();
+  });
+
+  it("does not report a lake band where the wrap brings the trail back past it", () => {
+    // The bug this guards (slope-mech, 2026-07-26): Fork 3's outside branch turns ~172°,
+    // so the INFINITE lateral line through the trail re-crosses the lake disc from the
+    // far side of the map. The extent came back non-null right across the wrap and the
+    // cliff, the terrain builder opened the bank onto that phantom lake, and the flank
+    // got blended up to the lake's height — ~120 units above the ground there. It
+    // rendered as a white wall out of the mountainside. Nothing past the lake's own
+    // shore may report a band.
+    //
+    // The first stretch of the approach (to ~480) legitimately still runs beside the
+    // body's lower shore — the disc's edge really is a few tens of units to the right
+    // there — so the sweep starts past it. Everything from the fork onward must be null.
+    for (let d = 500; d <= 920; d += 5) {
+      expect(lakeIceExtent(d)).toBeNull();
+    }
   });
 });
 

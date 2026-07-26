@@ -28,6 +28,8 @@
 
 import {
   BRANCH_SEGMENTS,
+  LATERAL_LIMIT,
+  PLAYED_FORK_BRANCHES,
   REFERENCE_GRADE,
   routeDistanceOf,
   routeGradeAt,
@@ -904,6 +906,16 @@ export function lakeIceExtent(
 ): { readonly latMin: number; readonly latMax: number } | null {
   const c = lakeCenterWorld();
   const on = trailPointAtRoute(routeDistance, 0);
+  // ⚠ THE TRAIL COMES BACK PAST THE LAKE (slope-mech, 2026-07-26 — a real bug this
+  // caught). Fork 3's outside branch wraps ~172°, so the INFINITE lateral line through
+  // the trail re-crosses the lake disc from hundreds of units away, mid-wrap and again
+  // on the cliff. Without this guard the function reported a lake band at route 640–740,
+  // the terrain builder duly "opened" the bank onto it, and the flank got blended up to
+  // the lake's height — which is ~120 units above the ground there. It rendered as a
+  // white wall stabbing out of the mountainside. So: the body only counts as being
+  // BESIDE this stretch of trail if its centre is within a ribbon-width of it.
+  const NEAR = FROZEN_LAKE.radius + 50;
+  if (Math.hypot(c.x - on.x, c.z - on.z) > NEAR) return null;
   const across = trailPointAtRoute(routeDistance, 1);
   // The unit lateral direction at this route distance, and where the centre projects
   // onto it. (`across` − `on` is already unit length: lateral is in world units.)
@@ -938,20 +950,59 @@ export function lakeIceExtent(
 export const FORK_MOUNTAIN = {
   /** Placed relative to the trail at the middle of the wrap, on the inside. */
   routeAnchor: 680,
+  /**
+   * How far off the trail the centre sits. Together with the wrap's shape this is
+   * what makes the outside branch hug the mountain: measured, the line holds ~20
+   * units off the foot for the whole 172°.
+   */
   lateralAnchor: 102,
-  /** Base radius: where the dome meets the surrounding ground. */
-  baseRadius: 85,
+  /**
+   * The footprint is NOT a circle (slope-mech, 2026-07-26, after looking at it).
+   *
+   * A single radius has to satisfy the tightest constraint everywhere, which is the
+   * wrap: the outside branch comes within ~101 units of the centre, so a circle caps
+   * at ~85. Paired with a peak tall enough to be seen from the lake, that is an
+   * 85 × 175 spire — and it rendered as exactly that, a needle, not "a mass".
+   *
+   * But the cap only BINDS where a lane passes. The wrap encloses ~172° of the
+   * perimeter and leaves a wide sector open, so the honest footprint is per-azimuth:
+   * as big as there is room for, in every direction independently. That gives a
+   * teardrop — a steep near flank the trail wraps, and the bulk piled away behind it,
+   * which is both how the map draws it and what a mountain looks like.
+   *
+   * `baseRadius` survives as the CAP on that profile (and as the scale the tests read).
+   */
+  baseRadius: 190,
+  /** Clearance the footprint keeps from any playable lane, beyond the lane's own
+   * half-width — so the mountain can crowd the piste but never bury it. */
+  laneClearance: 6,
   /**
    * Height at the summit, above the ground it stands on.
    *
-   * Sized to be SEEN, which on this mountain takes more than it sounds: the height
-   * profile only ever falls, so the mass stands on ground ~110 units below the lake
-   * you first see it from. At 175 its summit clears the eye line from the far shore
-   * by a good margin and it reads as a mountain standing beyond the water; at ~100 it
-   * would sit at eye level and read as a bump. (Real uphill would be the honest fix
-   * and is a SIM change — v3 §12.3 — so this is the cheap answer the drawing allows.)
+   * Two pulls. It has to be SEEN — the height profile only ever falls, so the mass
+   * stands on ground ~110 units below the lake you first see it from, and anything
+   * under ~100 sits at eye level and reads as a bump. But height over half-width is
+   * what decides whether it reads as a mountain or a spike, and the wrap side is only
+   * ~85 wide. 130 against that ~85 is a steep but believable flank (~57°), and the
+   * open side's much wider apron carries the bulk.
    */
-  peakHeight: 175,
+  peakHeight: 130,
+  /**
+   * How much mountainside a cave mouth needs above it. The dome reaches zero height
+   * (and zero slope) at its foot, so there is no flank to put a hole in out there —
+   * the mouth has to sit far enough in that the mass genuinely rises over it. This is
+   * the rise the portals are placed at, and it is what leaves the short open cutting
+   * at each end of the branch.
+   *
+   * It also has to be taller than the doorway cut into the flank (below), or the arch
+   * pokes out through the mountainside — which is exactly what it did at 26.
+   */
+  mouthRise: 36,
+  /** The cave mouth's opening: half-width across the corridor, and height above its
+   * floor. The doorway cut out of the mass uses these, and the arch is sized from them,
+   * so the hole and the thing standing in it can't disagree. */
+  mouthHalfWidth: 19,
+  mouthHeight: 26,
 } as const;
 
 /** The mass's centre in world x/z, and the ground height it stands on. */
@@ -963,53 +1014,229 @@ export function forkMountainCenter(): {
   return trailPointAtRoute(FORK_MOUNTAIN.routeAnchor, FORK_MOUNTAIN.lateralAnchor);
 }
 
-/**
- * The dome's height above its base at a distance `r` from the centre. A raised
- * cosine: zero height AND zero slope at the foot, so it blends into the surrounding
- * banks with no crease, and a rounded summit. Steepest mid-flank (~70°), which is
- * deliberate — it is a mass you ride around, not a slope you ski down.
- */
-export function forkMountainRise(r: number): number {
-  if (r >= FORK_MOUNTAIN.baseRadius) return 0;
-  const u = r / FORK_MOUNTAIN.baseRadius;
-  return FORK_MOUNTAIN.peakHeight * 0.5 * (1 + Math.cos(Math.PI * u));
+// The per-azimuth footprint, solved once at load.
+//
+// For each of AZIMUTH_STEPS directions out from the centre, how far the mountain can
+// reach before it would crowd something: any PLAYABLE lane (the approach, the outside
+// branch, the cliff run-in and its runout — but NOT the cave, which is meant to run
+// under the mass), and the frozen lake, which the mountain stands at the shore of
+// rather than in. Then smoothed around the circle so the silhouette has no creases,
+// and re-clamped to the raw limits afterwards so smoothing can never push the
+// mountain back over a lane.
+const AZIMUTH_STEPS = 96;
+const FORK_MOUNTAIN_PROFILE: Float64Array = (() => {
+  const c = forkMountainCenter();
+  const lake = lakeCenterWorld();
+  const clear = LATERAL_LIMIT + FORK_MOUNTAIN.laneClearance;
+  // Sample every open lane once.
+  const lanes: { x: number; z: number }[] = [];
+  for (const id of SINGLE_TRAIL) {
+    const seg = BRANCH_SEGMENTS[id];
+    if (!seg) continue;
+    const span = seg.length + (seg.next === null ? 200 : 0);
+    for (let d = 0; d <= span; d += 2) {
+      const p = segmentCenterline(id, d);
+      lanes.push({ x: p.x, z: p.z });
+    }
+  }
+  const raw = new Float64Array(AZIMUTH_STEPS);
+  for (let i = 0; i < AZIMUTH_STEPS; i++) {
+    const a = (i / AZIMUTH_STEPS) * Math.PI * 2;
+    const dx = Math.cos(a);
+    const dz = Math.sin(a);
+    let limit: number = FORK_MOUNTAIN.baseRadius;
+    for (const p of lanes) {
+      const vx = p.x - c.x;
+      const vz = p.z - c.z;
+      const along = vx * dx + vz * dz;
+      if (along <= 0) continue; // behind this ray
+      const perp = Math.abs(vx * -dz + vz * dx);
+      if (perp >= clear) continue; // this ray misses the lane
+      limit = Math.min(limit, along - Math.sqrt(clear * clear - perp * perp));
+    }
+    // …and stop at the lake's edge: the mountain rises FROM the shore, so the ice
+    // never climbs its flank and the flank never floats over the ice.
+    const lx = lake.x - c.x;
+    const lz = lake.z - c.z;
+    const along = lx * dx + lz * dz;
+    if (along > 0) {
+      const perp = Math.abs(lx * -dz + lz * dx);
+      if (perp < FROZEN_LAKE.radius) {
+        limit = Math.min(
+          limit,
+          along - Math.sqrt(FROZEN_LAKE.radius * FROZEN_LAKE.radius - perp * perp),
+        );
+      }
+    }
+    raw[i] = Math.max(20, limit);
+  }
+  // Circular box-smooth, then re-clamp to the raw limits.
+  const out = new Float64Array(AZIMUTH_STEPS);
+  const W = 5;
+  for (let i = 0; i < AZIMUTH_STEPS; i++) {
+    let sum = 0;
+    for (let k = -W; k <= W; k++) {
+      sum += raw[(i + k + AZIMUTH_STEPS) % AZIMUTH_STEPS]!;
+    }
+    out[i] = Math.min(sum / (2 * W + 1), raw[i]!);
+  }
+  return out;
+})();
+
+/** How far the mountain's foot reaches in a given world direction (radians, measured
+ * as atan2(dz, dx) from its centre). Lerped between the solved spokes. */
+export function forkMountainReach(azimuth: number): number {
+  const n = AZIMUTH_STEPS;
+  const t = ((azimuth / (Math.PI * 2)) % 1 + 1) % 1;
+  const f = t * n;
+  const i = Math.floor(f) % n;
+  const frac = f - Math.floor(f);
+  const a = FORK_MOUNTAIN_PROFILE[i]!;
+  const b = FORK_MOUNTAIN_PROFILE[(i + 1) % n]!;
+  return a + (b - a) * frac;
 }
 
 /**
- * Where the cave's two portals sit: the first and last points of the cave branch that
- * lie inside the mass's footprint. Measured rather than declared, so the mouths always
- * land ON the mountainside even if the wrap or the mass is retuned.
+ * The dome's height above its base, as a fraction of the way out to its foot in this
+ * direction. A raised cosine: zero height AND zero slope at the foot, so it blends
+ * into the surrounding banks with no crease, and a rounded summit.
  *
- * The residual open stretches (~36 units at each end) are a feature, not slop: a short
- * cutting leads into the mountainside and out again, which is what makes the mouth a
- * thing you can see and aim at from the approach rather than a hole that appears the
- * instant the fork fires.
+ * Taking `u` (normalised) rather than a raw radius is what lets the footprint be a
+ * teardrop — every direction reaches its own distance, and the profile fills whatever
+ * room it has there.
+ */
+export function forkMountainRiseAt(u: number): number {
+  if (u >= 1) return 0;
+  return FORK_MOUNTAIN.peakHeight * 0.5 * (1 + Math.cos(Math.PI * Math.max(0, u)));
+}
+
+/** The mountain's height above its base at a world point (0 outside the footprint). */
+export function forkMountainRiseWorld(x: number, z: number): number {
+  const c = forkMountainCenter();
+  const dx = x - c.x;
+  const dz = z - c.z;
+  const r = Math.hypot(dx, dz);
+  const reach = forkMountainReach(Math.atan2(dz, dx));
+  return forkMountainRiseAt(reach > 0 ? r / reach : 1);
+}
+
+/** How far IN (as a fraction of the reach in that direction) the dome has risen
+ * `mouthRise` above its base — how far into the footprint a cave mouth has to sit to
+ * have real mountainside over it. */
+export function caveMouthFraction(): number {
+  const { peakHeight, mouthRise } = FORK_MOUNTAIN;
+  // Invert the raised cosine: rise = peak·½(1+cos(πu)) ⇒ u = acos(2·rise/peak − 1)/π.
+  const ratio = Math.max(-1, Math.min(1, (2 * mouthRise) / peakHeight - 1));
+  return Math.acos(ratio) / Math.PI;
+}
+
+/**
+ * Where the cave's two portals sit: the first and last points of the cave branch with
+ * `mouthRise` of mountain over them. Measured rather than declared, so the mouths land
+ * ON a real flank even if the wrap or the mass is retuned.
+ *
+ * The open stretches this leaves at each end are a feature, not slop: a cutting leads
+ * into the mountainside and out again, which is what makes the mouth a thing you can
+ * see and aim at from the approach rather than a hole that appears the instant the fork
+ * fires.
  */
 export function cavePortals(): {
   readonly entryDistance: number;
   readonly exitDistance: number;
 } {
   const c = forkMountainCenter();
+  const mouthU = caveMouthFraction();
   const inside = (d: number): boolean => {
     const p = segmentCenterline(CAVE_ID, d);
-    return Math.hypot(p.x - c.x, p.z - c.z) <= FORK_MOUNTAIN.baseRadius;
+    const r = Math.hypot(p.x - c.x, p.z - c.z);
+    const reach = forkMountainReach(Math.atan2(p.z - c.z, p.x - c.x));
+    return reach > 0 && r / reach <= mouthU;
   };
   const span = CAVE_TO - CAVE_FROM;
+  // Quarter-unit scan: the portals are meshes standing in the world, so landing them
+  // within a metre of the flank they're cut into is the difference between a mouth and
+  // a floating arch.
+  const STEP_SCAN = 0.25;
   let entryDistance = 0;
-  for (let d = 0; d <= span; d++) {
+  for (let d = 0; d <= span; d += STEP_SCAN) {
     if (inside(d)) {
       entryDistance = d;
       break;
     }
   }
   let exitDistance = span;
-  for (let d = span; d >= 0; d--) {
+  for (let d = span; d >= 0; d -= STEP_SCAN) {
     if (inside(d)) {
       exitDistance = d;
       break;
     }
   }
   return { entryDistance, exitDistance };
+}
+
+/**
+ * The ground height under an OFF-TRAIL world point, and how far that point is from the
+ * nearest playable corridor.
+ *
+ * Needed because the height profile is keyed to ROUTE distance, so "how high is the
+ * ground at world (x, z)" has no closed form once the trail curves — and the lake basin
+ * and the mountain mass are the first things on this map that live off the ribbon and
+ * have to sit on the hill correctly. Sampled once per build, not per frame.
+ *
+ * ⚠ IT IS A WEIGHTED MEAN, NOT THE NEAREST SAMPLE (slope-mech, 2026-07-26, after
+ * looking at it). Taking the nearest corridor's height is discontinuous: the wrap
+ * brings the outside branch within ~100 units of the cliff run-in, which is ~100 units
+ * LOWER, so on the surface between them the answer jumps by ~100 the moment the nearest
+ * corridor switches. Adjacent vertices of the mass then landed 100 apart and rendered
+ * as tall thin white slivers stabbing out of the mountainside — very visible from the
+ * lake. Inverse-distance weighting (1/d⁴, so it still tracks the nearest closely)
+ * is continuous everywhere, and the slivers are gone.
+ */
+export function nearestCorridorGround(
+  x: number,
+  z: number,
+  samples: readonly { readonly x: number; readonly z: number; readonly y: number }[],
+): { readonly y: number; readonly distance: number } {
+  let wSum = 0;
+  let ySum = 0;
+  let bestD2 = Infinity;
+  for (const s of samples) {
+    const d2 = (s.x - x) ** 2 + (s.z - z) ** 2;
+    if (d2 < bestD2) bestD2 = d2;
+    // +1 keeps the weight finite right on top of a sample.
+    const w = 1 / ((d2 + 1) * (d2 + 1));
+    wSum += w;
+    ySum += s.y * w;
+  }
+  return {
+    y: wSum > 0 ? ySum / wSum : 0,
+    distance: Math.sqrt(bestD2),
+  };
+}
+
+/** Every played corridor sampled at `step` units — the default line (with its runout)
+ * plus each live fork branch. The input to `nearestCorridorGround`. */
+export function playedCorridorSamples(
+  step: number,
+  runout: number,
+): { readonly x: number; readonly z: number; readonly y: number }[] {
+  const out: { x: number; z: number; y: number }[] = [];
+  const walk = (segmentId: string, span: number): void => {
+    for (let d = 0; d <= span; d += step) {
+      const p = segmentCenterline(segmentId, d);
+      out.push({ x: p.x, z: p.z, y: p.y });
+    }
+  };
+  SINGLE_TRAIL.forEach((id, i) => {
+    const seg = BRANCH_SEGMENTS[id];
+    if (!seg) return;
+    walk(id, seg.length + (i === SINGLE_TRAIL.length - 1 ? runout : 0));
+  });
+  for (const id of PLAYED_FORK_BRANCHES) {
+    const seg = BRANCH_SEGMENTS[id];
+    if (seg) walk(id, seg.length);
+  }
+  return out;
 }
 
 /** World x/z for a (segmentId, distance, lateral) triple — the lane on a segment. */

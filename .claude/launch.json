@@ -23,6 +23,13 @@
       "port": 5302
     },
     {
+      "name": "toebeans-slope-mechanics-b",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5331", "--strictPort"],
+      "cwd": "C:\\Users\\joshu\\Toebeans-slope-mechanics\\client",
+      "port": 5331
+    },
+    {
       "name": "toebeans-slope-visuals",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "--port", "5303", "--strictPort"],

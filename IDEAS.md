@@ -105,56 +105,86 @@ is **unresolved** — Josh will decide. This is the natural unlock for follow-up
 (the peaks contrast much harder against a decided sky). Do NOT touch the sky/atmosphere
 until then.
 
-## ⏭ START HERE (slope-mech) — A BIG LAKE, AND A MOUNTAIN BEHIND IT (director, 2026-07-26)
+## THE BIG LAKE AND THE FORK MOUNTAIN — LANDED (slope-mech, 2026-07-26); follow-ups below
 
-Josh's verdict on the shaping pass, in his words: **"serious flaw: lake is too small.
-needs to be about 15x current size. also, the second mountain should be behind it (not
-another drop off)."** Both are now written into SLOPE_BRANCHINGv3.md — **§12.3 is the
-brief, read it there**, plus the amended §5 bullets for forks 2 and 3. This block is
-just the working notes.
+**Status: this block is CLOSED.** Both of Josh's 2026-07-26 calls shipped together —
+they turned out to be one job. Route 640 → 920. See the ROADMAP entry for the build and
+the measured numbers. Both blocking questions were answered before any code:
 
-**ASK JOSH FIRST — this one is genuinely blocking:** *15× of what?* The lake is 80
-units of trail today, crossing the corner of an ice sheet.
-- **The ice BODY** (its footprint on the mountain) → ~4× linear. The trail still clips
-  a corner; what changes is the expanse you see. Buildable at today's 640 length.
-- **The CROSSING** (how long you ski on ice) → 80 → 1200 units, longer than the entire
-  current route, making the lake ~68% of the run. Only coherent as part of the §9
-  stretch to 3:30.
+1. **15× of what → "body + longer corner."** The disc is ~180 units across (~25k sq
+   units, 15× the old ribbon's ~1.7k) AND the crossing grew 80 → 140 so riding it matches
+   how big it looks. Worth recording *why* the body-only reading wasn't enough on its own:
+   a body that size skirted in 3.8 s reads as nicking its edge, not crossing a lake.
+2. **The clock is not a target yet.** *"The 3:30 will only be achieved when the entire map
+   is finished. so far, we only have the starting mountain, no forest, and a small lake.
+   so no, don't worry about hitting the time right now."* This is the most useful thing to
+   carry forward: **size each area to its own content and let the total fall out.** It also
+   dissolves §12.4's §9-vs-§4 conflict — §9's budget describes the finished map.
 
-Don't infer it from the mountain call — ask.
+**And the third call, answered by building rather than asking:** "not another drop off"
+was solved with GEOMETRY, not pitch. The second mountain's mean grade now sits *above*
+the forest's, and the mass beside the line does the work. Recording this because the trap
+is durable: speed IS grade here, so every future "make area X gentler" ask should reach
+for shape or relief first.
 
-**The second mountain has a JOB, and it isn't scenery.** Correcting my own first read
-here, because I framed it as composition and Josh put it straight: *"its not a view only
-mountain. its got real purpose. the second mountain is the mountain that introduces the
-cave entrance and the ride around."* It **is** Fork 3 — the mass is what makes "through
-the cave" and "around the outside" two lines you can see and choose between, and the
-cave mouth needs to be something you spot and aim at on approach. Today the area is 180
-units of 21.5° descent that happens to curve, and the fork is parked and never arms. So
-this is **two jobs joined: build the mass, and light up Fork 3 on it** — which pulls the
-parked "re-grayblock `route.ts` for v3's fork structure" (v3 §8) into this work.
+**Follow-ups (slope-mech), for later sessions:**
+- **AWAITING PLAYTEST** — Josh hasn't ridden it. Verified by direct renders and by the sim
+  headlessly, but NOT end to end in a live ride: real-time runs stall in an unfocused
+  automation tab, so the full "steer right, go through the cave, come out at the cliff"
+  is his to fly.
+- **The cave's interior is unconvincing and I'm not sure it has a ceiling.** The mass is a
+  double-sided shell, which was meant to give the tunnel a roof for free. From inside, the
+  render is ambiguous — a pale washed surface overhead that may or may not be the shell.
+  Real tunnel geometry (a bored tube, walls, an interior light) is a look job — see the
+  (mountain) note below — but somebody should confirm what's actually over your head.
+- **The mouth is legible but small** from the approach (~90 units out). Sizing is a design
+  call now the hole is real; `FORK_MOUNTAIN.mouthHalfWidth`/`mouthHeight` are the knobs and
+  the doorway cut follows them automatically.
+- **Fork 4's ice tail is orphaned.** `ledge`/`valley`/`ice-castle` keep their same-clock
+  identity (390 = cave + cliff, reachable by injecting a divert, which the test does) but
+  nothing *steers* into them any more — the mountain's one trigger slot is Fork 3's cave,
+  and their real home is Fork 4's speed-triggered shove, which the sim doesn't model. That
+  shove is the natural next fork.
+- **One trigger per segment is now a real constraint.** Four forks need four distinct
+  trigger segments, and `Segment.trigger` is singular. Fine today; worth knowing before
+  anyone tries to hang two forks off one area.
+- **The lake gap is still a formality** (3 units wide, unfailable) — unchanged from the
+  last pass, deliberately, so the playtest judges the size and the fork.
+- **The forest scatter runs the WHOLE route**, so the lake and the mountain are viewed
+  through dense pines and the acceptance read is much more enclosed in-game than in a
+  clean render. Not mine to change — see the (forest) note below.
 
-**What that means practically.** The mountain has to exist as terrain the lines go
-*around* and *through*, which is the first thing on this map needing real geometry
-beyond the 92-unit ribbon — the ground currently stops dead at the banks. That crosses
-into mountain-graphics; agree the seam before building. And the cave needs a mouth, so
-there's a hazard/marker-mesh question in there too.
+**(forest) — the ice sheet and the decor scatter, two marked additive edits.** Per
+PARALLEL.md I made the smallest changes that work in `forestGraphics.ts`, both driven by
+one new export (`lakeIceExtent` in `slopePath.ts`, which owns the body's shape):
+- `buildIceRibbon` spans the measured body instead of ±13, with columns cosine-clustered
+  at both shores and the shore fade in UNITS (a fractional fade would have frosted 30+
+  units at this size); its along-trail extent comes from where the body is, not the
+  segment's ends. **Look-polish at the new size is yours:** at 180 units across, the seeded
+  canvas tiles a lot, the crack network reads small, and the sheet is pale enough at haze
+  distance that it can read as flat snow rather than ice. The open-water rim at the gap
+  (already parked above) matters more now the body is big.
+- The decor scatter **skips the lake side across the body**, or pines grow out of the ice
+  now that the bank is open there. The far bank is untouched and still wooded, which is
+  what keeps the crossing reading as a shoreline.
+- **Bigger, and yours to call: the forest isn't bounded to the forest.** `DECOR_BANDS` run
+  the entire route, so there are dense pines on the lake shore, up the mountain approach
+  and around the fork. It's the main thing standing between the clean renders and what you
+  actually see riding it. A per-area density/species profile keyed to route distance would
+  fix it and would give each area its own planting, which is v3 §12.1's whole rule.
 
-**The trap to avoid.** "Not another drop off" collides with the speed model: speed is
-grade, so a level second mountain is a slow second mountain. Do NOT solve it by making
-the area mellow — that is exactly the forest mistake, made three times. The options are
-(a) give it an `iceGlide`-style carry like the lake got, (b) let the CAVE carry the
-descent while the outside line stays flatter — which also gives the two fork lines
-distinct character, so it's the most interesting option — or (c) keep the descent honest
-and build the mountain's bulk beside/above the line so it reads as going *around* a
-mass. (b) and (c) compose.
-
-**Also worth deciding in the same breath:** the §9-vs-§4 size conflict (§12.4). A 15×
-lake makes the 640-unit route untenable, so this may be the moment to take the stretch
-to 3:30 rather than shape twice. Flag it to Josh as a fork in the road, not a detail.
-
-**Acceptance (browser, <1 min):** come out of the forest and see a lake wide enough to
-read as a lake, with the second mountain standing across it — and check the second
-mountain no longer feels like a third slope in a row.
+**(mountain) — the mass and the portals want a real look.** Both are mechanics-plain
+grayblock geometry (structural, like the parked fork-marker boulders), dressed with your
+`createTerrainSnowMaterial`:
+- The mass is a smooth raised-cosine dome with a per-azimuth footprint — no crags, no rock
+  bands, no cornice. It reads as "a mountain" and nothing more.
+- The cave mouths are a doorway cut out of the shell with an unfogged dark plane set back
+  inside it. Deliberately not fogged: the point of the mouth is that you can pick it out at
+  distance, and the dawn haze washed it to the same pink as the mountain. It wants a real
+  frame, and the interior wants light.
+- The world still stops dead beyond the ±46 ribbon everywhere except the lake basin and the
+  mass. Now that two features live off the ribbon, the void beyond it is more visible — the
+  lake's shore lip terminates cleanly, but the rest of the map's edge doesn't.
 
 ---
 

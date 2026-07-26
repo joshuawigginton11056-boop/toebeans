@@ -6,21 +6,36 @@ import {
   JUMP_CHARGE_TIME,
   LATERAL_LIMIT,
   MIN_SPEED,
+  PLAYED_FORK_BRANCHES,
   RESPAWN_DELAY,
   SINGLE_TRAIL,
   TIRED_HOP_DURATION,
   downhillHeading,
+  routeDistanceOf,
   singleTrailNext,
   type SkiState,
 } from "@toebeans/shared";
 import { createCatRig, type CatRig } from "./catModel";
 import { createSkierRig, type SkierRig } from "./skierModel";
 import {
+  cavePortals,
+  FORK_MOUNTAIN,
+  forkMountainCenter,
+  forkMountainReach,
+  forkMountainRiseAt,
+  forkMountainRiseWorld,
+  FROZEN_LAKE,
+  lakeCenterWorld,
+  lakeIceExtent,
+  lakeIceHeight,
+  nearestCorridorGround,
+  playedCorridorSamples,
   segmentCenterline,
   segmentPitch,
   segmentToWorld,
   slopeCenterline,
   trailRows,
+  type TrailRow,
 } from "./slopePath";
 import {
   createChasmMesh,
@@ -727,14 +742,63 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
     1.8 * Math.sin(x * 0.15 - z * 0.09) +
     2.0 * Math.cos(z * 0.11 + x * 0.045);
 
+  // OPEN THE LAKE-SIDE BERM (slope-mech, 2026-07-26 — the big lake). A 12-high bank
+  // rising from the lane edge is a trench: you can't see a lake you're driving past
+  // inside one, and "you come out of the forest and it's spread out in front of you"
+  // is the whole director call. So across the lake the bank on the BODY's side stops
+  // climbing and instead runs out flat to the water — the ground becomes a shore.
+  //
+  // Derived from the body itself (lakeIceExtent) rather than a hand-typed route range,
+  // so it opens exactly where there is lake to see and closes again at the shores. The
+  // far bank is untouched: the lake is on one side, and keeping the other bank up is
+  // what still reads the corridor as a trail across the ice rather than open snowfield.
+  const OPEN_RAMP = 34; // how much lake-reach it takes to fully drop the bank
+  const lakeOpenness = (routeD: number): number => {
+    const band = lakeIceExtent(routeD);
+    if (!band) return 0;
+    const reach = band.latMax - LANE_HALF; // how far the ice runs past the lane edge
+    const t = Math.max(0, Math.min(1, reach / OPEN_RAMP));
+    return t * t * (3 - 2 * t);
+  };
+
   // The height of a cross-section vertex: flat across the lane at the centerline
-  // y, rising smoothly into a noisy bank beyond it.
-  const crossY = (centerY: number, lat: number, wx: number, wz: number): number => {
+  // y, rising smoothly into a noisy bank beyond it — unless the bank is opened onto
+  // the lake, in which case it runs out to the water's level instead of climbing.
+  // NO SNOWBANKS INSIDE THE MOUNTAIN (slope-mech, 2026-07-26). The cave corridor is
+  // built like any other — a lane with banks climbing to BERM_HEIGHT — but it runs
+  // UNDER the mass, whose surface near the corridor sits at about the corridor's own
+  // height. So the banks poked straight up through the mountainside as white slivers
+  // (visible from the lake, and the first thing that looked wrong about it). Inside the
+  // mountain the walls ARE the mountain, so the cross-section goes flat; the short open
+  // cuttings at each portal keep their banks, which is what makes them read as a ravine
+  // leading in. Ramped off the mass's own rise, so it follows any reshaping of it.
+  const insideMountain = (wx: number, wz: number): number => {
+    const rise = forkMountainRiseWorld(wx, wz);
+    const t = Math.max(0, Math.min(1, rise / Math.max(1, FORK_MOUNTAIN.mouthRise)));
+    return t * t * (3 - 2 * t);
+  };
+
+  const crossY = (
+    centerY: number,
+    lat: number,
+    wx: number,
+    wz: number,
+    openRight: number,
+    lakeY: number,
+    bermScale: number,
+  ): number => {
     const a = Math.abs(lat);
     if (a <= LANE_HALF) return centerY;
     const t = Math.min(1, (a - LANE_HALF) / (FLANK_HALF - LANE_HALF));
     const smooth = t * t * (3 - 2 * t);
-    return centerY + (BERM_HEIGHT + flankRelief(wx, wz)) * smooth;
+    const bank =
+      centerY + (BERM_HEIGHT + flankRelief(wx, wz)) * smooth * bermScale;
+    const open = lat > 0 ? openRight : 0;
+    if (open <= 0) return bank;
+    // Opened: the flank descends from the lane edge to the ice level instead of
+    // climbing, so the ribbon meets the basin flush across the flat crossing.
+    const shore = centerY + (lakeY - centerY) * smooth;
+    return bank * (1 - open) + shore * open;
   };
 
   // ONE SURFACE (slope-mech, 2026-07-25). The trail used to be built one mesh PER
@@ -746,9 +810,8 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
   // a SINGLE grid — every join is one shared row of vertices, and normals are
   // computed once across the lot, so the hill is lit as one continuous mountain.
   // Vertex POSITIONS are unchanged, so nothing moved under the sim.
-  const rowPlan = trailRows(STEP_LONG, RUNOUT);
   const cols = COLS.length;
-  const rows = rowPlan.length;
+  const lakeY = lakeIceHeight();
 
   // PINCH THE BANKS ON THE INSIDE OF A TURN (slope-mech, 2026-07-25, "build my map
   // as i drew it"). The trail now really turns — a ~160° wrap around the second
@@ -777,46 +840,6 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
     return curvature > 0 ? { left: 1, right: scale } : { left: scale, right: 1 };
   };
 
-  const positions = new Float32Array(rows * cols * 3);
-  for (let i = 0; i < rows; i++) {
-    const { segmentId: id, distance: s } = rowPlan[i]!;
-    const centerY = segmentCenterline(id, s).y;
-    const bank = bankScaleFor(id, s);
-    for (let j = 0; j < cols; j++) {
-      const col = COLS[j]!;
-      // Inside the lane, columns are exactly where they say they are. Outside it,
-      // the bank columns are pulled in toward the lane edge on the turn's inside.
-      const scale = col < 0 ? bank.left : bank.right;
-      const lat =
-        Math.abs(col) <= LANE_HALF
-          ? col
-          : Math.sign(col) * (LANE_HALF + (Math.abs(col) - LANE_HALF) * scale);
-      const w = segmentToWorld(id, s, lat);
-      const k = (i * cols + j) * 3;
-      positions[k] = w.x;
-      positions[k + 1] = crossY(centerY, lat, w.x, w.z);
-      positions[k + 2] = w.z;
-    }
-  }
-
-  // Two triangles per grid cell, wound so the normals face up (+y). Rows run
-  // straight through the joins now, so the cells that span a join are ordinary
-  // cells — there is no edge to weld afterwards.
-  const indices: number[] = [];
-  for (let i = 0; i < rows - 1; i++) {
-    for (let j = 0; j < cols - 1; j++) {
-      const a = i * cols + j;
-      const b = i * cols + j + 1;
-      const c = (i + 1) * cols + j;
-      const d = (i + 1) * cols + j + 1;
-      indices.push(a, b, c, b, d, c);
-    }
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
   // DRESSED (mountain-graphics, 2026-07-25): the plain off-white placeholder
   // material is replaced with the realism snow — the same world-pinned dune
   // relief + palette lit/shadow shading + sparkle the moving window wears, so
@@ -825,16 +848,315 @@ export function addBranchTerrain(handle: SkiSceneHandle): void {
   // one albedo. The ski-trail carve now lands here too: the terrain material
   // samples the live carve target (the moving window's render-target), so the
   // grooves show on the ground the skier rides — see createTerrainSnowMaterial.
-  const mesh = new THREE.Mesh(
-    geo,
-    createTerrainSnowMaterial(handle.environment.trail.target.texture),
-  );
+  const snow = (): THREE.Material =>
+    createTerrainSnowMaterial(handle.environment.trail.target.texture);
+
+  // One corridor mesh from a row plan. Extracted (slope-mech, 2026-07-26) because
+  // the played trail is no longer a single line: FORK 3 is live, so the cave branch
+  // needs its own corridor built the same way. Each corridor is still ONE mesh whose
+  // rows run through its internal segment joins, so normals roll through them.
+  const buildCorridor = (rowPlan: readonly TrailRow[]): THREE.Mesh => {
+    const rows = rowPlan.length;
+    const positions = new Float32Array(rows * cols * 3);
+    for (let i = 0; i < rows; i++) {
+      const { segmentId: id, distance: s } = rowPlan[i]!;
+      const centerY = segmentCenterline(id, s).y;
+      const bank = bankScaleFor(id, s);
+      const openRight = lakeOpenness(routeDistanceOf(id, s));
+      for (let j = 0; j < cols; j++) {
+        const col = COLS[j]!;
+        // Inside the lane, columns are exactly where they say they are. Outside it,
+        // the bank columns are pulled in toward the lane edge on the turn's inside.
+        const scale = col < 0 ? bank.left : bank.right;
+        const lat =
+          Math.abs(col) <= LANE_HALF
+            ? col
+            : Math.sign(col) * (LANE_HALF + (Math.abs(col) - LANE_HALF) * scale);
+        const w = segmentToWorld(id, s, lat);
+        const k = (i * cols + j) * 3;
+        positions[k] = w.x;
+        positions[k + 1] = crossY(
+          centerY,
+          lat,
+          w.x,
+          w.z,
+          openRight,
+          lakeY,
+          1 - insideMountain(w.x, w.z),
+        );
+        positions[k + 2] = w.z;
+      }
+    }
+    // Two triangles per grid cell, wound so the normals face up (+y). Rows run
+    // straight through the joins, so the cells that span a join are ordinary
+    // cells — there is no edge to weld afterwards.
+    const indices: number[] = [];
+    for (let i = 0; i < rows - 1; i++) {
+      for (let j = 0; j < cols - 1; j++) {
+        const a = i * cols + j;
+        const b = i * cols + j + 1;
+        const c = (i + 1) * cols + j;
+        const d = (i + 1) * cols + j + 1;
+        indices.push(a, b, c, b, d, c);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, snow());
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  };
+
+  // The default line, summit to runout.
+  handle.scene.add(buildCorridor(trailRows(STEP_LONG, RUNOUT)));
+
+  // FORK 3's live branch: the cave corridor (slope-mech, 2026-07-26). Its own mesh
+  // rather than rows welded into the spine — it leaves the default line and comes
+  // back, so there is no continuous ladder to weld it into, and the seams at the two
+  // ends are exactly where the portals stand.
+  for (const branchId of PLAYED_FORK_BRANCHES) {
+    const seg = BRANCH_SEGMENTS[branchId];
+    if (!seg) continue;
+    const rows = Math.max(2, Math.ceil(seg.length / STEP_LONG) + 1);
+    const plan: TrailRow[] = [];
+    for (let i = 0; i < rows; i++) {
+      plan.push({ segmentId: branchId, distance: (i / (rows - 1)) * seg.length });
+    }
+    handle.scene.add(buildCorridor(plan));
+  }
+
+  // Ground samples for the off-ribbon features below (the basin's shores and the
+  // mass's base both have to sit on a hill whose height is keyed to route distance,
+  // so there is no closed form for "how high is world (x, z)").
+  const groundSamples = playedCorridorSamples(4, RUNOUT);
+
+  addFrozenLakeBasin(handle, snow(), lakeY, groundSamples);
+  addForkMountainMass(handle, snow(), groundSamples);
+  addCavePortals(handle);
+  // Fork-marker boulders are parked with the forks that are still parked (the
+  // "world grabs you" landmarks at each trigger). Fork 3's landmark is not a
+  // boulder — it is the mountain and the cave mouth, built above.
+}
+
+// ---------------------------------------------------------------------------
+// THE BIG LAKE'S BASIN (slope-mech, 2026-07-26 — v3 §12.3 #1).
+//
+// The ice DRESSING is forest-graphics' (buildFrozenLake); this is the GROUND under it,
+// which is mechanics' because it's terrain. Until now there was none: the world simply
+// stopped at the ribbon's ±46 edge, so a lake wider than the trail had nothing to sit
+// on. The body is a disc (see FROZEN_LAKE) — level, because ice is level — with a shore
+// lip ringing it so it reads as water held in a basin rather than a sheet laid on air.
+//
+// Dropped a hair below the ice level so it can't z-fight the corridor where the two
+// overlap across the flat crossing (the corridor is at exactly this height there, which
+// is the whole point — you ski straight out onto it).
+function addFrozenLakeBasin(
+  handle: SkiSceneHandle,
+  material: THREE.Material,
+  lakeY: number,
+  groundSamples: readonly { readonly x: number; readonly y: number; readonly z: number }[],
+): void {
+  const BASIN_DROP = 0.25;
+  const RINGS = 26;
+  const SPOKES = 72;
+  const { radius, shoreBand, shoreRise } = FROZEN_LAKE;
+  const c = lakeCenterWorld();
+
+  const positions = new Float32Array((RINGS + 1) * SPOKES * 3);
+  for (let i = 0; i <= RINGS; i++) {
+    const r = (i / RINGS) * radius;
+    // Flat across the body; the outer band lifts into a shore lip. Where the ground
+    // OUTSIDE the lake is higher still (the uphill shore), meet it instead, so the
+    // basin blends into the hill rather than terracing against it.
+    const shoreT = Math.max(0, (r - (radius - shoreBand)) / shoreBand);
+    const lift = shoreRise * (shoreT * shoreT * (3 - 2 * shoreT));
+    for (let j = 0; j < SPOKES; j++) {
+      const a = (j / SPOKES) * Math.PI * 2;
+      const x = c.x + Math.cos(a) * r;
+      const z = c.z + Math.sin(a) * r;
+      let y = lakeY - BASIN_DROP + lift;
+      if (shoreT > 0) {
+        const ground = nearestCorridorGround(x, z, groundSamples);
+        // Only the UPHILL shore gets pulled up to the hill: downhill of the lake the
+        // ground has fallen away, and following it there would drain the basin over a
+        // cliff. The lip stays, and the world beyond it is the run's own terrain.
+        if (ground.y > y) y = y + (ground.y - y) * (shoreT * shoreT);
+      }
+      const k = (i * SPOKES + j) * 3;
+      positions[k] = x;
+      positions[k + 1] = y;
+      positions[k + 2] = z;
+    }
+  }
+
+  const indices: number[] = [];
+  for (let i = 0; i < RINGS; i++) {
+    for (let j = 0; j < SPOKES; j++) {
+      const j2 = (j + 1) % SPOKES;
+      const a = i * SPOKES + j;
+      const b = i * SPOKES + j2;
+      const d = (i + 1) * SPOKES + j;
+      const e = (i + 1) * SPOKES + j2;
+      indices.push(a, d, b, b, d, e);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.name = "frozenLakeBasin";
+  mesh.receiveShadow = true;
+  handle.scene.add(mesh);
+}
+
+// ---------------------------------------------------------------------------
+// THE FORK MOUNTAIN'S MASS (slope-mech, 2026-07-26 — v3 §12.3 #2).
+//
+// The structural half of the director's call: *"its not a view only mountain. its got
+// real purpose. the second mountain is the mountain that introduces the cave entrance
+// and the ride around."* This is the mass that makes those two lines legible — the
+// outside branch rides around its foot, the cave branch runs through its middle, and
+// from the far shore of the lake it is the thing standing beyond the water.
+//
+// DOUBLE-SIDED on purpose. The cave corridor runs UNDER this shell, so with back faces
+// drawn the shell is also the cave's ceiling — a real "inside the mountain" read for
+// free. Proper tunnel geometry (a bored tube, rock walls, a lit mouth) is a look job and
+// is parked for mountain-graphics; this is the grayblock that proves the shape.
+function addForkMountainMass(
+  handle: SkiSceneHandle,
+  material: THREE.Material,
+  groundSamples: readonly { readonly x: number; readonly y: number; readonly z: number }[],
+): void {
+  const RINGS = 30;
+  const SPOKES = 96;
+  const c = forkMountainCenter();
+
+  const positions = new Float32Array((RINGS + 1) * SPOKES * 3);
+  for (let i = 0; i <= RINGS; i++) {
+    // Rings are fractions of the reach, not fixed radii — the footprint is a teardrop
+    // (see FORK_MOUNTAIN), so each spoke runs out to its own distance.
+    const u = i / RINGS;
+    const rise = forkMountainRiseAt(u);
+    for (let j = 0; j < SPOKES; j++) {
+      const a = (j / SPOKES) * Math.PI * 2;
+      const r = u * forkMountainReach(a);
+      const x = c.x + Math.cos(a) * r;
+      const z = c.z + Math.sin(a) * r;
+      // Stand on the hill, not on a plane: the base follows the surrounding ground,
+      // so the mass leans down the mountainside the way the drawn map has it.
+      const base = nearestCorridorGround(x, z, groundSamples).y;
+      const k = (i * SPOKES + j) * 3;
+      positions[k] = x;
+      positions[k + 1] = base + rise;
+      positions[k + 2] = z;
+    }
+  }
+
+  // CUT A REAL DOORWAY AT EACH PORTAL (slope-mech, 2026-07-26). The mass is a closed
+  // shell, so an arch standing inside it is invisible from outside — the mountain draws
+  // over it — and the director's call is that the cave mouth has to be something you
+  // SPOT AND AIM AT on approach. So the mouth is a genuine hole: quads of the shell that
+  // fall in the doorway's footprint, low enough to be under its lintel, are simply not
+  // emitted. You see into the dark, which is what makes it read as an entrance.
+  const doorways = [cavePortals().entryDistance, cavePortals().exitDistance].map((d) => {
+    const p = segmentCenterline("cave", d);
+    return {
+      x: p.x,
+      z: p.z,
+      // The corridor's tangent (into the hill) and its normal (across the mouth).
+      fx: Math.sin(p.heading),
+      fz: -Math.cos(p.heading),
+      nx: Math.cos(p.heading),
+      nz: Math.sin(p.heading),
+    };
+  });
+  const inDoorway = (x: number, z: number, rise: number): boolean => {
+    if (rise > FORK_MOUNTAIN.mouthHeight) return false; // above the lintel
+    for (const d of doorways) {
+      const vx = x - d.x;
+      const vz = z - d.z;
+      const along = Math.abs(vx * d.fx + vz * d.fz);
+      const across = Math.abs(vx * d.nx + vz * d.nz);
+      // A slot along the corridor, so the hole goes THROUGH the shell rather than
+      // nicking its surface — the shell is one surface, but it crosses the corridor
+      // twice on a tangential pass, and both crossings have to go.
+      if (along <= 30 && across <= FORK_MOUNTAIN.mouthHalfWidth) return true;
+    }
+    return false;
+  };
+
+  const indices: number[] = [];
+  for (let i = 0; i < RINGS; i++) {
+    for (let j = 0; j < SPOKES; j++) {
+      const j2 = (j + 1) % SPOKES;
+      const a = i * SPOKES + j;
+      const b = i * SPOKES + j2;
+      const d = (i + 1) * SPOKES + j;
+      const e = (i + 1) * SPOKES + j2;
+      // Skip the cell if its centre sits in a doorway. The rise is read off the ring
+      // fractions the positions were built from, so this matches the surface exactly.
+      const cx = (positions[a * 3]! + positions[e * 3]!) / 2;
+      const cz = (positions[a * 3 + 2]! + positions[e * 3 + 2]!) / 2;
+      const cRise = forkMountainRiseAt((i + 0.5) / RINGS);
+      if (inDoorway(cx, cz, cRise)) continue;
+      indices.push(a, d, b, b, d, e);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const shell = material.clone();
+  shell.side = THREE.DoubleSide;
+  const mesh = new THREE.Mesh(geo, shell);
+  mesh.name = "forkMountainMass";
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   handle.scene.add(mesh);
-  // Fork-marker boulders are parked with the forks (the "world grabs you" landmarks
-  // at each trigger). They return when the map reopens — iterate the trigger
-  // segments again then. Nothing to place on the single trail.
+}
+
+// ---------------------------------------------------------------------------
+// THE CAVE MOUTHS (slope-mech, 2026-07-26).
+//
+// "The cave mouth has to be something you spot and aim at on approach" (v3 §12.3 #2) —
+// so the fork needs a landmark, not just a trigger volume. A dark arch stands at each
+// portal, squarely across the cave corridor and facing back the way you come, sitting
+// where the mass has `mouthRise` of flank above it.
+//
+// Deliberately mechanics-plain: this is the structural marker (where the fork is, which
+// way it faces), the same job the parked fork-marker boulders do. Its STYLE — rock
+// framing, icicles, a glow from inside, whatever sells it — is a look call and is parked
+// for mountain-graphics.
+function addCavePortals(handle: SkiSceneHandle): void {
+  const { mouthHalfWidth, mouthHeight } = FORK_MOUNTAIN;
+  const { entryDistance, exitDistance } = cavePortals();
+  for (const distance of [entryDistance, exitDistance]) {
+    const p = segmentCenterline("cave", distance);
+    const group = new THREE.Group();
+    group.name = `cavePortal-${Math.round(distance)}`;
+    // The dark of the interior, set BACK inside the doorway that's been cut out of the
+    // mass. Deliberately not fogged (MeshBasicMaterial with fog off): the point of the
+    // mouth is that it's a dark hole you can pick out at distance, and the dawn haze
+    // would otherwise wash it to the same pink as the mountain around it.
+    const dark = new THREE.Mesh(
+      new THREE.PlaneGeometry(mouthHalfWidth * 2 + 2, mouthHeight + 2),
+      new THREE.MeshBasicMaterial({
+        color: 0x0a0e18,
+        side: THREE.DoubleSide,
+        fog: false,
+      }),
+    );
+    dark.position.set(0, mouthHeight / 2 - 1, 14); // back down the corridor, in shadow
+    group.add(dark);
+    group.position.set(p.x, p.y, p.z);
+    // The corridor's heading is the downhill tangent; face the plane across it.
+    group.rotation.y = -p.heading;
+    handle.scene.add(group);
+  }
 }
 
 export function render(handle: SkiSceneHandle): void {

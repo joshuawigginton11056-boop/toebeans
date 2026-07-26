@@ -129,6 +129,66 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
   call from Josh: the single trail will **end at the back of the forest** (forest = the
   bottom, for gauging its size). Still TODO for this redirect: the smooth single trail
   itself (item 1) + the drift-right (item 3, subsumed by item 1).
+- **THE BIG LAKE AND THE FORK MOUNTAIN (slope-mech, 2026-07-26) — awaiting playtest.**
+  Two director calls from v3 §12.3, built together because they turned out to be one
+  job. Route **640 → 920** (a clean run ~31 s → ~45 s). Both blocking questions answered
+  by Josh first: the 15× is *"body + longer corner"*, and on the clock — *"the 3:30 will
+  only be achieved when the entire map is finished… so no, don't worry about hitting the
+  time right now"*, so areas are sized to their own content and the total falls out.
+  - **The lake is a BODY, not a strip.** It was a 64 × 26 ribbon of ice skinned onto the
+    lane (~1.7k sq units) — which is exactly why it read as "about 15x too small". It is
+    now a ~180-unit **disc** (~25k sq units, 15× the area) that the trail clips the corner
+    of, plus its own **basin** terrain — the first ground on this map that lives off the
+    ±46 ribbon. The crossing grew 80 → **140** so riding it matches how big it looks
+    (3.8 s → ~7 s). Two supporting changes: the bank on the lake side **opens** across the
+    crossing (a 12-high berm meant you couldn't see a lake you were driving past), and the
+    body is a world DISC rather than a route-span band because ice has to be *level* and
+    the trail is only level across the flat — so the lake's downhill shore lands exactly
+    where the ground starts falling away, which is what an outlet is.
+  - **Fork 3 exists, and it is the second mountain.** `yeti`(70) → `cave`(110) were
+    *sequential spine segments* — which is why the area skied as two more slopes in a row
+    with the fork parked and never arming. They became an **approach** you see the mass and
+    the cave mouth from, then **two equal 300-unit branches** (through the mountain /
+    around its outside) rejoining at the cliff. That is v3 §8's parked "re-grayblock
+    route.ts for v3's fork structure", done. Forks also go live on the played trail for
+    the first time: a `PLAYED_FORKS` allowlist (one entry) rather than flipping every
+    trigger on, since the other three detours still have no corridor or content.
+  - **The mass is what answers "not another drop off"** — not a gentler pitch. The second
+    mountain's mean grade now sits **above** the forest's (~0.475 vs ~0.468; the old
+    profile dipped to 0.38 mid-wrap), because speed IS grade here and flattening it would
+    be the forest mistake a fourth time. The shape does the work instead: a ~170-across
+    dome standing on the inside of the wrap, the outside branch riding 20 units off its
+    foot for 172°, the cave winding through its middle, and a real **doorway cut out of
+    the shell** at each portal so the mouth is a dark hole you can pick out on approach.
+  - **Everything geometric is solved, not typed in.** The cave's one free parameter is
+    solved at load for the rejoin (closes to **6e-8 units** — a miss is a visible tear);
+    the mass's footprint is solved **per azimuth** against every playable lane and the
+    lake; the portals are measured as where the branch crosses enough mountainside to
+    hole. So reshaping the wrap re-solves the rest instead of quietly breaking it, and
+    `slopePath.test.ts` asserts each property.
+  - **Same-clock holds by construction**: all four routes sum to 920 (`water` 180 → 400,
+    the ice tail 200 → 390), and Fork 3's pair is **step-identical** behaviorally — both
+    branches are deliberately gap-free, so the §10 assertion needs no tolerance at all.
+    **182 tests green**, and the ±10-step tolerance was not touched.
+
+  **Four bugs this found, all in the new off-ribbon territory:**
+  - **`lakeIceExtent` reported a lake band mid-wrap.** The outside branch turns 172°, so
+    the *infinite* lateral line through the trail re-crossed the lake disc from hundreds
+    of units away — at route 640–740 and again on the cliff. The terrain builder duly
+    "opened" the bank onto that phantom lake and blended the flank up to the lake's height,
+    ~120 units above the ground there: a white wall stabbing out of the mountainside.
+    Guarded (the body only counts as beside a stretch of trail if its centre is within a
+    ribbon-width) and pinned by a test.
+  - **The mass was a needle.** One radius has to obey the tightest constraint (the wrap,
+    ~85) and paired with a peak tall enough to see from the lake that is an 85 × 175
+    spire — which is literally how it rendered. Hence the per-azimuth footprint.
+  - **`nearestCorridorGround` was discontinuous.** The wrap brings the outside branch
+    within ~100 units of the cliff run-in, which is ~100 *lower*, so the answer jumped
+    when the nearest corridor switched and adjacent mass vertices landed 100 apart. Now an
+    inverse-distance weighted mean (1/d⁴).
+  - **The cave's snowbanks poked through the mountainside.** Inside the mountain the walls
+    are the mountain, so the cross-section goes flat there; the open cuttings at each
+    portal keep their banks.
 - **The mountain has a SHAPE, laid out as Josh drew it (slope-mech, 2026-07-25) —
   awaiting playtest.** Every area used to be 80–120 units long and ski at the same ~26°,
   so the map had no terrain story and the frozen lake tilted down the fall line
@@ -473,35 +533,25 @@ ideas go in [IDEAS.md](IDEAS.md); scope lives in
 - [x] **SHAPE THE MOUNTAIN — DONE (slope-mech, 2026-07-25).** See "the mountain has a
       shape" under *What exists now*. **PLAYTEST VERDICT (2026-07-26): partial.** The
       shaping itself stands; two size/composition flaws called out, below.
-- [ ] **⏭ NEXT (slope-mech): A BIG LAKE, AND A MOUNTAIN BEHIND IT (director,
-      2026-07-26).** *"serious flaw: lake is too small. needs to be about 15x current
-      size. also, the second mountain should be behind it (not another drop off)."*
-      Written up in **SLOPE_BRANCHINGv3.md §12.3** (the brief) with §5's fork-2 and
-      fork-3 bullets amended; working notes in IDEAS.md START HERE.
-      **Blocking question for Josh: 15× the ice BODY (~4× linear, buildable at 640) or
-      15× the CROSSING (80 → 1200 units, longer than the whole current route)?**
-      **The second mountain is Fork 3's structure, not scenery** — *"its not a view only
-      mountain. its got real purpose. the second mountain is the mountain that introduces
-      the cave entrance and the ride around."* The mass is what makes "through the cave"
-      and "around the outside" two legible lines, and the cave mouth has to be something
-      you see and aim at. Today it's 180 units of 21.5° descent that happens to curve,
-      with the fork parked and never arming — so this is two jobs joined: build the mass,
-      and light up Fork 3 on it. That pulls the parked "re-grayblock route.ts for v3's
-      fork structure" into this work. Two consequences: (1) the mountain must exist as
-      terrain the lines go around and through, the first thing here needing real geometry
-      beyond the 92-unit ribbon — crosses into mountain-graphics, agree the seam first;
-      (2) "not another drop off" collides with the speed model (speed IS grade, so level =
-      slow) — solve it with a glide carry, or by letting the CAVE carry the descent while
-      the outside line stays flatter (which also differentiates the two fork lines), or
-      by building the bulk beside the line — but NOT by making the area mellow, which is
-      the forest mistake made three times.
-- [ ] **Stretch the route to §9's 3:30 — now the gating job, not a someday job.** The
-      shape pass proved the run is too short and the dressed ribbon too wide for the
-      drawn map: 640 units is ~7 ribbon-widths end to end where Josh's drawn trail is
-      nearer 100, which is why the forest gets one meander instead of three and the
-      wrap is 160° not 180°. A 15× lake makes 640 untenable outright. Also unresolved
-      in the same breath: §9's near-equal segment budget contradicts §4's drawn
-      proportions (SLOPE_BRANCHINGv3 §12.4) — director's call.
+- [x] **A BIG LAKE, AND A MOUNTAIN BEHIND IT — DONE (slope-mech, 2026-07-26).** See "the
+      big lake and the fork mountain" under *What exists now*. Both blocking questions were
+      answered by Josh before any code: the 15× is **body + longer corner**, and the clock
+      is **not** a target to hit yet. **Awaiting playtest.** Verified by direct renders (the
+      lake reads as a lake from the forest exit with the mass standing beyond it; the cave
+      mouth is a visible dark hole from the approach) and by the sim headlessly (steering
+      right on the approach arms the cave with a ~4 s window). NOT verified end-to-end in a
+      live ride — real-time runs stall in an unfocused automation tab, so that's the
+      playtest.
+- [ ] **Stretch the route to §9's 3:30 — DEPRIORITISED by the director (2026-07-26).**
+      *"The 3:30 will only be achieved when the entire map is finished. so far, we only
+      have the starting mountain, no forest, and a small lake. so no, don't worry about
+      hitting the time right now."* So this is no longer a job at all: each area gets sized
+      to what its own content needs and the total is whatever that sums to (920 today).
+      That also **resolves the §9-vs-§4 conflict** in SLOPE_BRANCHINGv3 §12.4 — §9's
+      segment budget describes the finished map, not a constraint on the grayblock. What
+      remains true from the old note: the dressed ribbon (±46) is wide relative to the run,
+      which is why the forest still has one meander instead of the drawn three. That eases
+      on its own as areas grow.
 - [ ] **⚠ SLOPE_BRANCHINGv3 landed (director, 2026-07-25) — three jobs it created.**
       The spec was rewritten (`SLOPE_BRANCHING.md` → `SLOPE_BRANCHINGv3.md`) and it
       changes the design, not just the prose. Flagged by the (slope-mech) seamless-

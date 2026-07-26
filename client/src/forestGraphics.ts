@@ -10,9 +10,10 @@
 // with the raw time-of-day phase and gate themselves.
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { BRANCH_SEGMENTS, LATERAL_LIMIT } from "@toebeans/shared";
+import { BRANCH_SEGMENTS, LATERAL_LIMIT, routeDistanceOf } from "@toebeans/shared";
 import { LANE_EDGE, makeRandom } from "./skiScene";
 import {
+  lakeIceExtent,
   segmentCenterline,
   segmentToWorld,
   trailPointAtRoute,
@@ -226,9 +227,25 @@ export function updateSlopeDecor(anchorZ: number): void {
           models[Math.floor(random() * models.length)]!,
         );
         if (!template) continue;
-        const copy = template.clone();
         const jitter = random() * 0.8; // where in the cell the tree stands
         const treeZ = -(cell + 0.1 + jitter) * band.cellSize;
+        // ⚠ (slope-mech additive, 2026-07-26 — NO TREES ON THE FROZEN LAKE.) The bank
+        // on the lake side is now OPEN across the crossing (skiRender's addBranchTerrain
+        // drops it so you can see the body), and the ice reaches ~150 units out. The
+        // scatter's bands sit at lateral ~14–40, which used to be a snowbank and is now
+        // open water — so without this guard a stand of pines grows out of the lake. The
+        // body's shape is slopePath's (lakeIceExtent); this just declines those cells.
+        // Only the lake side is skipped: the far bank is untouched and still wooded,
+        // which is what keeps the crossing reading as a shoreline.
+        if (decorGrounded) {
+          const band2 = lakeIceExtent(-treeZ);
+          const lat = side * x;
+          if (band2 && lat > band2.latMin && lat < band2.latMax) {
+            placed.set(key, EMPTY_CELL);
+            continue;
+          }
+        }
+        const copy = template.clone();
         if (decorGrounded) {
           // CROSS-SEAM EDIT (slope-mech, 2026-07-25 — smallest additive change per
           // PARALLEL.md; polish parked in IDEAS.md for the forest session). The cell's
@@ -1154,6 +1171,26 @@ function getIceTexture(): THREE.CanvasTexture {
   return iceTexture;
 }
 
+// ⚠ (slope-mech additive, 2026-07-26 — THE LAKE IS A BODY NOW.) The sheet used to be
+// a RIBBON: ±ICE_HALF (13) about the lane, i.e. 26 units wide, which is what made the
+// director call it "about 15x too small" — it was a strip of ice on the trail, not a
+// lake. The body's SHAPE is the map's, so it lives in slopePath.ts (FROZEN_LAKE /
+// lakeIceExtent — a ~180-unit disc the trail clips the corner of); this builder now
+// spans that band instead of a fixed half-width. Three consequences, all mechanical:
+//   * columns are distributed across the measured band, clustered at both shores
+//     (cosine spacing) so the alpha fade still gets fine geometry at 180 units wide;
+//   * the shore fade is in UNITS now, not a fraction of the half-width — at this size
+//     a fractional fade would have frosted 30+ units of the sheet;
+//   * the ribbon's along-trail extent comes from where the body actually is, not from
+//     the segment's ends, because the disc no longer fills the whole crossing.
+// Everything about the LOOK is untouched (the seeded canvas, roughness, the glint, the
+// torn-gap logic). Look-polish at the new size is parked in IDEAS.md for (forest).
+const ICE_SHORE_FADE = 11; // how many units of shore frost into the snow
+const ICE_BAND_COLS = 30;
+// Cosine spacing on [0,1]: dense at both ends, coarse in the middle.
+const iceBandFrac = (j: number): number =>
+  0.5 - 0.5 * Math.cos((j / (ICE_BAND_COLS - 1)) * Math.PI);
+
 // Build one ice ribbon over segment-distances [s0, s1] of the lake segment: a
 // flat grid on the graded lane, frosting to alpha 0 at the shores and the two
 // ends. Returns the mesh (or null if the span is too short to bother with).
@@ -1161,7 +1198,7 @@ function buildIceRibbon(s0: number, s1: number): THREE.Mesh | null {
   const span = s1 - s0;
   if (span < 4) return null;
   const rows = Math.max(2, Math.ceil(span / 1.5) + 1);
-  const cols = ICE_COLS.length;
+  const cols = ICE_BAND_COLS;
   const positions = new Float32Array(rows * cols * 3);
   const colors = new Float32Array(rows * cols * 4);
   const uvs = new Float32Array(rows * cols * 2);
@@ -1171,21 +1208,31 @@ function buildIceRibbon(s0: number, s1: number): THREE.Mesh | null {
     // End fade: distance to the nearer ribbon end, ramped over ICE_END_FADE.
     const endT = Math.min(1, Math.min(s - s0, s1 - s) / ICE_END_FADE);
     const endFade = endT * endT * (3 - 2 * endT);
+    // The body's lateral reach here. Falls back to the old ribbon width off the
+    // body, so a row that slips past the disc still degrades to something sane.
+    const band = lakeIceExtent(routeDistanceOf("lake", s)) ?? {
+      latMin: -ICE_HALF,
+      latMax: ICE_HALF,
+    };
+    const width = band.latMax - band.latMin;
     for (let j = 0; j < cols; j++) {
-      const frac = ICE_COLS[j]!;
-      const lat = frac * ICE_HALF;
+      const t = iceBandFrac(j);
+      const lat = band.latMin + t * width;
       const w = segmentToWorld("lake", s, lat);
       const k3 = (i * cols + j) * 3;
       positions[k3] = w.x;
       positions[k3 + 1] = centerY + ICE_LIFT;
       positions[k3 + 2] = w.z;
+      // Shore fade measured in units from the nearer edge of the body.
+      const toShore = Math.min(lat - band.latMin, band.latMax - lat);
+      const st = Math.min(1, Math.max(0, toShore / ICE_SHORE_FADE));
       const k4 = (i * cols + j) * 4;
       colors[k4] = 1;
       colors[k4 + 1] = 1;
       colors[k4 + 2] = 1;
-      colors[k4 + 3] = iceEdgeAlpha(frac) * endFade;
+      colors[k4 + 3] = st * st * (3 - 2 * st) * endFade;
       const k2 = (i * cols + j) * 2;
-      uvs[k2] = frac * 1.4; // across
+      uvs[k2] = lat * 0.05; // across — world-scaled, so the texture doesn't stretch
       uvs[k2 + 1] = s * 0.1; // along (repeat every 10 m)
     }
   }
@@ -1234,8 +1281,21 @@ export function buildFrozenLake(scene: THREE.Scene): void {
   const gaps = seg.chasms
     .map((c) => ({ from: c.start - ICE_GAP_MARGIN, to: c.start + c.width + ICE_GAP_MARGIN }))
     .sort((a, b) => a.from - b.from);
-  let cursor = ICE_END_INSET;
-  const end = seg.length - ICE_END_INSET;
+  // ⚠ (slope-mech additive, 2026-07-26) The along-trail extent is now the BODY's, not
+  // the segment's: the disc covers roughly the flat crossing, so insetting from the
+  // segment's ends would have hung ice over the run-in and the run-out where the ground
+  // has started to fall away. Scan for where the lane is actually on the body.
+  let bodyFrom = seg.length;
+  let bodyTo = 0;
+  for (let s = 0; s <= seg.length; s++) {
+    if (lakeIceExtent(routeDistanceOf("lake", s))) {
+      bodyFrom = Math.min(bodyFrom, s);
+      bodyTo = Math.max(bodyTo, s);
+    }
+  }
+  if (bodyTo <= bodyFrom) return;
+  let cursor = bodyFrom + ICE_END_INSET;
+  const end = bodyTo - ICE_END_INSET;
   for (const gap of gaps) {
     if (gap.from > cursor) {
       const ribbon = buildIceRibbon(cursor, Math.min(gap.from, end));
